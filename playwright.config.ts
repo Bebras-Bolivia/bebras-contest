@@ -40,6 +40,7 @@ const modules = {
   juego: ["play-flow.spec.ts"],
   practica: ["practice-api.spec.ts", "practice-player.spec.ts"],
   cuentas: [
+    "email-action.spec.ts",
     "login-validation.spec.ts",
     "registration.spec.ts",
     "registration-validation.spec.ts",

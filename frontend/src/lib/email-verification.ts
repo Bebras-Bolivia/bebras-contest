@@ -1,4 +1,5 @@
 export const FIREBASE_AUTH_LANGUAGE = "es";
+export const VERIFICATION_POLL_INTERVAL_MS = 2000;
 
 export function emailVerificationActionSettings(origin: string) {
   return {
@@ -20,4 +21,11 @@ export async function refreshEmailVerification(
   if (!user.emailVerified) return false;
   await user.getIdToken(true);
   return true;
+}
+
+export function shouldResumeFirebaseSession(
+  hasStoredBebrasUser: boolean,
+  explicitVerificationReturn: boolean,
+) {
+  return explicitVerificationReturn || !hasStoredBebrasUser;
 }

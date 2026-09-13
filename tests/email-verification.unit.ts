@@ -5,6 +5,8 @@ import {
   FIREBASE_AUTH_LANGUAGE,
   emailVerificationActionSettings,
   refreshEmailVerification,
+  shouldResumeFirebaseSession,
+  VERIFICATION_POLL_INTERVAL_MS,
   type EmailVerificationUser,
 } from "../frontend/src/lib/email-verification";
 
@@ -29,6 +31,13 @@ test("verification emails use Spanish and return to the current environment", ()
       url: "https://bebras-contest.bebrasbolivia.workers.dev/login?verified=1",
     },
   );
+});
+
+test("verification recovery polls quickly and explicit returns ignore stale local sessions", () => {
+  assert.equal(VERIFICATION_POLL_INTERVAL_MS, 2000);
+  assert.equal(shouldResumeFirebaseSession(true, true), true);
+  assert.equal(shouldResumeFirebaseSession(true, false), false);
+  assert.equal(shouldResumeFirebaseSession(false, false), true);
 });
 
 test("an unverified user reloads without refreshing the token", async () => {

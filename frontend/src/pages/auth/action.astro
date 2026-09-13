@@ -1,0 +1,15 @@
+---
+import { EmailActionHandler } from "../../components/email-action-handler";
+import Layout from "../../layouts/Layout.astro";
+---
+
+<Layout
+  title="Verificar correo"
+  heading="Verificar correo"
+  backHref="/login"
+  enableClientRouting={false}
+>
+  <main class="mx-auto flex w-full flex-1 items-center px-4 py-16 sm:py-24">
+    <EmailActionHandler client:load />
+  </main>
+</Layout>

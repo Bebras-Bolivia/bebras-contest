@@ -7,7 +7,12 @@ import { toast } from "sonner";
 import type { User } from "firebase/auth";
 
 import { getUser } from "@/lib/auth";
-import { refreshEmailVerification } from "@/lib/email-verification";
+import {
+  refreshEmailVerification,
+  shouldResumeFirebaseSession,
+  VERIFICATION_POLL_INTERVAL_MS,
+} from "@/lib/email-verification";
+import { EMAIL_VERIFICATION_CHANNEL } from "@/lib/email-action";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -52,6 +57,7 @@ export function LoginForm() {
   const [submitting, setSubmitting] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [resending, setResending] = useState(false);
+  const [checkingVerification, setCheckingVerification] = useState(false);
   const [unverified, setUnverified] = useState<User | null>(null);
   const [linkEmail, setLinkEmail] = useState("");
   const [errors, setErrors] = useState<{
@@ -62,6 +68,9 @@ export function LoginForm() {
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const resumedRef = useRef(false);
+  const verificationCheckRef = useRef<
+    ((showPendingMessage?: boolean) => void) | null
+  >(null);
 
   const busy = submitting || googleBusy;
 
@@ -89,6 +98,8 @@ export function LoginForm() {
   // Si Firebase todavia recuerda la sesion (volvio de un redirect de Google o
   // expiro solo la sesion Bebras), se retoma sin pedir credenciales de nuevo.
   useEffect(() => {
+    const explicitVerificationReturn =
+      new URLSearchParams(window.location.search).get("verified") === "1";
     if (
       !configured ||
       session.loading ||
@@ -98,7 +109,7 @@ export function LoginForm() {
       // reanudar aqui dispararia una segunda llamada por la misma entrada.
       busy ||
       unverified ||
-      getUser()
+      !shouldResumeFirebaseSession(Boolean(getUser()), explicitVerificationReturn)
     ) {
       return;
     }
@@ -106,7 +117,7 @@ export function LoginForm() {
     const user = session.user;
     let disposed = false;
     void (async () => {
-      if (new URLSearchParams(window.location.search).get("verified") === "1") {
+      if (explicitVerificationReturn) {
         try {
           await refreshEmailVerification(user);
         } catch {
@@ -124,6 +135,83 @@ export function LoginForm() {
       disposed = true;
     };
   }, [busy, configured, session.loading, session.user, unverified]);
+
+  useEffect(() => {
+    if (!unverified) return;
+
+    const user = unverified;
+    const uid = user.uid;
+    let disposed = false;
+    let running = false;
+    let manualCheckQueued = false;
+
+    const isCurrent = () =>
+      !disposed && session.user?.uid === uid && user.uid === uid;
+    const check = async (showPendingMessage = false) => {
+      if (!isCurrent()) return;
+      if (running) {
+        if (showPendingMessage) {
+          manualCheckQueued = true;
+          setCheckingVerification(true);
+        }
+        return;
+      }
+      running = true;
+      if (showPendingMessage) setCheckingVerification(true);
+
+      try {
+        const verified = await refreshEmailVerification(user);
+        if (!isCurrent()) return;
+        if (!verified) {
+          if (showPendingMessage) {
+            toast.info("Firebase todavía no confirmó el correo.");
+          }
+          return;
+        }
+        await enterBebras(user, isCurrent);
+      } catch {
+        if (showPendingMessage && isCurrent()) {
+          toast.error("No se pudo comprobar la verificación del correo.");
+        }
+      } finally {
+        running = false;
+        const runQueuedCheck = manualCheckQueued && isCurrent();
+        manualCheckQueued = false;
+        if (runQueuedCheck) {
+          void check(true);
+        } else if (isCurrent()) {
+          setCheckingVerification(false);
+        }
+      }
+    };
+
+    verificationCheckRef.current = (showPendingMessage = false) => {
+      void check(showPendingMessage);
+    };
+    void check();
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void check();
+    }, VERIFICATION_POLL_INTERVAL_MS);
+    const checkWhenVisible = () => {
+      if (document.visibilityState === "visible") void check();
+    };
+    window.addEventListener("focus", checkWhenVisible);
+    document.addEventListener("visibilitychange", checkWhenVisible);
+    const channel =
+      "BroadcastChannel" in window
+        ? new BroadcastChannel(EMAIL_VERIFICATION_CHANNEL)
+        : null;
+    channel?.addEventListener("message", checkWhenVisible);
+
+    return () => {
+      disposed = true;
+      verificationCheckRef.current = null;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", checkWhenVisible);
+      document.removeEventListener("visibilitychange", checkWhenVisible);
+      channel?.close();
+    };
+  }, [session.user, unverified]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -246,6 +334,15 @@ export function LoginForm() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
+          <Button
+            type="button"
+            disabled={checkingVerification}
+            onClick={() => verificationCheckRef.current?.(true)}
+          >
+            {checkingVerification
+              ? "Comprobando..."
+              : "Ya verifiqué mi correo"}
+          </Button>
           <Button
             type="button"
             variant="outline"

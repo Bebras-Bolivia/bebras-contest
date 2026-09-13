@@ -42,7 +42,11 @@ import {
   type RestrictedRegistrationField,
 } from "@/lib/registration-input";
 import { API_BASE_URL } from "@/lib/api-client";
-import { refreshEmailVerification } from "@/lib/email-verification";
+import {
+  refreshEmailVerification,
+  VERIFICATION_POLL_INTERVAL_MS,
+} from "@/lib/email-verification";
+import { EMAIL_VERIFICATION_CHANNEL } from "@/lib/email-action";
 import { GoogleButton } from "@/components/google-button";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import {
@@ -303,12 +307,17 @@ export function RegisterForm() {
     void check();
     const interval = window.setInterval(() => {
       if (document.visibilityState === "visible") void check();
-    }, 4000);
+    }, VERIFICATION_POLL_INTERVAL_MS);
     const checkWhenVisible = () => {
       if (document.visibilityState === "visible") void check();
     };
     window.addEventListener("focus", checkWhenVisible);
     document.addEventListener("visibilitychange", checkWhenVisible);
+    const channel =
+      "BroadcastChannel" in window
+        ? new BroadcastChannel(EMAIL_VERIFICATION_CHANNEL)
+        : null;
+    channel?.addEventListener("message", checkWhenVisible);
 
     return () => {
       disposed = true;
@@ -316,6 +325,7 @@ export function RegisterForm() {
       window.clearInterval(interval);
       window.removeEventListener("focus", checkWhenVisible);
       document.removeEventListener("visibilitychange", checkWhenVisible);
+      channel?.close();
     };
   }, [session.user, step]);
 
