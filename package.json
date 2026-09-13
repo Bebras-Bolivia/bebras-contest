@@ -28,7 +28,7 @@
     "db:setup": "bun run db:generate && bun run db:push && bun scripts/cloudflare-seed.ts --target local && bun scripts/cloudflare-seed-tasks.ts --target local",
     "db:bootstrap:staging": "bun scripts/cloudflare-seed.ts --target staging",
     "db:bootstrap:production": "bun scripts/cloudflare-seed.ts --target production",
-    "test:unidad": "bun x tsx --test tests/*.unit.ts tests/*.test.ts scripts/cloudflare-migrations-check.test.ts scripts/firebase-migrate-users-options.test.ts backend/prisma/*.test.ts backend/src/lib/*.test.ts backend/src/lib/task-answers/*.test.ts",
+    "test:unidad": "bun x tsx --test tests/*.unit.ts tests/*.test.ts scripts/cloudflare-migrations-check.test.ts scripts/firebase-email-config-options.test.ts scripts/firebase-migrate-users-options.test.ts backend/prisma/*.test.ts backend/src/lib/*.test.ts backend/src/lib/task-answers/*.test.ts",
     "test:e2e": "bun ./tests/run-e2e.ts",
     "test:e2e:rapido": "bun ./tests/run-e2e.ts --rapido",
     "test:e2e:servidores": "bun ./tests/run-e2e.ts --servidores",

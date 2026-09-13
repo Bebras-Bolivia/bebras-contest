@@ -98,7 +98,7 @@ producción sin compartir URLs entre entornos.
 
 Después del registro se mantiene abierta la sesión Firebase. Mientras se muestra
 la pantalla de verificación, el navegador ejecuta `user.reload()` al recuperar el
-foco y cada cuatro segundos si la pestaña está visible. Cuando Firebase confirma
+foco y cada dos segundos si la pestaña está visible. Cuando Firebase confirma
 el correo, fuerza `getIdToken(true)`, abre la sesión Bebras y redirige según el
 rol. El botón **Ya verifiqué mi correo** ejecuta la misma comprobación de forma
 manual.
@@ -108,9 +108,52 @@ y el token antes de abrir la sesión. Esto permite continuar automáticamente en
 el mismo navegador. En otro dispositivo, donde no existe esa sesión Firebase,
 la persona debe identificarse normalmente.
 
+Firebase entrega primero el enlace a `/auth/action`. Esa página aplica
+`oobCode` al cargar, elimina el código de la URL visible y redirige inmediatamente
+a `/login?verified=1`, sin botón ni espera intermedia. Solo acepta esa ruta en el
+origen actual o en `localhost`/`127.0.0.1` por HTTP para desarrollo, por lo que el
+`continueUrl` no puede convertirse en un redirect abierto. Si el enlace está
+vencido o ya fue usado, muestra una pantalla Bebras con acceso al reenvío.
+
 Un fallo del primer envío ya no se presenta como éxito: la cuenta queda creada,
 la pantalla explica el problema y permite reenviar. Los reenvíos están
 bloqueados mientras hay otro envío en curso.
+
+### Configuración del correo de verificación
+
+El repositorio es dueño únicamente de estos campos de Firebase Authentication:
+
+- `notification.defaultLocale` (`es`);
+- `notification.sendEmail.callbackUri`, distinto por entorno;
+- asunto, cuerpo HTML y formato de `verifyEmailTemplate`.
+
+El script usa la sesión activa de `firebase login`, muestra solo esos campos y el
+indicador informativo `customized`, y no modifica nada salvo con `--apply`. La
+máscara de actualización es deliberadamente estrecha: remitente, `replyTo`, SMTP
+y el resto de la configuración remota quedan fuera de su propiedad.
+
+Inspección de solo lectura (también se puede agregar `--check`):
+
+```powershell
+bun scripts/firebase-email-config.ts --project staging
+bun scripts/firebase-email-config.ts --project production
+```
+
+La inspección termina con código distinto de cero si detecta diferencias. Para
+aplicar, primero debe estar desplegada y operativa la ruta `/auth/action` del
+Worker correspondiente; Firebase enviará allí los enlaces:
+
+```powershell
+bun scripts/firebase-email-config.ts --project staging --apply
+bun scripts/firebase-email-config.ts --project production --apply
+```
+
+Siempre se aplica primero staging y se valida el correo real antes de producción.
+El script vuelve a consultar Firebase después del cambio y falla si queda alguna
+diferencia. `auth.languageCode = "es"` selecciona el idioma de plantillas
+predeterminadas, pero **no traduce** asunto ni cuerpo cuando la plantilla remota
+está explícitamente personalizada (`customized: true`); por eso el texto español
+se administra aquí.
 
 ## Rutas
 
