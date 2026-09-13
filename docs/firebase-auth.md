@@ -149,8 +149,15 @@ bun scripts/firebase-email-config.ts --project production --apply
 ```
 
 Siempre se aplica primero staging y se valida el correo real antes de producción.
-El script vuelve a consultar Firebase después del cambio y falla si queda alguna
-diferencia. `auth.languageCode = "es"` selecciona el idioma de plantillas
+El script aplica cada campo con una petición independiente, vuelve a consultar
+Firebase después del cambio y falla si queda alguna diferencia. Esto permite
+conservar los cambios aceptados y señalar con precisión un campo bloqueado. En
+algunos proyectos Firebase rechaza asunto, cuerpo o URL de acción con
+`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`, incluso cuando el dominio está autorizado;
+ese bloqueo también afecta al editor de la consola en algunos casos y requiere
+resolverlo con soporte de Firebase, SMTP personalizado o envío propio. El campo
+`customized` es informativo y de solo lectura, por lo que no puede desbloquearse
+desde el payload. `auth.languageCode = "es"` selecciona el idioma de plantillas
 predeterminadas, pero **no traduce** asunto ni cuerpo cuando la plantilla remota
 está explícitamente personalizada (`customized: true`); por eso el texto español
 se administra aquí.

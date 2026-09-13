@@ -100,14 +100,28 @@ async function main() {
     return;
   }
 
-  await client.patch(path, desired, {
-    queryParams: { updateMask: firebaseEmailUpdateMask },
-    headers: { "x-goog-user-project": target.projectId },
-  });
-  console.log("Configuración aplicada; verificando el estado remoto...");
+  const updateErrors: string[] = [];
+  for (const updateMask of firebaseEmailUpdateMask.split(",")) {
+    try {
+      await client.patch(path, desired, {
+        queryParams: { updateMask },
+        headers: { "x-goog-user-project": target.projectId },
+      });
+      console.log(`APPLIED ${updateMask}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      updateErrors.push(`${updateMask}: ${message}`);
+      console.error(`BLOCKED ${updateMask}: ${message}`);
+    }
+  }
+  console.log("Cambios permitidos aplicados; verificando el estado remoto...");
 
   const remainingDrift = printComparison(await fetchConfig(), desired);
   if (remainingDrift.length) {
+    if (updateErrors.length) {
+      console.error("Firebase rechazó estos campos:");
+      for (const error of updateErrors) console.error(`  ${error}`);
+    }
     throw new Error(
       "La configuración remota conserva diferencias después de aplicar.",
     );
