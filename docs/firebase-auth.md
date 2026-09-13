@@ -121,16 +121,16 @@ bloqueados mientras hay otro envío en curso.
 
 ### Configuración del correo de verificación
 
-El repositorio es dueño únicamente de estos campos de Firebase Authentication:
+Por ahora se usa el handler alojado de Firebase. El repositorio es dueño
+únicamente de este campo de Firebase Authentication:
 
-- `notification.defaultLocale` (`es`);
-- `notification.sendEmail.callbackUri`, distinto por entorno;
-- asunto, cuerpo HTML y formato de `verifyEmailTemplate`.
+- `notification.defaultLocale` (`es`).
 
-El script usa la sesión activa de `firebase login`, muestra solo esos campos y el
-indicador informativo `customized`, y no modifica nada salvo con `--apply`. La
-máscara de actualización es deliberadamente estrecha: remitente, `replyTo`, SMTP
-y el resto de la configuración remota quedan fuera de su propiedad.
+El script usa la sesión activa de `firebase login`, muestra ese campo, el callback
+y el indicador `customized`, y no modifica nada salvo con `--apply`. La máscara
+de actualización es deliberadamente estrecha: callback, plantilla, remitente,
+`replyTo`, SMTP y el resto de la configuración remota quedan fuera de su
+propiedad.
 
 Inspección de solo lectura (también se puede agregar `--check`):
 
@@ -140,8 +140,7 @@ bun scripts/firebase-email-config.ts --project production
 ```
 
 La inspección termina con código distinto de cero si detecta diferencias. Para
-aplicar, primero debe estar desplegada y operativa la ruta `/auth/action` del
-Worker correspondiente; Firebase enviará allí los enlaces:
+aplicar el idioma español:
 
 ```powershell
 bun scripts/firebase-email-config.ts --project staging --apply
@@ -149,18 +148,14 @@ bun scripts/firebase-email-config.ts --project production --apply
 ```
 
 Siempre se aplica primero staging y se valida el correo real antes de producción.
-El script aplica cada campo con una petición independiente, vuelve a consultar
-Firebase después del cambio y falla si queda alguna diferencia. Esto permite
-conservar los cambios aceptados y señalar con precisión un campo bloqueado. En
-algunos proyectos Firebase rechaza asunto, cuerpo o URL de acción con
-`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`, incluso cuando el dominio está autorizado;
-ese bloqueo también afecta al editor de la consola en algunos casos y requiere
-resolverlo con soporte de Firebase, SMTP personalizado o envío propio. El campo
-`customized` es informativo y de solo lectura, por lo que no puede desbloquearse
-desde el payload. `auth.languageCode = "es"` selecciona el idioma de plantillas
-predeterminadas, pero **no traduce** asunto ni cuerpo cuando la plantilla remota
-está explícitamente personalizada (`customized: true`); por eso el texto español
-se administra aquí.
+El script vuelve a consultar Firebase después del cambio y falla si queda alguna
+diferencia. Firebase rechazó el callback y la personalización con
+`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`, incluso con el dominio autorizado. Por eso
+los enlaces pasan por `*.firebaseapp.com/__/auth/action`, aplican el código allí y
+regresan a `/login?verified=1`; el login retoma la sesión automáticamente. El
+campo `customized` es informativo y de solo lectura. Si soporte de Firebase
+desbloquea la configuración o se adopta envío propio, `/auth/action` ya está
+disponible para volver al handler personalizado.
 
 ## Rutas
 

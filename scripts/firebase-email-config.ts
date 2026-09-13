@@ -30,13 +30,10 @@ function printComparison(
   console.log(
     `verifyEmailTemplate.customized: ${customizedStatus(current)} (informativo)`,
   );
-  for (const field of [
-    "notification.defaultLocale",
-    "notification.sendEmail.callbackUri",
-    "verifyEmailTemplate.subject",
-    "verifyEmailTemplate.body",
-    "verifyEmailTemplate.bodyFormat",
-  ]) {
+  console.log(
+    `notification.sendEmail.callbackUri: ${JSON.stringify(current.notification?.sendEmail?.callbackUri ?? "<absent>")} (informativo)`,
+  );
+  for (const field of ["notification.defaultLocale"]) {
     const item = driftByField.get(field);
     if (!item) {
       console.log(`OK    ${field}`);

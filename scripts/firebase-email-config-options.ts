@@ -47,24 +47,7 @@ const targets: Record<FirebaseEmailEnvironment, FirebaseEmailTarget> = {
   },
 };
 
-export const verifyEmailTemplate = {
-  subject: "Verifica tu correo en %APP_NAME%",
-  body: [
-    "<p>Hola:</p>",
-    "<p>Confirma tu dirección de correo para completar tu registro en %APP_NAME%.</p>",
-    '<p><a href="%LINK%">Verificar correo</a></p>',
-    "<p>Si no creaste esta cuenta, puedes ignorar este mensaje.</p>",
-  ].join(""),
-  bodyFormat: "HTML",
-} as const;
-
-export const firebaseEmailUpdateMask = [
-  "notification.defaultLocale",
-  "notification.sendEmail.callbackUri",
-  "notification.sendEmail.verifyEmailTemplate.subject",
-  "notification.sendEmail.verifyEmailTemplate.body",
-  "notification.sendEmail.verifyEmailTemplate.bodyFormat",
-].join(",");
+export const firebaseEmailUpdateMask = "notification.defaultLocale";
 
 export function firebaseEmailTarget(
   environment: FirebaseEmailEnvironment,
@@ -121,10 +104,6 @@ export function desiredFirebaseEmailConfig(
   return {
     notification: {
       defaultLocale: "es",
-      sendEmail: {
-        callbackUri: target.callbackUri,
-        verifyEmailTemplate,
-      },
     },
   };
 }
@@ -133,29 +112,11 @@ export function firebaseEmailConfigDrift(
   current: FirebaseEmailConfig,
   desired: FirebaseEmailConfig,
 ): FirebaseEmailConfigDrift[] {
-  const currentTemplate = current.notification?.sendEmail?.verifyEmailTemplate;
-  const desiredTemplate = desired.notification?.sendEmail?.verifyEmailTemplate;
   const fields = [
     [
       "notification.defaultLocale",
       current.notification?.defaultLocale,
       desired.notification?.defaultLocale,
-    ],
-    [
-      "notification.sendEmail.callbackUri",
-      current.notification?.sendEmail?.callbackUri,
-      desired.notification?.sendEmail?.callbackUri,
-    ],
-    [
-      "verifyEmailTemplate.subject",
-      currentTemplate?.subject,
-      desiredTemplate?.subject,
-    ],
-    ["verifyEmailTemplate.body", currentTemplate?.body, desiredTemplate?.body],
-    [
-      "verifyEmailTemplate.bodyFormat",
-      currentTemplate?.bodyFormat,
-      desiredTemplate?.bodyFormat,
     ],
   ] as const;
 

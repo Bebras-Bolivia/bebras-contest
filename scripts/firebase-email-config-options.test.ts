@@ -8,7 +8,6 @@ import {
   firebaseEmailTarget,
   firebaseEmailUpdateMask,
   parseFirebaseEmailConfigArgs,
-  verifyEmailTemplate,
 } from "./firebase-email-config-options";
 
 describe("Firebase verification email configuration", () => {
@@ -78,30 +77,11 @@ describe("Firebase verification email configuration", () => {
     });
   });
 
-  test("builds Spanish HTML desired state with required placeholders", () => {
+  test("builds the Spanish locale desired state", () => {
     const desired = desiredFirebaseEmailConfig(firebaseEmailTarget("staging"));
     assert.equal(desired.notification?.defaultLocale, "es");
-    assert.equal(
-      desired.notification?.sendEmail?.callbackUri,
-      firebaseEmailTarget("staging").callbackUri,
-    );
-    assert.deepEqual(
-      desired.notification?.sendEmail?.verifyEmailTemplate,
-      verifyEmailTemplate,
-    );
-    assert.match(verifyEmailTemplate.body, /%LINK%/u);
-    assert.match(verifyEmailTemplate.body, /%APP_NAME%/u);
-    assert.equal(verifyEmailTemplate.bodyFormat, "HTML");
-    assert.equal(
-      firebaseEmailUpdateMask,
-      [
-        "notification.defaultLocale",
-        "notification.sendEmail.callbackUri",
-        "notification.sendEmail.verifyEmailTemplate.subject",
-        "notification.sendEmail.verifyEmailTemplate.body",
-        "notification.sendEmail.verifyEmailTemplate.bodyFormat",
-      ].join(","),
-    );
+    assert.equal(desired.notification?.sendEmail, undefined);
+    assert.equal(firebaseEmailUpdateMask, "notification.defaultLocale");
   });
 
   test("reports only owned-field drift and tracks customized separately", () => {
@@ -110,27 +90,23 @@ describe("Firebase verification email configuration", () => {
     );
     assert.deepEqual(
       firebaseEmailConfigDrift({}, desired).map(({ field }) => field),
-      [
-        "notification.defaultLocale",
-        "notification.sendEmail.callbackUri",
-        "verifyEmailTemplate.subject",
-        "verifyEmailTemplate.body",
-        "verifyEmailTemplate.bodyFormat",
-      ],
+      ["notification.defaultLocale"],
     );
     assert.deepEqual(firebaseEmailConfigDrift(desired, desired), []);
 
     const current = structuredClone(desired);
     current.notification!.defaultLocale = "en";
-    current.notification!.sendEmail!.verifyEmailTemplate!.subject =
-      "Old subject";
+    current.notification!.sendEmail = {
+      callbackUri: "https://example.firebaseapp.com/__/auth/action",
+      verifyEmailTemplate: { subject: "Old subject" },
+    };
     current.notification!.sendEmail!.verifyEmailTemplate!.customized = false;
     current.notification!.sendEmail!.verifyEmailTemplate!.replyTo =
       "ignored@example.org";
 
     assert.deepEqual(
       firebaseEmailConfigDrift(current, desired).map(({ field }) => field),
-      ["notification.defaultLocale", "verifyEmailTemplate.subject"],
+      ["notification.defaultLocale"],
     );
     assert.equal(customizedStatus(current), "false");
     assert.equal(customizedStatus(desired), "absent");
