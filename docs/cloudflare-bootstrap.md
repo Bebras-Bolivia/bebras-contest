@@ -80,7 +80,7 @@ Todas aceptan `--target local --config wrangler.jsonc` y `--check`:
 | `backend/prisma/seed-tasks.ts` | Alias del catálogo completo, conserva tareas existentes. |
 | `backend/prisma/seed.ts` | Colegios: conserva el comportamiento anterior de omitir si coincide el conteo; carga incompleta o `--force` reemplaza el snapshot en un único batch atómico. |
 | `backend/scripts/seed-admins.ts` | Reset explícito: actualiza nombre, hash y rol de los tres admins; conserva estado y fecha de creación existentes. Contraseña obligatoria, no se imprime. |
-| `backend/scripts/clear-teams.ts` | Elimina respuestas, resultados, intentos y equipos en un único batch atómico. |
+| `backend/scripts/clear-teams.ts` | Elimina respuestas, resultados, intentos y equipos en un único batch atómico; exige `--confirm-clear-teams`. |
 | `backend/prisma/seed-test-tasks.ts` | Conserva las tres fixtures/upserts; exige además `BEBRAS_E2E=1`. |
 | `backend/prisma/replace-tasks.ts` | Reemplazo destructivo local con exportación de respaldo verificado y `--confirm-replace`. |
 
@@ -106,7 +106,7 @@ Después verifica el esquema vigente (incluido el retiro de `ContestGroup.schedu
 ## Estado de aliases y pruebas legadas
 
 - `db:push`/`prisma:push` aplican migraciones D1 locales. `db:setup` genera Prisma, aplica migraciones y ejecuta bootstrap y catálogo con `--target local` explícito.
-- Los aliases `db:seed`, `db:tasks`, `db:admins` y `db:clear-teams` fijan `--target local --config wrangler.jsonc`; `DATABASE_URL` ya no selecciona la base. El reset de admins es distinto del bootstrap idempotente.
+- Los aliases `db:seed`, `db:tasks`, `db:admins` y `db:clear-teams` del backend fijan `--target local --config wrangler.jsonc`; los aliases raíz delegan sin repetir opciones. `DATABASE_URL` ya no selecciona la base. El reset de admins es distinto del bootstrap idempotente y `db:clear-teams` conserva su confirmación destructiva.
 - `db:tasks:replace` vuelve a estar operativo sobre D1 local; el alias pasa target/config explícitos y el usuario debe conservar `--confirm-replace`. Los respaldos ahora son exports SQL D1, no archivos SQLite de `VACUUM INTO`.
 - `bun run test:cloudflare:d1` incluye semillas y reemplazo. La auditoría retiró `@prisma/adapter-better-sqlite3`, `better-sqlite3`, `pdfkit` y sus tipos con `bun remove`; no hay un runtime SQLite alternativo al Worker/D1.
 - `tests/run-e2e.ts` prepara un D1 temporal y aislado en `tests/.wrangler` con `tests/wrangler.e2e.jsonc`. Las suites no abren archivos SQLite directamente.

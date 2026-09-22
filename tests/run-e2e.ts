@@ -84,6 +84,7 @@ async function prepareDatabase() {
     [
       "bun",
       "x",
+      "--no-install",
       "wrangler",
       "d1",
       "migrations",
@@ -124,10 +125,10 @@ async function run(command: string[], cwd: string, extraEnv: Env = {}) {
   }
 }
 
-/** Deja backend y frontend de prueba levantados para las corridas rápidas. */
+/** Deja Firebase, backend y frontend de prueba levantados para corridas rápidas. */
 async function startServers() {
   console.log(
-    "Servidores de prueba en http://localhost:3100 y http://localhost:4421.\n" +
+    "Firebase y servidores de prueba en los puertos 9099, 3100 y 4421.\n" +
       "Déjalos abiertos y corre las pruebas con: bun run test:e2e:rapido\n",
   );
 
@@ -136,12 +137,94 @@ async function startServers() {
   }
 
   // Los mismos puertos y variables que usa playwright.config.ts al levantarlos.
-  await Promise.all([
-    run(["bun", "x", "wrangler", "dev", "--config", wranglerConfig], root),
-    run(["bun", "run", "dev", "--", "--port", "4421"], frontend, {
-      PUBLIC_API_BASE_URL: backendUrl,
+  const definitions = [
+    {
+      command: [
+        "bun",
+        "x",
+        "--no-install",
+        "firebase",
+        "emulators:start",
+        "--only",
+        "auth",
+        "--project",
+        "bebras-bo-staging",
+      ],
+      cwd: root,
+      env: {},
+    },
+    {
+      command: [
+        "bun",
+        "x",
+        "--no-install",
+        "wrangler",
+        "dev",
+        "--config",
+        wranglerConfig,
+      ],
+      cwd: root,
+      env: {},
+    },
+    {
+      command: ["bun", "run", "dev", "--", "--port", "4421"],
+      cwd: frontend,
+      env: { PUBLIC_API_BASE_URL: backendUrl },
+    },
+  ];
+  const servers = definitions.map((definition) => ({
+    ...definition,
+    child: Bun.spawn(definition.command, {
+      cwd: definition.cwd,
+      env: { ...testEnv, ...definition.env },
+      detached: process.platform !== "win32",
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
     }),
-  ]);
+  }));
+  let stopping = false;
+  const stopServers = () => {
+    stopping = true;
+    for (const { child } of servers) {
+      try {
+        if (process.platform === "win32") {
+          Bun.spawnSync(["taskkill", "/PID", String(child.pid), "/T", "/F"], {
+            stdout: "ignore",
+            stderr: "ignore",
+          });
+        } else {
+          process.kill(-child.pid, "SIGTERM");
+        }
+      } catch {
+        // Another server may already have stopped and triggered cleanup.
+      }
+    }
+  };
+  const interrupt = () => {
+    process.exitCode = 130;
+    stopServers();
+  };
+  process.once("SIGINT", interrupt);
+  process.once("SIGTERM", interrupt);
+
+  try {
+    await Promise.all(
+      servers.map(async ({ child, command }) => {
+        const exitCode = await child.exited;
+        if (!stopping) {
+          throw new Error(
+            `El servidor terminó inesperadamente (${exitCode}): ${command.join(" ")}`,
+          );
+        }
+      }),
+    );
+  } finally {
+    stopServers();
+    process.off("SIGINT", interrupt);
+    process.off("SIGTERM", interrupt);
+    await Promise.allSettled(servers.map(({ child }) => child.exited));
+  }
 }
 
 async function main() {
@@ -163,7 +246,10 @@ async function main() {
       await prepareDatabase();
     }
 
-    await run(["bun", "x", "playwright", "test", ...playwrightArgs], root);
+    await run(
+      ["bun", "x", "--no-install", "playwright", "test", ...playwrightArgs],
+      root,
+    );
   } finally {
     if (!fast) {
       cleanupTestArtifacts();

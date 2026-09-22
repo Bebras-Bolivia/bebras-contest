@@ -66,7 +66,7 @@ El esquema se aplica con migraciones de `backend/migrations/`, no con Prisma db 
 | `bun run db:tasks:replace -- --confirm-replace` | Exporta y verifica un respaldo SQL D1 antes del reemplazo destructivo del catálogo y grafo de concursos. |
 | `bun run db:schools:fetch`                   | Vuelve a descargar las unidades educativas del MINEDU y regenera el snapshot. Solo hace falta cuando el listado oficial cambia.   |
 | `bun run db:admins` | Crea o restablece los tres admins con `SEED_ADMIN_PASSWORD`; para conservar cuentas existentes usa el bootstrap aditivo. |
-| `bun run db:clear-teams` | Borra equipos, intentos, respuestas y resultados. |
+| `bun run db:clear-teams -- --confirm-clear-teams` | Borra equipos, intentos, respuestas y resultados después de una confirmación explícita. |
 
 `db:setup` ejecuta migraciones y semillas exclusivamente locales y requiere
 `SEED_ADMIN_PASSWORD`. Detalles de semillas,
@@ -312,12 +312,11 @@ bun run test:e2e:servidores            # en otra terminal, se quedan arriba
 bun run test:e2e:rapido -- --project=juego
 ```
 
-En el runner legado, el modo rápido conserva la base sembrada entre corridas y aprovecha los
-servidores que ya estén escuchando; el reloj de pruebas sí se borra siempre,
-porque una hora vieja rompe cualquier ventana de desafío. Con los servidores
-arriba, un módulo baja de unos 40 s a unos 25 s. Para una verificación
-reproducible sobre Cloudflare falta implementar la corrida con D1 temporal,
-semillas y servidores aislados.
+`test:e2e:servidores` prepara el D1 aislado y deja levantados Firebase Auth
+Emulator, Wrangler y Astro en los puertos 9099, 3100 y 4421. El modo rápido
+conserva la base sembrada entre corridas y aprovecha esos servidores; el reloj de
+pruebas sí se borra siempre, porque una hora vieja rompe cualquier ventana de
+desafío. Con los servidores arriba, un módulo baja de unos 40 s a unos 25 s.
 
 La lógica del contrato, la geometría de las zonas, los huecos del documento y
 las asignaciones se comprueban sin navegador:
@@ -326,9 +325,9 @@ las asignaciones se comprueban sin navegador:
 bun run test:unidad
 ```
 
-El comando agregado no incluye `scripts/cloudflare-seed.test.ts`; las pruebas D1
-tienen su comando explícito en la guía de bootstrap. No se declara aprobada toda
-la suite unitaria.
+El comando incluye las reglas unitarias del frontend, pero no
+`scripts/cloudflare-seed.test.ts`; las pruebas D1 tienen su comando explícito en
+la guía de bootstrap.
 
 ## Operación Cloudflare
 
@@ -352,16 +351,18 @@ bun x --no-install wrangler deploy --env production --dry-run
 
 Con los recursos remotos provisionados, `bun run deploy:staging` y
 `bun run deploy:production` aplican las migraciones D1 pendientes, verifican el
-historial, reconstruyen el modo correcto y despliegan con su `--env`. También se
-pueden ejecutar por separado para diagnóstico:
+historial, reconstruyen el modo correcto y despliegan con su `--env`. Antes de la
+primera escritura exigen un worktree limpio y la rama exacta: `staging` para
+staging y `master` para producción. También se pueden ejecutar por separado para
+diagnóstico desde esas mismas ramas:
 
 ```bash
 bun run db:migrations:apply:staging
 bun run db:migrations:check:staging
-bun scripts/cloudflare-seed.ts --target staging
+bun run db:bootstrap:staging
 bun run db:migrations:apply:production
 bun run db:migrations:check:production
-bun scripts/cloudflare-seed.ts --target production
+bun run db:bootstrap:production
 ```
 
 `SEED_ADMIN_PASSWORD` es obligatorio en el entorno del script; véase su entrada

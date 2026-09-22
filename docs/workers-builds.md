@@ -29,7 +29,8 @@ backup; luego el gate ejecuta un `SELECT` sobre `d1_migrations`, compara el
 resultado con los archivos locales y bloquea el despliegue si la aplicación falló
 o existe un historial divergente. Después el build genera Prisma
 para workerd, compila Astro y aplica el recorte sólo a producción. Si
-Workers Builds comunica una rama distinta a la esperada, falla antes de compilar.
+Workers Builds comunica una rama distinta a la esperada o el checkout no está
+limpio, falla antes de aplicar migraciones.
 `develop` no debe estar conectado a ningún build.
 
 Cloudflare proporciona el token de despliegue elegido en el Dashboard. La

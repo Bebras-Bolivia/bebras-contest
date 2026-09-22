@@ -1,13 +1,22 @@
 import { fileURLToPath } from "node:url";
 import { firebaseWebConfig } from "./firebase-config";
+import {
+  expectedBuildBranch,
+  type CloudflareBuildEnvironment,
+} from "./cloudflare-remote-options";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const target = process.argv[2];
 if (!["local", "staging", "production"].includes(target ?? "")) {
-  throw new Error("Uso: bun scripts/cloudflare-build.ts local|staging|production");
+  throw new Error(
+    "Uso: bun scripts/cloudflare-build.ts local|staging|production",
+  );
 }
 const branch = process.env.WORKERS_CI_BRANCH;
-if (branch && branch !== (target === "production" ? "master" : "staging")) {
+const expectedBranch = expectedBuildBranch(
+  target as CloudflareBuildEnvironment,
+);
+if (branch && branch !== expectedBranch) {
   throw new Error(`La rama ${branch} no puede publicar el entorno ${target}.`);
 }
 // La configuracion Web es publica. Local comparte identidades con staging, pero

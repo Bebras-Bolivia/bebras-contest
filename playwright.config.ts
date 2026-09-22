@@ -65,13 +65,14 @@ export default defineConfig({
   webServer: [
     {
       command:
-        "bun x firebase emulators:start --only auth --project bebras-bo-staging",
+        "bun x --no-install firebase emulators:start --only auth --project bebras-bo-staging",
       url: "http://127.0.0.1:9099/emulator/v1/projects/bebras-bo-staging/config",
       reuseExistingServer: reuseServers,
       timeout: 120000,
     },
     {
-      command: "bun x wrangler dev --config tests/wrangler.e2e.jsonc",
+      command:
+        "bun x --no-install wrangler dev --config tests/wrangler.e2e.jsonc",
       url: `${backendUrl}/health`,
       env: backendEnv,
       reuseExistingServer: reuseServers,
