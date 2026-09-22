@@ -247,7 +247,7 @@ async function main() {
   }
 
   console.log(`Listo. ${rows.length} colegios guardados en ${SNAPSHOT}.`);
-  console.log('Ejecuta "bun run db:seed --force" para cargarlos en la base.');
+  console.log('Ejecuta "bun run db:seed -- --force" para cargarlos en la base.');
 }
 
 main().catch((error) => {

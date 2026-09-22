@@ -23,7 +23,7 @@ const child = Bun.spawn(
     "-c",
     "blue,magenta",
     "bun x --no-install wrangler dev --local " +
-      "--var FIREBASE_PROJECT_ID:bebras-bo-staging",
+      "--var FIREBASE_PROJECT_ID:bebras-bo-staging --config wrangler.jsonc",
     "bun run --cwd frontend dev",
   ],
   { cwd: root, env, stdin: "inherit", stdout: "inherit", stderr: "inherit" },

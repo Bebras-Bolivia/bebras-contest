@@ -34,9 +34,9 @@ Prepara Prisma, la base de datos y los datos iniciales:
 
 ```bash
 bun run db:generate
-bun x --no-install wrangler d1 migrations apply DB --local
+bun run db:push
 bun scripts/cloudflare-credentials.ts local seed
-bun run db:tasks -- --target local
+bun run db:tasks
 bun run build:local
 ```
 
@@ -61,12 +61,12 @@ El esquema se aplica con migraciones de `backend/migrations/`, no con Prisma db 
 | Comando                                      | Qué hace                                                                                                                          |
 | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | `bun run db:push` | Aplica migraciones D1 locales mediante Wrangler. |
-| `bun run db:seed -- --target local` | Carga colegios; omite si coincide el conteo. Una carga incompleta o `--force` reemplaza el snapshot. |
-| `bun run db:tasks -- --target local` | Valida e inserta solo las tareas faltantes. |
-| `bun run db:tasks:replace -- --target local --confirm-replace` | Exporta y verifica un respaldo SQL D1 antes del reemplazo destructivo del catálogo y grafo de concursos. |
+| `bun run db:seed` | Carga colegios; omite si coincide el conteo. Una carga incompleta o `--force` reemplaza el snapshot. |
+| `bun run db:tasks` | Valida e inserta solo las tareas faltantes. |
+| `bun run db:tasks:replace -- --confirm-replace` | Exporta y verifica un respaldo SQL D1 antes del reemplazo destructivo del catálogo y grafo de concursos. |
 | `bun run db:schools:fetch`                   | Vuelve a descargar las unidades educativas del MINEDU y regenera el snapshot. Solo hace falta cuando el listado oficial cambia.   |
-| `bun run db:admins -- --target local` | Crea o restablece los tres admins con `SEED_ADMIN_PASSWORD`; para conservar cuentas existentes usa el bootstrap aditivo. |
-| `bun run db:clear-teams -- --target local` | Borra equipos, intentos, respuestas y resultados. |
+| `bun run db:admins` | Crea o restablece los tres admins con `SEED_ADMIN_PASSWORD`; para conservar cuentas existentes usa el bootstrap aditivo. |
+| `bun run db:clear-teams` | Borra equipos, intentos, respuestas y resultados. |
 
 `db:setup` ejecuta migraciones y semillas exclusivamente locales y requiere
 `SEED_ADMIN_PASSWORD`. Detalles de semillas,
@@ -76,7 +76,7 @@ Los recortes corregidos del banco se pueden regenerar con
 `uv run --with pymupdf python backend/scripts/recrop-task-images.py`.
 El script requiere el PDF original en `tareas-otono-2024/_referencia/`, conserva
 los identificadores de las imágenes y modifica únicamente la semilla JSON.
-`bun run db:tasks -- --target local` carga las tareas oficiales que falten en D1 local.
+`bun run db:tasks` carga las tareas oficiales que falten en D1 local.
 Los tres fixtures sintéticos están reservados a pruebas (`BEBRAS_E2E=1`) y
 requieren una configuración D1 aislada explícita.
 El reemplazo explícito conserva intactos colegios, usuarios y solicitudes de
@@ -255,10 +255,10 @@ de la autoría en Python no aporta una regeneración segura.
 2. Desde `backend/`, ejecuta `bun run catalog:validate` para validar la semilla,
    o `bun run catalog:validate -- <ruta-json>` para revisar una candidata sin
    escribir archivos ni conectar a la base. Ejecuta `bun run test:catalog`.
-3. Desde la raíz, `bun run db:tasks -- --target local` valida e inserta solo IDs faltantes. No
+3. Desde la raíz, `bun run db:tasks` valida e inserta solo IDs faltantes. No
    actualiza tareas existentes ni elimina variantes antiguas o ediciones locales.
 4. Solo si quieres descartar esos datos, detén el backend y ejecuta explícitamente
-   `bun run db:tasks:replace -- --target local --confirm-replace`, opcionalmente con
+   `bun run db:tasks:replace -- --confirm-replace`, opcionalmente con
    `--backup <ruta-nueva.sql>`. Crea un export SQL D1 verificado antes del reemplazo;
    no sobrescribe respaldos existentes. Borra tareas y el grafo de concursos
    (incluidas respuestas y resultados), conservando colegios, usuarios y

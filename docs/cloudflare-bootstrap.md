@@ -106,8 +106,8 @@ Después verifica el esquema vigente (incluido el retiro de `ContestGroup.schedu
 ## Estado de aliases y pruebas legadas
 
 - `db:push`/`prisma:push` aplican migraciones D1 locales. `db:setup` genera Prisma, aplica migraciones y ejecuta bootstrap y catálogo con `--target local` explícito.
-- Actualizar aliases `db:seed`, `db:tasks`, `db:admins`, `db:clear-teams`, `db:test-tasks` y sus invocaciones E2E: `DATABASE_URL` ya no selecciona la base. El reset de admins es distinto del bootstrap idempotente.
-- `db:tasks:replace` vuelve a estar operativo sobre D1 local; el alias debe pasar target/config explícitos y conservar `--confirm-replace`. Los respaldos ahora son exports SQL D1, no archivos SQLite de `VACUUM INTO`.
+- Los aliases `db:seed`, `db:tasks`, `db:admins` y `db:clear-teams` fijan `--target local --config wrangler.jsonc`; `DATABASE_URL` ya no selecciona la base. El reset de admins es distinto del bootstrap idempotente.
+- `db:tasks:replace` vuelve a estar operativo sobre D1 local; el alias pasa target/config explícitos y el usuario debe conservar `--confirm-replace`. Los respaldos ahora son exports SQL D1, no archivos SQLite de `VACUUM INTO`.
 - `bun run test:cloudflare:d1` incluye semillas y reemplazo. La auditoría retiró `@prisma/adapter-better-sqlite3`, `better-sqlite3`, `pdfkit` y sus tipos con `bun remove`; no hay un runtime SQLite alternativo al Worker/D1.
 - `tests/run-e2e.ts` prepara un D1 temporal y aislado en `tests/.wrangler` con `tests/wrangler.e2e.jsonc`. Las suites no abren archivos SQLite directamente.
 
