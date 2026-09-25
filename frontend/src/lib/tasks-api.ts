@@ -1,4 +1,8 @@
-import { normalizeCategories, type StoredTask } from "@/lib/task-schema";
+import {
+  normalizeCategories,
+  type AnswerType,
+  type StoredTask,
+} from "@/lib/task-schema";
 import { BEBRAS_CATEGORIES } from "@/lib/contest-schema";
 import { apiRequest as request } from "@/lib/api-client";
 import type { PlayTask } from "@/lib/play-api";
@@ -13,6 +17,7 @@ export type HomeTaskItem = {
   categories: string[];
   /** Categorías de Bebras que cubre, según los rangos de edad con dificultad. */
   levels: string[];
+  answerType: AnswerType;
   isPractice: boolean;
 };
 
@@ -112,6 +117,7 @@ export function mapTaskToHomeItem(task: StoredTask): HomeTaskItem {
     levels: BEBRAS_CATEGORIES.filter(
       (category) => (task.difficulties[category.ageRange] ?? "").trim() !== "",
     ).map((category) => category.name),
+    answerType: task.answerType,
     isPractice: Boolean((task as { isPractice?: boolean }).isPractice),
   };
 }

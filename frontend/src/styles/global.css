@@ -54,6 +54,16 @@
   --shadow-hard: var(--shadow-offset-x) var(--shadow-offset-y)
     var(--shadow-blur) var(--shadow-spread) var(--shadow-color);
   --focus-soft: 0 0 0 3px rgb(255 51 51 / 0.28);
+  /* Dificultad de una tarea para una categoría: los colores de la paleta.
+     Rojo con letra blanca, como los botones del tema (a la vista se lee mejor
+     que el negro, aunque WCAG 2 dé 4,1:1; por eso la etiqueta va en
+     seminegrita); verde y amarillo con negra, porque el blanco se pierde. */
+  --difficulty-easy: var(--chart-4);
+  --difficulty-easy-foreground: var(--foreground);
+  --difficulty-medium: var(--secondary);
+  --difficulty-medium-foreground: var(--secondary-foreground);
+  --difficulty-hard: var(--primary);
+  --difficulty-hard-foreground: var(--primary-foreground);
 }
 
 .dark {
@@ -92,6 +102,12 @@
 }
 
 @theme inline {
+  --color-difficulty-easy: var(--difficulty-easy);
+  --color-difficulty-easy-foreground: var(--difficulty-easy-foreground);
+  --color-difficulty-medium: var(--difficulty-medium);
+  --color-difficulty-medium-foreground: var(--difficulty-medium-foreground);
+  --color-difficulty-hard: var(--difficulty-hard);
+  --color-difficulty-hard-foreground: var(--difficulty-hard-foreground);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -197,6 +213,13 @@
   [data-slot="textarea"][data-plain],
   [data-slot="textarea"][data-plain]:focus-visible {
     border-color: transparent !important;
+    box-shadow: none !important;
+  }
+
+  /* Menú sin marco: cada opción ya es su propia tarjeta, y el marco de todos
+     los popovers la dejaba como una tarjeta dentro de otra. */
+  [data-slot="popover-content"][data-plain-menu] {
+    border: 0 !important;
     box-shadow: none !important;
   }
 
@@ -649,11 +672,109 @@
   view-transition-class: task-row;
 }
 
+:root[data-task-filter] [data-task-row] {
+  view-transition-name: var(--task-transition-name, none);
+}
+
+/* Al filtrar solo se mueven las filas y la raya del filtro: el resto de la
+   página cambia en seco, sin fundido. El pill del menú no participa; si no,
+   quedaría por encima de su rótulo y lo taparía mientras dura el cambio. */
+/* `app-content` y `app-root` traen el deslizamiento de Astro entre páginas;
+   sin anularlo aquí, toda la página se corre de lado al filtrar. */
+:root[data-task-filter]::view-transition-old(root),
+:root[data-task-filter]::view-transition-old(app-root),
+:root[data-task-filter]::view-transition-old(app-content) {
+  display: none;
+}
+
+:root[data-task-filter]::view-transition-group(root),
+:root[data-task-filter]::view-transition-group(app-root),
+:root[data-task-filter]::view-transition-group(app-content),
+:root[data-task-filter]::view-transition-new(root),
+:root[data-task-filter]::view-transition-new(app-root),
+:root[data-task-filter]::view-transition-new(app-content) {
+  animation: none !important;
+}
+
+:root[data-task-filter] .nav-pill {
+  view-transition-name: none;
+}
+
 ::view-transition-group(*.task-row),
 ::view-transition-old(*.task-row),
 ::view-transition-new(*.task-row) {
   animation-duration: 380ms;
   animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* La raya del filtro activo viaja de una pestaña a la otra, como el pill del
+   menú, en vez de apagarse en una y encenderse en otra. */
+.task-filter-indicator {
+  view-transition-name: task-filter-indicator;
+}
+
+::view-transition-group(task-filter-indicator) {
+  z-index: 1;
+  animation-duration: 320ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+::view-transition-old(task-filter-indicator),
+::view-transition-new(task-filter-indicator) {
+  animation: none;
+  height: 100%;
+}
+
+/* Al llegar la lista, las filas que se ven suben y se funden en cascada sobre
+   el hueco del esqueleto, en vez de aparecer todas de golpe. */
+[data-task-row][data-revealing] {
+  animation: bebras-row-in 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+[data-task-row][data-revealing]:nth-child(2) {
+  animation-delay: 30ms;
+}
+[data-task-row][data-revealing]:nth-child(3) {
+  animation-delay: 60ms;
+}
+[data-task-row][data-revealing]:nth-child(4) {
+  animation-delay: 90ms;
+}
+[data-task-row][data-revealing]:nth-child(5) {
+  animation-delay: 120ms;
+}
+[data-task-row][data-revealing]:nth-child(6) {
+  animation-delay: 150ms;
+}
+[data-task-row][data-revealing]:nth-child(n + 7) {
+  animation-delay: 180ms;
+}
+
+@keyframes bebras-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-task-row][data-revealing] {
+    animation: none;
+  }
+}
+
+/* Al filtrar, la fila que sale se va antes y la que entra llega después,
+   para que no se superpongan mientras las demás se acomodan. */
+::view-transition-old(*.task-row):only-child {
+  animation: bebras-fade-out 130ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+::view-transition-new(*.task-row):only-child {
+  animation: bebras-fade-in 260ms cubic-bezier(0, 0, 0.2, 1) 120ms both;
 }
 
 /* Una sola superficie editable: la selección y el texto comparten geometría. */

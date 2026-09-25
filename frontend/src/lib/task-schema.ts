@@ -26,6 +26,14 @@ export const answerTypes = [
   "state_grid",
   "text_cloze",
 ] as const;
+export const answerTypeLabels: Record<(typeof answerTypes)[number], string> = {
+  multiple_choice: "Opción múltiple",
+  short_text: "Respuesta corta",
+  drag_drop: "Arrastrar y soltar",
+  image_hotspot: "Zonas sobre la imagen",
+  state_grid: "Estados por casilla",
+  text_cloze: "Huecos en el texto",
+};
 export const multipleChoiceOrderModes = ["fixed", "random"] as const;
 export const multipleChoiceCorrectnessModes = ["single", "any", "all"] as const;
 export const multipleChoiceLayouts = ["vertical", "horizontal"] as const;

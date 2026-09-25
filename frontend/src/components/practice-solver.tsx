@@ -13,17 +13,23 @@ import { TaskContentRenderer } from "@/components/task-content-renderer";
 import { TaskPlayContent } from "@/components/task-play-content";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   checkPracticeAnswer,
   getPracticeTask,
   type PracticeCheck,
 } from "@/lib/practice-api";
 import { answerHasResponse, type PlayTask } from "@/lib/play-api";
+import { readSavedAnswer, saveAnswer } from "@/lib/answer-memory";
 import {
   practiceCategoryHref,
   practiceOrigin,
 } from "@/lib/practice-navigation";
+
+/**
+ * Tareas ya descargadas en esta visita: al volver a una, aparece al instante y
+ * se refresca por detrás en vez de mostrar otra vez la carga.
+ */
+const loadedTasks = new Map<string, PlayTask>();
 
 export function PracticeSolver() {
   const [taskId] = useState(() =>
@@ -41,11 +47,21 @@ export function PracticeSolver() {
     const origin = practiceOrigin(params.get("from"));
     return category ? practiceCategoryHref(category, origin) : origin;
   });
-  const [task, setTask] = useState<PlayTask | null>(null);
+  const memoryKey = `practica:${taskId}`;
+  const [task, setTask] = useState<PlayTask | null>(
+    () => loadedTasks.get(taskId) ?? null,
+  );
   const [failed, setFailed] = useState(false);
-  const [answer, setAnswer] = useState<unknown>(undefined);
-  const [result, setResult] = useState<PracticeCheck | null>(null);
+  const [saved] = useState(() => readSavedAnswer<PracticeCheck>(memoryKey));
+  const [answer, setAnswer] = useState<unknown>(saved?.answer);
+  const [result, setResult] = useState<PracticeCheck | null>(
+    saved?.result ?? null,
+  );
   const [checking, setChecking] = useState(false);
+
+  useEffect(() => {
+    if (taskId) saveAnswer(memoryKey, { answer, result });
+  }, [taskId, memoryKey, answer, result]);
 
   useEffect(() => {
     if (!taskId) {
@@ -54,12 +70,14 @@ export function PracticeSolver() {
     let active = true;
     getPracticeTask(taskId)
       .then((data) => {
+        loadedTasks.set(taskId, data);
         if (active) {
           setTask(data);
         }
       })
       .catch(() => {
-        if (active) {
+        // Si ya se mostraba una copia, se queda esa en vez del error.
+        if (active && !loadedTasks.has(taskId)) {
           setFailed(true);
         }
       });
@@ -112,21 +130,16 @@ export function PracticeSolver() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <Card>
-        <CardContent className="flex flex-col gap-5 pt-6">
-          <div className="flex flex-col gap-2">
-            <h1 className="text-xl font-semibold">{task.title}</h1>
-          </div>
-
-          <TaskPlayContent
-            task={task}
-            value={answer}
-            onChange={setAnswer}
-            disabled={result !== null}
-          />
-        </CardContent>
-      </Card>
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+      <section className="flex flex-col gap-5">
+        <h1 className="text-xl font-semibold">{task.title}</h1>
+        <TaskPlayContent
+          task={task}
+          value={answer}
+          onChange={setAnswer}
+          disabled={result !== null}
+        />
+      </section>
 
       {result && (
         <Alert variant={result.correct ? "default" : "destructive"}>

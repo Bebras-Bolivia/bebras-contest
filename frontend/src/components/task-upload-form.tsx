@@ -752,6 +752,30 @@ export function TaskUploadForm({
   const [errors, setErrors] = useState<string[]>([]);
   // Ya no cambia en vivo: al guardar se sale de la pantalla.
   const loadedTask = initialTask;
+
+  // Desde el probador, cada categoría enlaza a su fila de dificultad: se baja
+  // hasta ella, se resalta un momento y queda enfocado su selector.
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    if (!id.startsWith("dificultad-")) return;
+    const row = document.getElementById(id);
+    if (!row) return;
+    row.scrollIntoView({ block: "center", behavior: "smooth" });
+    const control =
+      row.querySelector<HTMLElement>("button[role=combobox]:not([disabled])") ??
+      row.querySelector<HTMLElement>("button[role=checkbox]");
+    control?.focus({ preventScroll: true });
+    row.animate?.(
+      [
+        {
+          backgroundColor:
+            "color-mix(in srgb, var(--primary) 18%, transparent)",
+        },
+        { backgroundColor: "transparent" },
+      ],
+      { duration: 1600, easing: "ease-out" },
+    );
+  }, []);
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
   const [selectedBlank, setSelectedBlank] = useState("");
   const blankRemovalDescription = (ids: string[]) => {
@@ -1353,7 +1377,8 @@ export function TaskUploadForm({
           {ageRanges.map((range) => (
             <Field
               key={range}
-              className="items-center"
+              id={`dificultad-${range.replace("–", "-")}`}
+              className="scroll-mt-24 items-center rounded-md"
               orientation="horizontal"
             >
               <div className="flex shrink-0 items-center gap-3">

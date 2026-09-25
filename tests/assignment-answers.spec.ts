@@ -1,4 +1,9 @@
-import { expect, test, type APIRequestContext } from "@playwright/test";
+import {
+  expect,
+  test,
+  type APIRequestContext,
+  type Page,
+} from "@playwright/test";
 import {
   API,
   createContest,
@@ -25,6 +30,35 @@ const payload = (kind: Kind, values: Record<string, string>) => ({
   version: 1,
   [field(kind)]: values,
 });
+/**
+ * La rejilla se resuelve tocando la casilla hasta llegar al estado; el hueco,
+ * eligiendo primero la opción en la paleta.
+ */
+async function assignSlot(
+  page: Page,
+  grid: boolean,
+  slotId: string,
+  label: string,
+  tap = false,
+) {
+  const slot = page.locator(`[data-assignment-slot="${slotId}"]`);
+  if (grid) {
+    for (let step = 0; step < 8; step += 1) {
+      const current = (await slot.getAttribute("aria-label")) ?? "";
+      if (current.endsWith(`: ${label}`)) return;
+      await (tap ? slot.tap() : slot.click());
+      await expect(slot).not.toHaveAttribute("aria-label", current);
+    }
+    throw new Error(`La casilla ${slotId} nunca llegó a ${label}.`);
+  }
+  const choice = page.getByRole("radio", {
+    name: `Elegir ${label}`,
+    exact: true,
+  });
+  await (tap ? choice.tap() : choice.click());
+  await (tap ? slot.tap() : slot.click());
+}
+
 function fixture(kind: Kind) {
   return {
     title: `Configuración ${kind} ${Date.now()}`,
@@ -220,7 +254,9 @@ for (const kind of kinds) {
       const first = page.locator('[data-assignment-slot="first"]');
       const second = page.locator('[data-assignment-slot="second"]');
       await expect(first).toHaveAccessibleName(/vacío$/);
-      if (width === 390) {
+      if (kind === "state_grid") {
+        await assignSlot(page, true, "first", "Blanca", width === 390);
+      } else if (width === 390) {
         await page
           .getByRole("radio", { name: "Elegir Blanca", exact: true })
           .tap();
@@ -577,10 +613,12 @@ for (const width of [1100, 390]) {
       await page.locator("[data-assignment-slot]").first().waitFor();
       for (const [slotId, optionId] of Object.entries(accepted)) {
         const option = bank.find((entry) => entry.id === optionId)!;
-        await page
-          .getByRole("radio", { name: `Elegir ${option.label}`, exact: true })
-          .click();
-        await page.locator(`[data-assignment-slot="${slotId}"]`).click();
+        await assignSlot(
+          page,
+          author.answerType === "state_grid",
+          slotId,
+          option.label,
+        );
       }
       await page
         .getByRole("button", { name: "Comprobar", exact: true })
@@ -634,8 +672,8 @@ test("the five booklet tasks are answered, submitted and scored in a real contes
   // así que primero se arman los dos desafíos y recién después salta el reloj.
   const rounds = [];
   for (const group of contests) {
-    const entries = group.ids.map((id) =>
-      seeded.find((entry) => entry.id === id)!,
+    const entries = group.ids.map(
+      (id) => seeded.find((entry) => entry.id === id)!,
     );
     const authored = [];
     for (const entry of entries)

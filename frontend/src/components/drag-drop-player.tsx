@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { HelpCircleIcon } from "lucide-react";
 
 import {
@@ -15,7 +15,7 @@ import type {
 } from "@/lib/task-schema";
 import { DEFAULT_DRAG_DROP_ITEM_WIDTH_PERCENT } from "@/lib/task-schema";
 import {
-  findTargetAtPoint,
+  findDropTarget,
   getSnapCircleStyle,
   isPointOutsideStage,
   type StageBounds,
@@ -34,7 +34,13 @@ type PointerDrag = {
   startX: number;
   startY: number;
   moved: boolean;
+  /** Dónde se tomó la pieza, respecto de su centro y en fracción de su ancho. */
+  grabX: number;
+  grabY: number;
 };
+
+/** Punto donde se soltó una pieza, para que se deslice desde ahí a su lugar. */
+type Settle = { itemId: string; x: number; y: number };
 
 type DragPreview = {
   itemId: string;
@@ -104,6 +110,8 @@ export function DragDropPlayer({
   const suppressClickItemIdRef = useRef<string | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
+  const [hoverTargetId, setHoverTargetId] = useState<string | null>(null);
+  const settleRef = useRef<Settle | null>(null);
   const [keyboardCursor, setKeyboardCursor] = useState<KeyboardCursor | null>(
     null,
   );
@@ -153,6 +161,53 @@ export function DragDropPlayer({
     Number.isFinite(item.widthPercent) && item.widthPercent > 0
       ? item.widthPercent
       : DEFAULT_DRAG_DROP_ITEM_WIDTH_PERCENT;
+
+  /** Cuánto se puede errar al soltar: al menos media pieza y 24 px. */
+  const dropRadius = (itemId: string) => {
+    const item = items.find((candidate) => candidate.id === itemId);
+    const width = stageRef.current?.clientWidth ?? 0;
+    const piece =
+      ((item ? itemWidth(item) : DEFAULT_DRAG_DROP_ITEM_WIDTH_PERCENT) / 100) *
+      width;
+    return Math.max(24, piece * 0.6);
+  };
+
+  const dropTargetAt = (itemId: string, clientX: number, clientY: number) => {
+    const stageElement = stageRef.current;
+    if (!stageElement) return undefined;
+    return findDropTarget(
+      clientX,
+      clientY,
+      getStageBounds(stageElement),
+      targets,
+      dropRadius(itemId),
+    );
+  };
+
+  // La pieza recién soltada se desliza desde donde quedó el dedo hasta el
+  // centro de su destino, en vez de aparecer ahí de golpe.
+  useLayoutEffect(() => {
+    const settle = settleRef.current;
+    settleRef.current = null;
+    if (!settle || !targetById.has(placements[settle.itemId] ?? "")) return;
+    const element = itemButtonRefs.current.get(settle.itemId);
+    if (
+      !element?.animate ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+    const rect = element.getBoundingClientRect();
+    const dx = settle.x - (rect.left + rect.width / 2);
+    const dy = settle.y - (rect.top + rect.height / 2);
+    element.animate(
+      [
+        { transform: `translate(${dx}px, ${dy}px) scale(1.06)` },
+        { transform: "none" },
+      ],
+      { duration: 240, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+    );
+  }, [placements, targetById]);
 
   const cursorForItem = (itemId: string): KeyboardCursor => {
     const target = targetById.get(placements[itemId] ?? "");
@@ -330,8 +385,7 @@ export function DragDropPlayer({
       return false;
     }
 
-    const stage = getStageBounds(stageElement);
-    const target = findTargetAtPoint(clientX, clientY, stage, targets);
+    const target = dropTargetAt(itemId, clientX, clientY);
     return target ? placeItem(itemId, target.id) : false;
   };
 
@@ -353,12 +407,19 @@ export function DragDropPlayer({
     }
 
     event.currentTarget.setPointerCapture(event.pointerId);
+    const rect = event.currentTarget.getBoundingClientRect();
     pointerDragRef.current = {
       itemId,
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
       moved: false,
+      grabX: rect.width
+        ? (event.clientX - (rect.left + rect.width / 2)) / rect.width
+        : 0,
+      grabY: rect.width
+        ? (event.clientY - (rect.top + rect.height / 2)) / rect.width
+        : 0,
     };
   };
 
@@ -382,14 +443,18 @@ export function DragDropPlayer({
     event.preventDefault();
     const item = items.find((candidate) => candidate.id === drag.itemId);
     const stageWidth = stageRef.current?.clientWidth ?? 0;
-    setDragPreview({
-      itemId: drag.itemId,
-      x: event.clientX,
-      y: event.clientY,
-      width: item
-        ? (itemWidth(item) / 100) * stageWidth
-        : (DEFAULT_DRAG_DROP_ITEM_WIDTH_PERCENT / 100) * stageWidth,
-    });
+    const width = item
+      ? (itemWidth(item) / 100) * stageWidth
+      : (DEFAULT_DRAG_DROP_ITEM_WIDTH_PERCENT / 100) * stageWidth;
+    // La pieza sigue al dedo desde el punto donde se tomó, sin recentrarse.
+    const x = event.clientX - drag.grabX * width;
+    const y = event.clientY - drag.grabY * width;
+    setDragPreview({ itemId: drag.itemId, x, y, width });
+    setHoverTargetId(
+      isOutsideStage(event.clientX, event.clientY)
+        ? null
+        : (dropTargetAt(drag.itemId, x, y)?.id ?? null),
+    );
   };
 
   const handlePointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -400,7 +465,9 @@ export function DragDropPlayer({
     }
 
     pointerDragRef.current = null;
+    const preview = dragPreview;
     setDragPreview(null);
+    setHoverTargetId(null);
 
     if (drag.moved && !disabled) {
       suppressClickItemIdRef.current = drag.itemId;
@@ -422,7 +489,11 @@ export function DragDropPlayer({
         returnItem(drag.itemId);
         clearSelection();
       } else {
-        placeItemAtPoint(drag.itemId, event.clientX, event.clientY);
+        // Cuenta dónde quedó la pieza, no la punta del dedo.
+        const x = preview?.itemId === drag.itemId ? preview.x : event.clientX;
+        const y = preview?.itemId === drag.itemId ? preview.y : event.clientY;
+        settleRef.current = { itemId: drag.itemId, x, y };
+        if (!placeItemAtPoint(drag.itemId, x, y)) settleRef.current = null;
       }
     }
   };
@@ -436,6 +507,7 @@ export function DragDropPlayer({
 
     pointerDragRef.current = null;
     setDragPreview(null);
+    setHoverTargetId(null);
   };
 
   /** La bandeja pinta la pieza igual esté puesta o no, para que el hueco no se mueva. */
@@ -620,6 +692,27 @@ export function DragDropPlayer({
               {index + 1}
             </span>
           ))}
+        {dragPreview &&
+          hoverTargetId &&
+          (() => {
+            const target = targetById.get(hoverTargetId);
+            if (!target) return null;
+            const size = Math.max(32, dragPreview.width * 1.15);
+            return (
+              <span
+                key={target.id}
+                aria-hidden="true"
+                data-drop-hint
+                className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 border-2 border-dashed border-primary bg-primary/15 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-75 motion-safe:duration-150"
+                style={{
+                  left: `${target.x}%`,
+                  top: `${target.y}%`,
+                  width: size,
+                  height: size,
+                }}
+              />
+            );
+          })()}
         {placedItems.map((item) => {
           const target = targetById.get(placements[item.id]);
 
@@ -632,7 +725,7 @@ export function DragDropPlayer({
               key={item.id}
               {...itemButtonProps(item)}
               className={cn(
-                "absolute touch-none -translate-x-1/2 -translate-y-1/2 cursor-grab overflow-hidden rounded-sm border-2 border-transparent bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default",
+                "absolute touch-none -translate-x-1/2 -translate-y-1/2 cursor-pointer overflow-hidden rounded-sm border-2 border-transparent bg-transparent p-0 mix-blend-multiply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default",
                 selectedItemId === item.id && "ring-2 ring-primary",
                 dragPreview?.itemId === item.id && "opacity-50",
               )}
@@ -759,7 +852,7 @@ export function DragDropPlayer({
                 key={item.id}
                 {...itemButtonProps(item)}
                 className={cn(
-                  "flex touch-none cursor-grab items-center justify-center rounded-sm border-2 border-transparent transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-70",
+                  "flex touch-none cursor-pointer items-center justify-center rounded-sm border-2 border-transparent transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-70",
                   selectedItemId === item.id
                     ? "ring-2 ring-primary"
                     : "hover:bg-muted/60",
@@ -779,7 +872,7 @@ export function DragDropPlayer({
       {dragPreview && previewItem && (
         <div
           aria-hidden="true"
-          className="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-sm opacity-70"
+          className="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-1/2 scale-105 overflow-hidden rounded-sm opacity-95 mix-blend-multiply"
           style={{
             left: dragPreview.x,
             top: dragPreview.y,

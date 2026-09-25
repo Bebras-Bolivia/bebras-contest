@@ -7,6 +7,7 @@ import { TaskContentRenderer } from "@/components/task-content-renderer";
 import { TaskPlayContent } from "@/components/task-play-content";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
   getTask,
@@ -18,8 +19,30 @@ import {
   type TaskCheckResult,
 } from "@/lib/tasks-api";
 import { readTaskDraftForTest } from "@/lib/task-draft-test";
+import { readSavedAnswer, saveAnswer } from "@/lib/answer-memory";
 import { answerHasResponse, type PlayTask } from "@/lib/play-api";
 import { BEBRAS_CATEGORIES } from "@/lib/contest-schema";
+import { cn } from "@/lib/utils";
+
+const difficultyStyles: Record<string, { label: string; className: string }> = {
+  easy: {
+    label: "Fácil",
+    className: "bg-difficulty-easy text-difficulty-easy-foreground",
+  },
+  medium: {
+    label: "Medio",
+    className: "bg-difficulty-medium text-difficulty-medium-foreground",
+  },
+  hard: {
+    label: "Difícil",
+    className: "bg-difficulty-hard text-difficulty-hard-foreground",
+  },
+};
+
+/** Ancla de la fila de dificultad de un rango en el editor («10–12» → «10-12»). */
+export function difficultyAnchor(ageRange: string) {
+  return `dificultad-${ageRange.replace("–", "-")}`;
+}
 import type { StoredTask } from "@/lib/task-schema";
 
 export function TaskTester() {
@@ -36,6 +59,16 @@ export function TaskTester() {
   const [draft, setDraft] = useState<unknown>(null);
   const revision = useRef(0);
   const checkController = useRef<AbortController | null>(null);
+  // Solo las tareas guardadas recuerdan la respuesta, y atada a su versión:
+  // si alguien la edita, la respuesta vieja podría no encajar.
+  const memoryKey =
+    selectedTask && !draft
+      ? `probador:${selectedTask.id}:${selectedTask.updatedAt}`
+      : null;
+
+  useEffect(() => {
+    if (memoryKey) saveAnswer(memoryKey, { answer, result });
+  }, [memoryKey, answer, result]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -73,6 +106,13 @@ export function TaskTester() {
         if (!task || !active) return;
         const preview = await previewTask(task.id, controller.signal);
         if (!active) return;
+        const saved = readSavedAnswer<TaskCheckResult>(
+          `probador:${task.id}:${task.updatedAt}`,
+        );
+        if (saved) {
+          setAnswer(saved.answer ?? {});
+          setResult(saved.result);
+        }
         setSelectedTask(task);
         setPlayTask(preview);
       } catch (error) {
@@ -147,18 +187,18 @@ export function TaskTester() {
 
   return (
     <div className="flex w-full flex-col gap-6">
-      {!selectedTask && (
+      {loading && !selectedTask && <TesterSkeleton />}
+
+      {!loading && !selectedTask && (
         <Alert>
           <AlertCircleIcon />
-          <AlertTitle>
-            {loading ? "Cargando tarea…" : "No se pudo abrir la tarea"}
-          </AlertTitle>
+          <AlertTitle>No se pudo abrir la tarea</AlertTitle>
           <AlertDescription className="flex flex-col items-start gap-3">
             <span>
               {loadError ??
                 "Abre el probador desde una tarea específica para verla en esta vista."}
             </span>
-            {!loading && backHref && (
+            {backHref && (
               <Button asChild type="button" variant="outline">
                 <a href={backHref}>
                   <PencilIcon data-icon="inline-start" />
@@ -171,7 +211,7 @@ export function TaskTester() {
       )}
 
       {selectedTask && (
-        <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 sm:gap-7">
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300 sm:gap-7">
           <div className="flex flex-wrap items-center gap-2 border-b pb-3 text-sm text-muted-foreground">
             <span>Probando:</span>
             <h1 className="font-medium text-foreground">
@@ -183,16 +223,51 @@ export function TaskTester() {
                 {category}
               </Badge>
             ))}
-            {BEBRAS_CATEGORIES.filter(
-              (category) =>
-                (selectedTask.difficulties[category.ageRange] ?? "").trim() !==
-                "",
-            ).map((category) => (
-              <Badge key={category.name} variant="outline">
-                {category.name}
-              </Badge>
-            ))}
           </div>
+          <nav
+            aria-label="Dificultad por categoría"
+            className="-mt-3 flex flex-wrap gap-1.5 sm:-mt-4"
+          >
+            {BEBRAS_CATEGORIES.map((category) => {
+              const level =
+                difficultyStyles[
+                  (selectedTask.difficulties[category.ageRange] ?? "").trim()
+                ];
+              // Con un borrador se vuelve a ese borrador, no a lo guardado.
+              const editor =
+                backHref ??
+                (draft === null
+                  ? `/tareas/editar?id=${encodeURIComponent(selectedTask.id)}`
+                  : null);
+              return (
+                <Badge
+                  key={category.name}
+                  asChild
+                  // Con dificultad, sin borde: el color ya marca la etiqueta.
+                  variant={level ? "secondary" : "outline"}
+                  className={cn(
+                    "h-6 gap-1.5 px-2 font-semibold hover:brightness-95",
+                    level?.className ?? "border-dashed text-muted-foreground",
+                  )}
+                >
+                  <a
+                    href={
+                      editor
+                        ? `${editor}#${difficultyAnchor(category.ageRange)}`
+                        : undefined
+                    }
+                    aria-label={`${category.name}, ${category.ageRange} años: ${level?.label ?? "sin dificultad"}. Cambiar en el editor.`}
+                    title={level?.label ?? "Sin dificultad"}
+                  >
+                    {category.name}
+                    <span className="font-normal opacity-80">
+                      {category.ageRange}
+                    </span>
+                  </a>
+                </Badge>
+              );
+            })}
+          </nav>
 
           {playTask && (
             <TaskPlayContent
@@ -251,6 +326,48 @@ export function TaskTester() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Silueta del probador mientras llega la tarea: la misma forma, sin saltos. */
+function TesterSkeleton() {
+  return (
+    <div
+      role="status"
+      aria-label="Cargando tarea"
+      className="mx-auto flex w-full max-w-4xl flex-col gap-6 sm:gap-7"
+    >
+      <div className="flex flex-wrap items-center gap-2 border-b pb-3">
+        <Skeleton className="h-4 w-16 rounded-none" />
+        <Skeleton className="h-5 w-40 rounded-none" />
+        <Skeleton className="h-5 w-48 rounded-none" />
+      </div>
+      <div className="-mt-3 flex flex-wrap gap-1.5 sm:-mt-4">
+        {[28, 24, 20, 26, 28, 22].map((width, index) => (
+          <Skeleton
+            key={index}
+            className="h-6 rounded-none"
+            style={{ width: `${width * 0.25}rem` }}
+          />
+        ))}
+      </div>
+      <div className="flex flex-col gap-3">
+        <Skeleton className="h-4 w-full rounded-none" />
+        <Skeleton className="h-4 w-11/12 rounded-none" />
+        <Skeleton className="h-4 w-2/3 rounded-none" />
+      </div>
+      <Skeleton className="mx-auto h-64 w-full max-w-xl rounded-none" />
+      <Skeleton className="h-4 w-3/4 rounded-none" />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {[0, 1, 2, 3].map((option) => (
+          <Skeleton key={option} className="h-28 rounded-none" />
+        ))}
+      </div>
+      <div className="flex justify-end gap-3 border-t pt-4">
+        <Skeleton className="h-9 w-28 rounded-none" />
+        <Skeleton className="h-9 w-24 rounded-none" />
+      </div>
     </div>
   );
 }

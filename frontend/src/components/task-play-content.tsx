@@ -9,6 +9,12 @@ import {
 } from "@/components/assignment-player";
 import type { ClozeConfig } from "@/lib/assignment-answers";
 
+/**
+ * Las figuras llegan con el ancho del cuadernillo y algunas miden más que la
+ * pantalla: en la vista del estudiante manda un alto máximo, con su proporción.
+ */
+const playImages = "gap-4 [&_img]:max-h-[24rem] [&_img]:object-contain";
+
 const answerTitles: Record<string, string> = {
   multiple_choice: "Opciones de respuesta",
   short_text: "Respuesta corta",
@@ -45,7 +51,7 @@ export function TaskPlayContent({
     showHeadings && !["image_hotspot", "state_grid"].includes(task.answerType);
   return (
     <div className="flex flex-col gap-5">
-      <TaskContentRenderer blocks={task.bodyBlocks} className="gap-4" />
+      <TaskContentRenderer blocks={task.bodyBlocks} className={playImages} />
       {task.challengeBlocks.length > 0 && (
         <section className="flex flex-col gap-3">
           {sectionHeadings && (
@@ -55,7 +61,7 @@ export function TaskPlayContent({
           )}
           <TaskContentRenderer
             blocks={task.challengeBlocks}
-            className="gap-4"
+            className={playImages}
           />
         </section>
       )}

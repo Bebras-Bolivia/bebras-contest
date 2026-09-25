@@ -732,7 +732,7 @@ export function AttemptPage({
 
       {attempt.questionDisplayMode === "all" ? (
         attempt.tasks.map((task) => (
-          <TaskCard
+          <TaskSection
             key={task.taskId}
             task={task}
             value={answers[task.taskId]}
@@ -771,7 +771,7 @@ export function AttemptPage({
           </div>
 
           {attempt.tasks[currentIndex] && (
-            <TaskCard
+            <TaskSection
               key={attempt.tasks[currentIndex].taskId}
               task={attempt.tasks[currentIndex]}
               value={answers[attempt.tasks[currentIndex].taskId]}
@@ -864,7 +864,8 @@ function SubmitAttemptDialog({
   );
 }
 
-function TaskCard({
+/** Una tarea del intento, suelta en la página como en el probador, sin tarjeta. */
+function TaskSection({
   task,
   value,
   onChange,
@@ -876,21 +877,20 @@ function TaskCard({
   disabled?: boolean;
 }) {
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-5 pt-6">
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-medium text-muted-foreground">
-            Tarea {task.position}
-          </span>
-          <h2 className="text-xl font-semibold">{task.title}</h2>
-        </div>
-        <TaskPlayContent
-          task={task}
-          value={value}
-          disabled={disabled}
-          onChange={onChange}
-        />
-      </CardContent>
-    </Card>
+    // Con todas las tareas a la vez, una línea fina separa una de la otra.
+    <section className="flex flex-col gap-5 border-b pb-8 last:border-b-0 last:pb-0">
+      <div className="flex flex-col gap-2">
+        <span className="text-xs font-medium text-muted-foreground">
+          Tarea {task.position}
+        </span>
+        <h2 className="text-xl font-semibold">{task.title}</h2>
+      </div>
+      <TaskPlayContent
+        task={task}
+        value={value}
+        disabled={disabled}
+        onChange={onChange}
+      />
+    </section>
   );
 }

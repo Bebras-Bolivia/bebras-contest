@@ -1,6 +1,5 @@
 "use client";
 
-import { CheckIcon } from "lucide-react";
 import {
   StateGridPlayer,
   readAssignments,
@@ -15,7 +14,6 @@ import {
   type DragDropPlacements,
 } from "@/components/drag-drop-player";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Input } from "@/components/ui/input";
 import type { PlayTask } from "@/lib/play-api";
 import {
   readMultipleChoiceLayout,
@@ -123,6 +121,11 @@ export function PlayTaskFields({
   );
   const horizontalChoices =
     readMultipleChoiceLayout(task.answerConfig) === "horizontal";
+  const imageChoices =
+    task.answerType === "multiple_choice" &&
+    task.answers.some((answer) =>
+      answer.blocks.some((block) => block.type === "image" && block.image),
+    );
 
   return (
     <>
@@ -149,14 +152,27 @@ export function PlayTaskFields({
         <div
           className={cn(
             "gap-3",
-            horizontalChoices
-              ? "grid grid-cols-2 items-stretch lg:grid-cols-4"
-              : "flex flex-col",
+            imageChoices
+              ? cn(
+                  "grid grid-cols-2",
+                  task.answers.length === 4
+                    ? "md:grid-cols-4"
+                    : "md:grid-cols-3",
+                )
+              : horizontalChoices
+                ? "grid grid-cols-2 items-stretch lg:grid-cols-4"
+                : "flex flex-col",
           )}
         >
-          {task.answers.map((answer) => {
+          {task.answers.map((answer, index) => {
             const isSelected = selected.includes(answer.id);
             const multi = task.multipleChoiceMode === "all";
+            // La letra es la de la opción, no su puesto: la explicación
+            // dice «la respuesta es B» aunque el orden se haya barajado.
+            const letter = /^[A-F]$/.test(answer.id)
+              ? answer.id
+              : String.fromCharCode(65 + index);
+            const stacked = imageChoices || horizontalChoices;
             return (
               <button
                 key={answer.id}
@@ -164,13 +180,19 @@ export function PlayTaskFields({
                 disabled={disabled}
                 aria-pressed={isSelected}
                 className={cn(
-                  "flex w-full gap-3 rounded-md border-2 bg-card px-4 py-4 transition",
-                  horizontalChoices
-                    ? "h-full flex-col items-center text-center"
-                    : "items-center text-left",
+                  "flex w-full rounded-md border-2 bg-card transition-colors",
+                  stacked
+                    ? "h-full flex-col items-start gap-2 p-3"
+                    : "items-center gap-3 px-4 py-3 text-left",
                   isSelected
-                    ? "border-primary bg-primary/10 shadow-hard"
-                    : "border-border hover:border-primary/50",
+                    ? // Con imagen no se tiñe el fondo: la imagen se mezcla con
+                      // él y cambiaría de color justo al elegirla.
+                      imageChoices
+                      ? "border-primary ring-2 ring-primary"
+                      : "border-primary bg-primary/10"
+                    : imageChoices
+                      ? "border-border/40 enabled:hover:border-primary/60"
+                      : "border-border/40 enabled:hover:border-primary/60 enabled:hover:bg-primary/5",
                   disabled && "cursor-default opacity-90",
                 )}
                 onClick={() => {
@@ -189,27 +211,31 @@ export function PlayTaskFields({
                 }}
               >
                 <span
+                  aria-hidden="true"
                   className={cn(
-                    "flex size-5 shrink-0 items-center justify-center border-2 border-foreground",
-                    multi ? "rounded-none" : "rounded-full",
+                    "grid size-7 shrink-0 place-items-center text-sm font-semibold transition-colors",
                     isSelected
                       ? "bg-primary text-primary-foreground"
-                      : "bg-background",
+                      : "bg-muted text-muted-foreground",
                   )}
                 >
-                  {isSelected && (
-                    <CheckIcon className="size-3.5" strokeWidth={3} />
-                  )}
+                  {letter}
                 </span>
                 <div
                   className={cn(
                     "min-w-0",
-                    horizontalChoices ? "w-full" : "flex-1",
+                    stacked ? "w-full text-center" : "flex-1",
                   )}
                 >
                   <TaskContentRenderer
                     blocks={answer.blocks}
-                    className="gap-2 text-base"
+                    className={cn(
+                      "gap-2 text-base",
+                      // Las imágenes llegan con el ancho del cuadernillo; en
+                      // una opción manda el alto, para que quepan varias.
+                      imageChoices &&
+                        "[&_img]:max-h-40 [&_img]:w-auto! [&_img]:max-w-full [&_img]:mix-blend-multiply [&>div]:py-0",
+                    )}
                     minImageWidth="0px"
                   />
                 </div>
@@ -227,12 +253,23 @@ export function PlayTaskFields({
         )}
 
       {task.answerType === "short_text" && (
-        <Input
+        // Un campo propio y no el Input del sistema: el marco global de los
+        // formularios lo volvía una barra fina de lado a lado.
+        <input
+          type="text"
           aria-label="Tu respuesta"
-          placeholder="Escribe tu respuesta"
+          placeholder="Escribe aquí"
+          autoComplete="off"
+          spellCheck={false}
           disabled={disabled}
           value={String(response.text ?? "")}
           onChange={(event) => onChange({ text: event.target.value })}
+          className={cn(
+            "mx-auto h-14 w-full max-w-xs border-2 px-4 text-center text-2xl font-semibold text-foreground outline-none transition-colors placeholder:text-base placeholder:font-normal placeholder:text-primary/70 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-90",
+            String(response.text ?? "").trim()
+              ? "border-primary bg-primary/10"
+              : "border-dashed border-primary/50 bg-background hover:bg-primary/5 focus:border-solid focus:border-primary",
+          )}
         />
       )}
 
