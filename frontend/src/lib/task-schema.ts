@@ -129,7 +129,8 @@ export type StoredTask = {
   correctAnswerId: string;
   shortAnswer: string;
   /** Único intervalo aceptado cuando la respuesta es un número. */
-  dragDropBackground: ContentImage | null;
+  /** `widthPercent`: ancho con que se muestra, en % de la columna (20-100). */
+  dragDropBackground: (ContentImage & { widthPercent?: number }) | null;
   dragDropItems: StoredTaskDragDropItem[];
   dragDropTargets: StoredTaskDragDropTarget[];
   dragDropSolutions?: StoredTaskDragDropSolution[];

@@ -286,6 +286,7 @@ export function PlayTaskFields({
       {task.answerType === "drag_drop" && task.dragDropBackground && (
         <DragDropPlayer
           backgroundUrl={task.dragDropBackground.url}
+          widthPercent={task.dragDropBackground.widthPercent}
           disabled={disabled}
           items={task.dragDropItems}
           placements={dragDropPlacements}

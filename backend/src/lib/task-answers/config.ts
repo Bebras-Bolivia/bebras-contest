@@ -415,7 +415,17 @@ export function parseTaskAnswerConfig(body: Record<string, unknown>) {
   }
 
   if (answerType === "drag_drop") {
-    if (!validDragDropImage(body.dragDropBackground)) {
+    const backgroundWidth = (
+      body.dragDropBackground as Record<string, unknown> | null
+    )?.widthPercent;
+    if (
+      !validDragDropImage(body.dragDropBackground) ||
+      (backgroundWidth !== undefined &&
+        (typeof backgroundWidth !== "number" ||
+          !Number.isFinite(backgroundWidth) ||
+          backgroundWidth < 20 ||
+          backgroundWidth > 100))
+    ) {
       throw new Error(
         "Debes agregar la imagen de fondo para arrastrar y soltar.",
       );

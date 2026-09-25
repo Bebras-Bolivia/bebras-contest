@@ -168,6 +168,7 @@ type FormState = {
     id: string;
     name: string;
     url: string;
+    widthPercent?: number;
   } | null;
   dragDropItems: StoredTaskDragDropItem[];
   dragDropTargets: StoredTaskDragDropTarget[];
@@ -191,31 +192,9 @@ const createInitialOptions = (): Record<OptionKey, ContentBlock[]> => ({
   F: [createContentBlock("text")],
 });
 
-function createDragDropEntry(index: number) {
-  const targetId = crypto.randomUUID();
-
-  return {
-    item: {
-      id: crypto.randomUUID(),
-      label: `Objeto ${index}`,
-      image: null,
-      correctTargetId: targetId,
-      widthPercent: DEFAULT_DRAG_DROP_ITEM_WIDTH_PERCENT,
-    } satisfies StoredTaskDragDropItem,
-    target: {
-      id: targetId,
-      x: 50,
-      y: 50,
-      snapRadius: 10,
-    } satisfies StoredTaskDragDropTarget,
-  };
-}
-
 const createInitialState = (
   idPrefix: string = crypto.randomUUID(),
 ): FormState => {
-  const dragDropEntry = createDragDropEntry(1);
-
   return {
     title: "",
     country: "",
@@ -259,8 +238,9 @@ const createInitialState = (
     correctOptions: [],
     shortAnswer: "",
     dragDropBackground: null,
-    dragDropItems: [dragDropEntry.item],
-    dragDropTargets: [dragDropEntry.target],
+    // Un arrastre nuevo empieza vacío: el autor sube el fondo y sus piezas.
+    dragDropItems: [],
+    dragDropTargets: [],
     dragDropSolutions: [],
     explanationBlocks: [
       { ...createContentBlock("text"), id: `${idPrefix}-explanation` },
@@ -270,7 +250,6 @@ const createInitialState = (
 
 function createStateFromTask(task: StoredTask): FormState {
   const nextOptions = createInitialOptions();
-  const fallbackDragDropEntry = createDragDropEntry(1);
   const hasDragDropConfiguration =
     task.dragDropItems.length > 0 && task.dragDropTargets.length > 0;
   let multipleChoiceContentType: "text" | "image" = "text";
@@ -359,10 +338,8 @@ function createStateFromTask(task: StoredTask): FormState {
             ? item.widthPercent
             : DEFAULT_DRAG_DROP_ITEM_WIDTH_PERCENT,
         }))
-      : [fallbackDragDropEntry.item],
-    dragDropTargets: hasDragDropConfiguration
-      ? task.dragDropTargets
-      : [fallbackDragDropEntry.target],
+      : [],
+    dragDropTargets: hasDragDropConfiguration ? task.dragDropTargets : [],
     dragDropSolutions: hasDragDropConfiguration
       ? (task.dragDropSolutions ?? [])
       : [],
@@ -1168,7 +1145,13 @@ export function TaskUploadForm({
 
     setForm((current) => ({
       ...current,
-      dragDropBackground: nextImage,
+      // Cambiar la imagen conserva el tamaño elegido.
+      dragDropBackground: nextImage && {
+        ...nextImage,
+        ...(current.dragDropBackground?.widthPercent
+          ? { widthPercent: current.dragDropBackground.widthPercent }
+          : {}),
+      },
     }));
   };
 
@@ -2095,16 +2078,18 @@ export function TaskUploadForm({
           )}
           {form.answerType === "drag_drop" && (
             <FieldSet className="gap-4">
-              <FieldLegend className="mb-0" variant="label">
-                Escenario interactivo
-              </FieldLegend>
-              <FieldDescription>
-                Agrega las piezas y todas las posiciones donde pueden colocarse.
-                Después define la solución principal y los demás acomodos
-                válidos. Los destinos pueden quedar vacíos.
-              </FieldDescription>
               <DragDropEditor
                 backgroundUrl={form.dragDropBackground?.url ?? null}
+                backgroundWidthPercent={form.dragDropBackground?.widthPercent}
+                onResizeBackground={(widthPercent) =>
+                  setForm((current) => ({
+                    ...current,
+                    dragDropBackground: current.dragDropBackground && {
+                      ...current.dragDropBackground,
+                      widthPercent,
+                    },
+                  }))
+                }
                 items={form.dragDropItems}
                 targets={form.dragDropTargets}
                 onUploadBackground={(files) => {
@@ -2121,13 +2106,14 @@ export function TaskUploadForm({
                       ...current.dragDropItems,
                       {
                         id: itemId,
-                        label: `Objeto ${current.dragDropItems.length + 1}`,
+                        label: `Pieza ${current.dragDropItems.length + 1}`,
                         image: null,
                         correctTargetId: "",
                         widthPercent: DEFAULT_DRAG_DROP_ITEM_WIDTH_PERCENT,
                       },
                     ],
                   }));
+                  return itemId;
                 }}
                 onRemoveItem={(itemId) =>
                   setForm((current) => ({

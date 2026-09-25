@@ -9,6 +9,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { useCutoutImages } from "@/lib/cutout-images";
 import type {
   StoredTaskDragDropItem,
   StoredTaskDragDropTarget,
@@ -55,8 +56,28 @@ type KeyboardCursor = {
   y: number;
 };
 
+/**
+ * Modo del editor: la pieza se suelta donde el autor quiera y ese punto pasa a
+ * ser su lugar. Los destinos vacíos se ven como círculos punteados.
+ */
+export type DragDropAuthoring = {
+  /** Se soltó una pieza lejos de todo destino: crear uno en ese punto (%). */
+  onPlaceAt: (itemId: string, x: number, y: number) => void;
+  /** Se soltó una pieza sobre su propio destino: moverlo a ese punto (%). */
+  onMoveTarget: (targetId: string, x: number, y: number) => void;
+  /** Toque en el escenario sin pieza elegida; `targetId` si tocó un lugar vacío. */
+  onStageTap?: (x: number, y: number, targetId: string | null) => void;
+  /** Se arrastró un borde de la imagen: nuevo ancho en % de la columna. */
+  onResize?: (widthPercent: number) => void;
+};
+
 type DragDropPlayerProps = {
-  showTargets?: boolean;
+  authoring?: DragDropAuthoring;
+  /**
+   * Ancho del escenario en % de la columna del estudiante (56 rem), para que el
+   * autor lo vea igual que quien responde; sin valor, hasta 48 rem.
+   */
+  widthPercent?: number;
   backgroundUrl: string;
   items: PublicDragDropItem[];
   targets: StoredTaskDragDropTarget[];
@@ -76,7 +97,8 @@ function getStageBounds(stage: HTMLDivElement): StageBounds {
 }
 
 export function DragDropPlayer({
-  showTargets = false,
+  authoring,
+  widthPercent,
   backgroundUrl,
   items,
   targets,
@@ -85,6 +107,7 @@ export function DragDropPlayer({
   onChange,
 }: DragDropPlayerProps) {
   const stageRef = useRef<HTMLDivElement>(null);
+  const columnRef = useRef<HTMLDivElement>(null);
   const [stageWidth, setStageWidth] = useState(0);
   const [stageHeight, setStageHeight] = useState(0);
 
@@ -106,6 +129,11 @@ export function DragDropPlayer({
     return () => observer.disconnect();
   }, [backgroundUrl]);
   const itemButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const cutouts = useCutoutImages(
+    items.flatMap((item) => (item.image ? [item.image.url] : [])),
+  );
+  /** La pieza sin su fondo blanco, si lo tenía. */
+  const pieceSrc = (url: string) => cutouts[url] ?? url;
   const pointerDragRef = useRef<PointerDrag | null>(null);
   const suppressClickItemIdRef = useRef<string | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -386,7 +414,55 @@ export function DragDropPlayer({
     }
 
     const target = dropTargetAt(itemId, clientX, clientY);
+
+    if (authoring && !isOutsideStage(clientX, clientY)) {
+      const point = stagePercent(clientX, clientY);
+
+      if (!target) {
+        authoring.onPlaceAt(itemId, point.x, point.y);
+        clearSelection();
+        return true;
+      }
+
+      if (target.id === placements[itemId]) {
+        authoring.onMoveTarget(target.id, point.x, point.y);
+        clearSelection();
+        return true;
+      }
+    }
+
     return target ? placeItem(itemId, target.id) : false;
+  };
+
+  const stagePercent = (clientX: number, clientY: number) => {
+    const stage = getStageBounds(stageRef.current!);
+    const clamp = (value: number) =>
+      Math.round(Math.min(100, Math.max(0, value)) * 1000) / 1000;
+    return {
+      x: clamp(((clientX - stage.left) / stage.width) * 100),
+      y: clamp(((clientY - stage.top) / stage.height) * 100),
+    };
+  };
+
+  const occupiedTargetIds = new Set(
+    items.flatMap((item) =>
+      targetById.has(placements[item.id] ?? "") ? [placements[item.id]] : [],
+    ),
+  );
+  /** Lugar vacío bajo un toque, con al menos 14 px para acertarle. */
+  const emptyTargetAt = (clientX: number, clientY: number) => {
+    const stageElement = stageRef.current;
+    if (!stageElement) return null;
+    const stage = getStageBounds(stageElement);
+    return (
+      findDropTarget(
+        clientX,
+        clientY,
+        stage,
+        targets.filter((target) => !occupiedTargetIds.has(target.id)),
+        14,
+      ) ?? null
+    );
   };
 
   /** Qué posición de la bandeja está bajo el puntero, si es que hay alguna. */
@@ -517,7 +593,7 @@ export function DragDropPlayer({
         alt=""
         className="block h-auto w-full"
         draggable={false}
-        src={item.image.url}
+        src={pieceSrc(item.image.url)}
       />
     ) : (
       <span className="block px-2 py-6 text-center text-sm font-medium">
@@ -578,208 +654,246 @@ export function DragDropPlayer({
   });
 
   return (
-    <div className="flex flex-col gap-4">
+    <div ref={columnRef} className="flex flex-col gap-4">
       <div
-        ref={stageRef}
-        aria-label="Escenario de la tarea. Selecciona un objeto y toca el escenario, o usa las flechas y Enter, para colocarlo."
-        className={cn(
-          "relative mx-auto w-full max-w-3xl overflow-hidden rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          selectedItemId && !disabled && "cursor-crosshair",
-        )}
-        onFocus={() => {
-          if (!selectedItemId || disabled) {
-            return;
-          }
-
-          setKeyboardCursor((current) =>
-            current?.itemId === selectedItemId
-              ? current
-              : cursorForItem(selectedItemId),
-          );
-          setKeyboardMode(true);
-        }}
-        onKeyDown={(event) => {
-          if (!selectedItemId || disabled) {
-            return;
-          }
-
-          if (event.key === "Escape") {
-            event.preventDefault();
-            const itemId = selectedItemId;
-            clearSelection();
-            focusItem(itemId);
-            return;
-          }
-
-          if (event.key === "Enter") {
-            event.preventDefault();
-            const stageElement = stageRef.current;
-            const cursor = keyboardCursor;
-            if (!stageElement || !cursor) {
+        className={cn("group/stage relative mx-auto w-full")}
+        style={stageWidthStyle(widthPercent)}
+      >
+        <div
+          ref={stageRef}
+          aria-label="Escenario de la tarea. Selecciona un objeto y toca el escenario, o usa las flechas y Enter, para colocarlo."
+          className={cn(
+            "relative w-full overflow-hidden rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            ((selectedItemId && !disabled) || authoring?.onStageTap) &&
+              "cursor-crosshair",
+          )}
+          onFocus={() => {
+            if (!selectedItemId || disabled) {
               return;
             }
 
-            const stage = getStageBounds(stageElement);
-            if (
-              placeItemAtPoint(
-                selectedItemId,
-                stage.left + (cursor.x / 100) * stage.width,
-                stage.top + (cursor.y / 100) * stage.height,
-              )
-            ) {
-              focusItem(selectedItemId);
-            }
-            return;
-          }
-
-          const movement = {
-            ArrowDown: [0, 1],
-            ArrowLeft: [-1, 0],
-            ArrowRight: [1, 0],
-            ArrowUp: [0, -1],
-          }[event.key];
-
-          if (!movement) {
-            return;
-          }
-
-          event.preventDefault();
-          const step = event.shiftKey ? 5 : 1;
-          setKeyboardCursor((current) => {
-            const cursor =
+            setKeyboardCursor((current) =>
               current?.itemId === selectedItemId
                 ? current
-                : cursorForItem(selectedItemId);
-            return {
-              itemId: selectedItemId,
-              x: Math.min(100, Math.max(0, cursor.x + movement[0] * step)),
-              y: Math.min(100, Math.max(0, cursor.y + movement[1] * step)),
-            };
-          });
-          setKeyboardMode(true);
-        }}
-        onClick={(event) => {
-          if (!selectedItemId || disabled) {
-            return;
-          }
+                : cursorForItem(selectedItemId),
+            );
+            setKeyboardMode(true);
+          }}
+          onKeyDown={(event) => {
+            if (!selectedItemId || disabled) {
+              return;
+            }
 
-          setKeyboardMode(false);
-          placeItemAtPoint(selectedItemId, event.clientX, event.clientY);
-        }}
-        tabIndex={selectedItemId && !disabled ? 0 : -1}
-      >
-        <img
-          alt="Escenario de la tarea"
-          className="block h-auto w-full"
-          src={backgroundUrl}
-        />
+            if (event.key === "Escape") {
+              event.preventDefault();
+              const itemId = selectedItemId;
+              clearSelection();
+              focusItem(itemId);
+              return;
+            }
 
-        {showTargets &&
-          targets.map((target, index) => (
-            <span
-              key={target.id}
-              aria-hidden="true"
-              className="pointer-events-none absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-dashed border-primary bg-background/70 text-xs"
-              style={{
-                left: `${target.x}%`,
-                top: `${target.y}%`,
-                ...getSnapCircleStyle(target.snapRadius, {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              const stageElement = stageRef.current;
+              const cursor = keyboardCursor;
+              if (!stageElement || !cursor) {
+                return;
+              }
+
+              const stage = getStageBounds(stageElement);
+              if (
+                placeItemAtPoint(
+                  selectedItemId,
+                  stage.left + (cursor.x / 100) * stage.width,
+                  stage.top + (cursor.y / 100) * stage.height,
+                )
+              ) {
+                focusItem(selectedItemId);
+              }
+              return;
+            }
+
+            const movement = {
+              ArrowDown: [0, 1],
+              ArrowLeft: [-1, 0],
+              ArrowRight: [1, 0],
+              ArrowUp: [0, -1],
+            }[event.key];
+
+            if (!movement) {
+              return;
+            }
+
+            event.preventDefault();
+            const step = event.shiftKey ? 5 : 1;
+            setKeyboardCursor((current) => {
+              const cursor =
+                current?.itemId === selectedItemId
+                  ? current
+                  : cursorForItem(selectedItemId);
+              return {
+                itemId: selectedItemId,
+                x: Math.min(100, Math.max(0, cursor.x + movement[0] * step)),
+                y: Math.min(100, Math.max(0, cursor.y + movement[1] * step)),
+              };
+            });
+            setKeyboardMode(true);
+          }}
+          onClick={(event) => {
+            if (!selectedItemId && authoring?.onStageTap && !disabled) {
+              const point = stagePercent(event.clientX, event.clientY);
+              authoring.onStageTap(
+                point.x,
+                point.y,
+                emptyTargetAt(event.clientX, event.clientY)?.id ?? null,
+              );
+              return;
+            }
+
+            if (!selectedItemId || disabled) {
+              return;
+            }
+
+            setKeyboardMode(false);
+            placeItemAtPoint(selectedItemId, event.clientX, event.clientY);
+          }}
+          tabIndex={selectedItemId && !disabled ? 0 : -1}
+        >
+          <img
+            alt="Escenario de la tarea"
+            className="block h-auto w-full"
+            src={backgroundUrl}
+          />
+
+          {authoring &&
+            targets
+              .filter((target) => !occupiedTargetIds.has(target.id))
+              .map((target) => {
+                const circle = getSnapCircleStyle(target.snapRadius, {
                   width: stageWidth,
                   height: stageHeight,
-                }),
-              }}
-            >
-              {index + 1}
-            </span>
-          ))}
-        {dragPreview &&
-          hoverTargetId &&
-          (() => {
-            const target = targetById.get(hoverTargetId);
-            if (!target) return null;
-            const size = Math.max(32, dragPreview.width * 1.15);
+                });
+                const size = Math.max(20, circle.width);
+                return (
+                  <span
+                    key={target.id}
+                    aria-hidden="true"
+                    data-empty-target
+                    className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-dashed border-primary bg-background/60 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-75"
+                    style={{
+                      left: `${target.x}%`,
+                      top: `${target.y}%`,
+                      width: size,
+                      height: size,
+                    }}
+                  />
+                );
+              })}
+          {dragPreview &&
+            hoverTargetId &&
+            (() => {
+              const target = targetById.get(hoverTargetId);
+              if (!target) return null;
+              const size = Math.max(32, dragPreview.width * 1.15);
+              return (
+                <span
+                  key={target.id}
+                  aria-hidden="true"
+                  data-drop-hint
+                  className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 border-2 border-dashed border-primary bg-primary/15 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-75 motion-safe:duration-150"
+                  style={{
+                    left: `${target.x}%`,
+                    top: `${target.y}%`,
+                    width: size,
+                    height: size,
+                  }}
+                />
+              );
+            })()}
+          {placedItems.map((item) => {
+            const target = targetById.get(placements[item.id]);
+
+            if (!target) {
+              return null;
+            }
+
             return (
-              <span
-                key={target.id}
-                aria-hidden="true"
-                data-drop-hint
-                className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 border-2 border-dashed border-primary bg-primary/15 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-75 motion-safe:duration-150"
+              <button
+                key={item.id}
+                {...itemButtonProps(item)}
+                className={cn(
+                  "absolute touch-none -translate-x-1/2 -translate-y-1/2 cursor-pointer overflow-hidden rounded-sm border-2 border-transparent bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default",
+                  selectedItemId === item.id && "ring-2 ring-primary",
+                  dragPreview?.itemId === item.id && "opacity-50",
+                )}
                 style={{
                   left: `${target.x}%`,
                   top: `${target.y}%`,
-                  width: size,
-                  height: size,
+                  width: `${itemWidth(item)}%`,
                 }}
-              />
+                type="button"
+              >
+                {item.image ? (
+                  <img
+                    alt=""
+                    className="block h-auto w-full object-contain"
+                    draggable={false}
+                    src={pieceSrc(item.image.url)}
+                  />
+                ) : (
+                  <span className="block max-w-24 bg-background/90 px-2 py-1 text-sm font-medium">
+                    {item.label || "Objeto"}
+                  </span>
+                )}
+              </button>
             );
-          })()}
-        {placedItems.map((item) => {
-          const target = targetById.get(placements[item.id]);
+          })}
 
-          if (!target) {
-            return null;
-          }
-
-          return (
-            <button
-              key={item.id}
-              {...itemButtonProps(item)}
-              className={cn(
-                "absolute touch-none -translate-x-1/2 -translate-y-1/2 cursor-pointer overflow-hidden rounded-sm border-2 border-transparent bg-transparent p-0 mix-blend-multiply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default",
-                selectedItemId === item.id && "ring-2 ring-primary",
-                dragPreview?.itemId === item.id && "opacity-50",
-              )}
+          {keyboardMode && keyboardCursor && keyboardCursorItem && (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-sm border-2 border-primary bg-background/80 opacity-80 ring-2 ring-ring"
+              data-keyboard-cursor
               style={{
-                left: `${target.x}%`,
-                top: `${target.y}%`,
-                width: `${itemWidth(item)}%`,
+                left: `${keyboardCursor.x}%`,
+                top: `${keyboardCursor.y}%`,
+                width: `${itemWidth(keyboardCursorItem)}%`,
               }}
-              type="button"
             >
-              {item.image ? (
+              {keyboardCursorItem.image ? (
                 <img
                   alt=""
                   className="block h-auto w-full object-contain"
-                  draggable={false}
-                  src={item.image.url}
+                  src={pieceSrc(keyboardCursorItem.image.url)}
                 />
               ) : (
-                <span className="block max-w-24 bg-background/90 px-2 py-1 text-sm font-medium">
-                  {item.label || "Objeto"}
+                <span className="block bg-background/90 px-2 py-1 text-sm font-medium">
+                  {keyboardCursorItem.label || "Objeto"}
                 </span>
               )}
-            </button>
-          );
-        })}
-
-        {keyboardMode && keyboardCursor && keyboardCursorItem && (
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-sm border-2 border-primary bg-background/80 opacity-80 ring-2 ring-ring"
-            data-keyboard-cursor
-            style={{
-              left: `${keyboardCursor.x}%`,
-              top: `${keyboardCursor.y}%`,
-              width: `${itemWidth(keyboardCursorItem)}%`,
-            }}
-          >
-            {keyboardCursorItem.image ? (
-              <img
-                alt=""
-                className="block h-auto w-full object-contain"
-                src={keyboardCursorItem.image.url}
-              />
-            ) : (
-              <span className="block bg-background/90 px-2 py-1 text-sm font-medium">
-                {keyboardCursorItem.label || "Objeto"}
-              </span>
-            )}
-          </div>
+            </div>
+          )}
+        </div>
+        {authoring?.onResize && (
+          <StageResizeHandles
+            columnRef={columnRef}
+            stageRef={stageRef}
+            onResize={authoring.onResize}
+          />
         )}
       </div>
 
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
-        <div className="flex items-center justify-between gap-2">
+      <div
+        className={cn("mx-auto flex w-full flex-col gap-3")}
+        style={stageWidthStyle(widthPercent)}
+      >
+        <div
+          className={cn(
+            "flex items-center justify-between gap-2",
+            // En el editor la bandeja es solo de dónde se toman las piezas.
+            authoring && "hidden",
+          )}
+        >
           <p className="text-sm font-medium text-muted-foreground">Objetos</p>
           <Popover>
             <PopoverTrigger asChild>
@@ -872,7 +986,9 @@ export function DragDropPlayer({
       {dragPreview && previewItem && (
         <div
           aria-hidden="true"
-          className="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-1/2 scale-105 overflow-hidden rounded-sm opacity-95 mix-blend-multiply"
+          className={cn(
+            "pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-1/2 scale-105 overflow-hidden rounded-sm opacity-95",
+          )}
           style={{
             left: dragPreview.x,
             top: dragPreview.y,
@@ -883,7 +999,7 @@ export function DragDropPlayer({
             <img
               alt=""
               className="block h-auto w-full object-contain"
-              src={previewItem.image.url}
+              src={pieceSrc(previewItem.image.url)}
             />
           ) : (
             <span className="text-sm font-medium">
@@ -893,5 +1009,144 @@ export function DragDropPlayer({
         </div>
       )}
     </div>
+  );
+}
+
+/** Ancho de referencia del escenario: la columna del estudiante, 56 rem. */
+const REFERENCE_REM = 56;
+
+/**
+ * Mientras se arrastra un borde, `--stage-max` en la columna manda sobre el
+ * ancho guardado: así solo se redibuja la imagen, no todo el formulario.
+ */
+function stageWidthStyle(widthPercent?: number) {
+  const saved = widthPercent
+    ? `min(100%, ${(widthPercent * REFERENCE_REM) / 100}rem)`
+    : "48rem";
+  return { maxWidth: `var(--stage-max, ${saved})` };
+}
+
+function referencePx() {
+  return (
+    REFERENCE_REM *
+    (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16)
+  );
+}
+
+/**
+ * Tiradores a los lados del escenario para agrandarlo o achicarlo, con el mismo
+ * gesto que las imágenes del enunciado. El ancho se guarda en % de la columna.
+ */
+function StageResizeHandles({
+  columnRef,
+  stageRef,
+  onResize,
+}: {
+  columnRef: React.RefObject<HTMLDivElement | null>;
+  stageRef: React.RefObject<HTMLDivElement | null>;
+  onResize: (widthPercent: number) => void;
+}) {
+  const resizeRef = useRef<{
+    pointerId: number;
+    side: "left" | "right";
+    startX: number;
+    startWidth: number;
+    limit: number;
+    width: number;
+  } | null>(null);
+  const [resizing, setResizing] = useState(false);
+
+  const toPercent = (width: number) =>
+    Math.round(Math.max(20, (width / referencePx()) * 100));
+
+  const finish = (save: boolean) => {
+    const state = resizeRef.current;
+    resizeRef.current = null;
+    setResizing(false);
+    if (state && save) onResize(toPercent(state.width));
+    // Tras guardar, el ancho vuelve a salir de lo guardado.
+    requestAnimationFrame(() =>
+      columnRef.current?.style.removeProperty("--stage-max"),
+    );
+  };
+
+  const handle = (side: "left" | "right") => (
+    <button
+      type="button"
+      aria-label={`Achicar o agrandar la imagen desde la ${
+        side === "left" ? "izquierda" : "derecha"
+      }`}
+      className={cn(
+        "group/handle absolute inset-y-0 z-10 flex w-5 cursor-ew-resize touch-none items-center justify-center outline-none transition-opacity",
+        side === "left" ? "left-0 -translate-x-1/2" : "right-0 translate-x-1/2",
+        !resizing &&
+          "opacity-0 group-hover/stage:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100",
+      )}
+      onPointerDown={(event) => {
+        const column = columnRef.current?.getBoundingClientRect().width;
+        const stage = stageRef.current?.getBoundingClientRect().width;
+        if (!event.isPrimary || event.button !== 0 || !column || !stage) return;
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        resizeRef.current = {
+          pointerId: event.pointerId,
+          side,
+          startX: event.clientX,
+          startWidth: stage,
+          // No puede pasar del ancho disponible ni del de referencia.
+          limit: Math.min(column, referencePx()),
+          width: stage,
+        };
+        setResizing(true);
+      }}
+      onPointerMove={(event) => {
+        const state = resizeRef.current;
+        if (!state || state.pointerId !== event.pointerId) return;
+        event.preventDefault();
+        const delta = event.clientX - state.startX;
+        // La imagen está centrada: cada lado crece el doble de lo que se tira.
+        state.width = Math.max(
+          referencePx() * 0.2,
+          Math.min(
+            state.limit,
+            state.startWidth + (state.side === "right" ? delta : -delta) * 2,
+          ),
+        );
+        columnRef.current?.style.setProperty("--stage-max", `${state.width}px`);
+      }}
+      onPointerUp={(event) => {
+        if (resizeRef.current?.pointerId !== event.pointerId) return;
+        finish(true);
+      }}
+      onPointerCancel={() => finish(false)}
+      onKeyDown={(event) => {
+        const column = columnRef.current?.getBoundingClientRect().width;
+        const stage = stageRef.current?.getBoundingClientRect().width;
+        const step = { ArrowLeft: -5, ArrowRight: 5 }[event.key];
+        if (!step || !column || !stage) return;
+        event.preventDefault();
+        const grow = side === "right" ? step : -step;
+        const max = (Math.min(column, referencePx()) / referencePx()) * 100;
+        onResize(
+          Math.round(
+            Math.max(20, Math.min(max, (stage / referencePx()) * 100 + grow)),
+          ),
+        );
+      }}
+    >
+      <span
+        className={cn(
+          "block h-10 w-1 rounded-full bg-foreground/50 shadow-[0_0_0_2px_var(--background)] transition-colors group-hover/handle:bg-primary group-focus-visible/handle:bg-primary",
+          resizing && "bg-primary",
+        )}
+      />
+    </button>
+  );
+
+  return (
+    <>
+      {handle("left")}
+      {handle("right")}
+    </>
   );
 }

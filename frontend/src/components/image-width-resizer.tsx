@@ -14,12 +14,15 @@ type ResizeState = {
   startX: number;
   startWidthPx: number;
   containerWidth: number;
+  widthPercent: number;
 };
 
 /**
  * Imagen con dos tiradores para achicarla o agrandarla. La usan los bloques de
- * contenido y las opciones de respuesta, para que redimensionar se sienta igual
- * en los dos lugares.
+ * contenido y las opciones de respuesta, con el mismo gesto que el fondo del
+ * arrastre: mientras se tira solo cambia el ancho de esta imagen en el DOM, y
+ * se guarda una vez al soltar (guardar en cada movimiento redibujaba todo el
+ * formulario y se sentía pesado).
  */
 export function ImageWidthResizer({
   src,
@@ -37,6 +40,7 @@ export function ImageWidthResizer({
   onChange: (widthPercent: number) => void;
 }) {
   const areaRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
   const resizeRef = useRef<ResizeState | null>(null);
   const [resizing, setResizing] = useState(false);
 
@@ -59,6 +63,7 @@ export function ImageWidthResizer({
       startX: event.clientX,
       startWidthPx: (containerWidth * widthPercent) / 100,
       containerWidth,
+      widthPercent,
     };
     setResizing(true);
   };
@@ -74,18 +79,21 @@ export function ImageWidthResizer({
     const deltaX = event.clientX - state.startX;
     const nextWidthPx =
       state.startWidthPx + (state.side === "right" ? deltaX * 2 : -deltaX * 2);
-    onChange(
-      Math.round(
-        Math.max(
-          minPercent,
-          Math.min(100, (nextWidthPx / state.containerWidth) * 100),
-        ),
+    state.widthPercent = Math.round(
+      Math.max(
+        minPercent,
+        Math.min(100, (nextWidthPx / state.containerWidth) * 100),
       ),
     );
+    if (frameRef.current) {
+      frameRef.current.style.width = `${state.widthPercent}%`;
+    }
   };
 
   const finishResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (resizeRef.current?.pointerId !== event.pointerId) {
+    const state = resizeRef.current;
+
+    if (state?.pointerId !== event.pointerId) {
       return;
     }
 
@@ -95,6 +103,12 @@ export function ImageWidthResizer({
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+
+    if (event.type === "pointerup" && state.widthPercent !== widthPercent) {
+      onChange(state.widthPercent);
+    } else if (frameRef.current) {
+      frameRef.current.style.width = `${widthPercent}%`;
+    }
   };
 
   const handle = (side: "left" | "right") => (
@@ -103,20 +117,34 @@ export function ImageWidthResizer({
         side === "left" ? "izquierda" : "derecha"
       }`}
       className={cn(
-        "absolute top-1/2 h-12 w-6 -translate-y-1/2 cursor-ew-resize touch-none items-center justify-center rounded-full border bg-background/90 text-muted-foreground shadow-sm sm:w-4",
+        "group/handle absolute inset-y-0 z-10 flex w-5 cursor-ew-resize touch-none items-center justify-center outline-none transition-opacity",
         side === "left" ? "left-0 -translate-x-1/2" : "right-0 translate-x-1/2",
-        resizing
-          ? "flex"
-          : "hidden group-hover/image:flex [@media(hover:none)]:flex",
+        !resizing &&
+          "opacity-0 group-hover/image:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100",
       )}
       type="button"
       onPointerCancel={finishResize}
       onPointerDown={(event) => startResize(event, side)}
       onPointerMove={handleResize}
       onPointerUp={finishResize}
+      onKeyDown={(event) => {
+        const step = { ArrowLeft: -5, ArrowRight: 5 }[event.key];
+        if (!step) return;
+        event.preventDefault();
+        onChange(
+          Math.max(
+            minPercent,
+            Math.min(100, widthPercent + (side === "right" ? step : -step)),
+          ),
+        );
+      }}
     >
-      <span className="block h-6 w-0.5 rounded-full bg-current" />
-      <span className="ml-0.5 block h-6 w-0.5 rounded-full bg-current" />
+      <span
+        className={cn(
+          "block h-10 max-h-[80%] w-1 rounded-full bg-foreground/50 shadow-[0_0_0_2px_var(--background)] transition-colors group-hover/handle:bg-primary group-focus-visible/handle:bg-primary",
+          resizing && "bg-primary",
+        )}
+      />
     </button>
   );
 
@@ -127,6 +155,7 @@ export function ImageWidthResizer({
     >
       <div
         className="relative"
+        ref={frameRef}
         style={{ width: `${widthPercent}%`, maxWidth: "100%" }}
       >
         <img

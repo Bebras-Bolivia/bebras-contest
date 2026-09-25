@@ -23,7 +23,7 @@ export type PlayTask = {
   multipleChoiceOrderMode: string;
   multipleChoiceMode: "single" | "any" | "all";
   answers: PlayAnswerOption[];
-  dragDropBackground: ContentImage | null;
+  dragDropBackground: (ContentImage & { widthPercent?: number }) | null;
   dragDropItems: Pick<
     StoredTaskDragDropItem,
     "id" | "label" | "image" | "widthPercent"

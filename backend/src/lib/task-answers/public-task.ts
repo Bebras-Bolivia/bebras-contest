@@ -125,6 +125,16 @@ function publicImage(value: unknown): unknown {
   );
 }
 
+/** El fondo del arrastre lleva además el ancho con que se muestra (20-100 %). */
+function publicBackground(value: unknown): unknown {
+  const image = publicImage(value);
+  if (!image) return null;
+  const widthPercent = (value as Record<string, unknown>).widthPercent;
+  return typeof widthPercent === "number" && Number.isFinite(widthPercent)
+    ? { ...(image as object), widthPercent }
+    : image;
+}
+
 function publicBlocks(value: unknown): unknown {
   if (!Array.isArray(value)) return [];
   return value.flatMap((value: unknown) => {
@@ -207,7 +217,7 @@ export function renderSafeTask(
     multipleChoiceOrderMode: task.multipleChoiceOrderMode,
     multipleChoiceMode: parseMcCorrectness(task.correctAnswerId).mode,
     answers,
-    dragDropBackground: publicImage(task.dragDropBackground),
+    dragDropBackground: publicBackground(task.dragDropBackground),
     dragDropItems: task.dragDropItems.map((item) => ({
       id: item.id,
       label: item.label,
