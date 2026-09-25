@@ -59,14 +59,25 @@ export function decideMaestroSchool(
 
 export type MaestroDoc = "letter" | "idFront" | "idBack";
 
-export async function openMaestroDocument(id: number, doc: MaestroDoc) {
+export function openMaestroDocument(id: number, doc: MaestroDoc) {
+  return openPrivateDocument(`/api/users/${id}/documents/${doc}`);
+}
+
+export function openSchoolLetter(schoolId: string) {
+  return openPrivateDocument(`/api/users/schools/${schoolId}/letter`);
+}
+
+/**
+ * Los documentos exigen el token de Firebase en la cabecera, así que no se
+ * pueden abrir con un enlace: se descargan con sesión y se muestran como blob.
+ */
+async function openPrivateDocument(path: string) {
   const tab = window.open("", "_blank");
 
   try {
-    const response = await fetch(
-      `${API_BASE_URL}/api/users/${id}/documents/${doc}`,
-      { headers: await authorizationHeaders() },
-    );
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      headers: await authorizationHeaders(),
+    });
 
     if (response.status === 401) {
       void endRejectedSession();

@@ -16,12 +16,12 @@ import {
   decideMaestroSchool,
   listMaestros,
   openMaestroDocument,
+  openSchoolLetter,
   rejectMaestro,
   suspendMaestro,
   type Maestro,
   type MaestroDoc,
 } from "@/lib/users-api";
-import { API_BASE_URL } from "@/lib/api-client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -228,16 +228,8 @@ export function MaestrosHome() {
     });
   }, [maestros, filter, leaving, search, sort]);
 
-  const openSchoolLetter = (schoolId: string) => {
-    window.open(
-      `${API_BASE_URL}/api/users/schools/${schoolId}/letter`,
-      "_blank",
-      "noopener",
-    );
-  };
-
-  const openDoc = (id: number, doc: MaestroDoc) => {
-    openMaestroDocument(id, doc).catch((error) =>
+  const showDocument = (open: () => Promise<void>) => {
+    open().catch((error) =>
       toast.error(
         error instanceof Error
           ? error.message
@@ -245,6 +237,9 @@ export function MaestrosHome() {
       ),
     );
   };
+
+  const openDoc = (id: number, doc: MaestroDoc) =>
+    showDocument(() => openMaestroDocument(id, doc));
 
   const updateStatus = (maestro: Maestro, status: string) => {
     const action =
@@ -584,7 +579,9 @@ export function MaestrosHome() {
                                       type="button"
                                       variant="outline"
                                       onClick={() =>
-                                        openSchoolLetter(school.id)
+                                        showDocument(() =>
+                                          openSchoolLetter(school.id),
+                                        )
                                       }
                                     >
                                       <FileTextIcon data-icon="inline-start" />
