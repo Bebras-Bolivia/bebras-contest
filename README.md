@@ -51,6 +51,19 @@ Firebase se comparten con staging, pero perfiles, roles, colegios, documentos,
 concursos y tareas se guardan en D1/R2 locales. Para probar staging completo, usa
 su URL desplegada en lugar de mezclar frontend local con servicios remotos.
 
+Para que tampoco la autenticación salga de la máquina:
+
+```bash
+bun run dev:local
+```
+
+Levanta además el emulador de Firebase Auth (`127.0.0.1:9099`, interfaz en
+`http://127.0.0.1:4000/auth`) y lo carga con los usuarios de la D1 local, con el
+mismo UID que ya tienen enlazado y la contraseña `bebras123` (se cambia con
+`LOCAL_AUTH_PASSWORD`). El emulador no guarda nada entre arranques: las cuentas
+se reconstruyen desde D1 cada vez. No envía correos; los enlaces de verificación
+aparecen en su interfaz. Necesita Java.
+
 ## Base de datos
 
 La base activa es el binding **DB de D1**. En local Wrangler persiste en

@@ -4,6 +4,7 @@
   "packageManager": "bun@1.3.5",
   "scripts": {
     "dev": "bun scripts/cloudflare-dev.ts",
+    "dev:local": "bun scripts/cloudflare-dev.ts --auth-local",
     "build:local": "bun scripts/cloudflare-build.ts local",
     "build:staging": "bun scripts/cloudflare-build.ts staging",
     "build:production": "bun scripts/cloudflare-build.ts production",
