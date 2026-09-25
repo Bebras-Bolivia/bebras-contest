@@ -29,6 +29,8 @@ export interface FirebaseSession {
   emailVerified: boolean;
   /** `password`, `google.com`, … del proveedor con el que entro. */
   provider: string | null;
+  /** Foto de la cuenta de Google, si entró o vinculó Google. */
+  photoURL: string | null;
 }
 
 const SIGNED_OUT: FirebaseSession = {
@@ -38,6 +40,7 @@ const SIGNED_OUT: FirebaseSession = {
   email: null,
   emailVerified: false,
   provider: null,
+  photoURL: null,
 };
 
 const GOOGLE_PROFILE_KEY = "bebras_google_profile";
@@ -61,6 +64,12 @@ function describe(user: User): FirebaseSession {
     email: user.email,
     emailVerified: user.emailVerified,
     provider: user.providerData[0]?.providerId ?? null,
+    // Con una cuenta de contraseña vinculada después a Google, la foto queda en
+    // el proveedor de Google y no en el usuario.
+    photoURL:
+      user.photoURL ??
+      user.providerData.find((profile) => profile.photoURL)?.photoURL ??
+      null,
   };
 }
 
@@ -207,11 +216,15 @@ export function readGoogleProfile(credential: UserCredential): GoogleProfile {
   const claims = getAdditionalUserInfo(credential)?.profile as
     | { given_name?: unknown; family_name?: unknown }
     | undefined;
-  const given = typeof claims?.given_name === "string" ? claims.given_name.trim() : "";
+  const given =
+    typeof claims?.given_name === "string" ? claims.given_name.trim() : "";
   const family =
     typeof claims?.family_name === "string" ? claims.family_name.trim() : "";
 
-  const parts = (credential.user.displayName ?? "").trim().split(/\s+/u).filter(Boolean);
+  const parts = (credential.user.displayName ?? "")
+    .trim()
+    .split(/\s+/u)
+    .filter(Boolean);
   const fallbackFirst = parts.length ? parts[0] : "";
   const fallbackLast = parts.length > 1 ? parts.slice(1).join(" ") : "";
 
@@ -298,8 +311,9 @@ export function rememberPendingGoogleCredential(error: unknown) {
     return null;
   }
   pendingGoogleCredential = GoogleAuthProvider.credentialFromError(authError);
-  pendingGoogleEmail =
-    ((authError.customData?.email as string | undefined) ?? "").toLowerCase();
+  pendingGoogleEmail = (
+    (authError.customData?.email as string | undefined) ?? ""
+  ).toLowerCase();
   return pendingGoogleCredential ? pendingGoogleEmail : null;
 }
 
@@ -329,7 +343,8 @@ const MESSAGES: Record<string, string> = {
   "auth/too-many-requests":
     "Demasiados intentos. Espera unos minutos y vuelve a probar.",
   "auth/network-request-failed": "No se pudo conectar con el servidor.",
-  "auth/popup-closed-by-user": "Cerraste la ventana de Google antes de terminar.",
+  "auth/popup-closed-by-user":
+    "Cerraste la ventana de Google antes de terminar.",
   "auth/unauthorized-domain":
     "Este dominio no está autorizado en Firebase Authentication.",
 };

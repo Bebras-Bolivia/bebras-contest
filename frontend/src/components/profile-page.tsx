@@ -12,8 +12,11 @@ import { toast } from "sonner";
 import { API_BASE_URL, apiRequest } from "@/lib/api-client";
 import { REGISTRATION_ONLY } from "@/lib/registration-only";
 import { getUser, setUser } from "@/lib/auth";
+import { landingPath } from "@/lib/session-api";
+import { useFirebaseSession } from "@/lib/use-firebase-session";
 import { authorizationHeaders } from "@/lib/firebase-auth";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -95,6 +98,7 @@ const SCHOOL_STATUS_LABEL: Record<string, string> = {
 };
 
 export function ProfilePage() {
+  const { photoURL } = useFirebaseSession();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -142,6 +146,13 @@ export function ProfilePage() {
   }, []);
 
   useEffect(() => {
+    // El perfil es del maestro (colegios, carta, grupos); un administrador no
+    // tiene nada que ver aquí y vuelve a su inicio.
+    const user = getUser();
+    if (user?.role === "admin") {
+      window.location.replace(landingPath(user));
+      return;
+    }
     void load();
     const refresh = () => {
       void load();
@@ -298,9 +309,14 @@ export function ProfilePage() {
   return (
     <div className="flex w-full flex-col gap-8">
       <header className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-start sm:gap-5">
-        <div className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary text-lg font-semibold text-primary-foreground">
-          {initials}
-        </div>
+        <Avatar className="size-14 after:hidden">
+          {photoURL && (
+            <AvatarImage src={photoURL} alt="" referrerPolicy="no-referrer" />
+          )}
+          <AvatarFallback className="bg-primary text-lg font-semibold text-primary-foreground">
+            {initials}
+          </AvatarFallback>
+        </Avatar>
         <div className="flex min-w-0 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold tracking-tight">

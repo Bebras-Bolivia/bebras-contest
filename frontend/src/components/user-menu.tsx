@@ -2,7 +2,7 @@
 
 import { ChevronDownIcon, LogOutIcon } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +14,7 @@ import {
 import { type AuthUser } from "@/lib/auth";
 import { signOutFirebase } from "@/lib/firebase-auth";
 import { useAuthUser } from "@/lib/use-auth-user";
+import { useFirebaseSession } from "@/lib/use-firebase-session";
 import { Button } from "@/components/ui/button";
 
 function getInitials(user: AuthUser) {
@@ -32,8 +33,32 @@ function firstName(user: AuthUser) {
   return source.split(/\s+/)[0] ?? source;
 }
 
+/** Foto de Google si la hay; si no carga o no existe, las iniciales. */
+function UserAvatar({
+  user,
+  photoURL,
+  fallbackClassName,
+}: {
+  user: AuthUser;
+  photoURL: string | null;
+  fallbackClassName?: string;
+}) {
+  return (
+    <Avatar className="after:hidden">
+      {photoURL && (
+        // Google rechaza a veces las fotos pedidas con referer.
+        <AvatarImage src={photoURL} alt="" referrerPolicy="no-referrer" />
+      )}
+      <AvatarFallback className={fallbackClassName}>
+        {getInitials(user)}
+      </AvatarFallback>
+    </Avatar>
+  );
+}
+
 export function UserMenu() {
   const user = useAuthUser();
+  const { photoURL } = useFirebaseSession();
 
   if (!user) {
     return (
@@ -62,9 +87,7 @@ export function UserMenu() {
           aria-label="Mi cuenta"
           className="flex items-center gap-2 rounded-full py-0.5 pr-2 pl-0.5 outline-none transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50"
         >
-          <Avatar>
-            <AvatarFallback>{getInitials(user)}</AvatarFallback>
-          </Avatar>
+          <UserAvatar user={user} photoURL={photoURL} />
           <span className="hidden max-w-40 truncate text-sm font-medium sm:inline">
             {firstName(user)}
           </span>
@@ -89,11 +112,11 @@ export function UserMenu() {
           aria-label="Menú de usuario"
           className="flex items-center gap-2 rounded-full py-0.5 pr-1 pl-0.5 outline-none transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50"
         >
-          <Avatar className="after:hidden">
-            <AvatarFallback className="bg-primary font-semibold text-primary-foreground">
-              {getInitials(user)}
-            </AvatarFallback>
-          </Avatar>
+          <UserAvatar
+            user={user}
+            photoURL={photoURL}
+            fallbackClassName="bg-primary font-semibold text-primary-foreground"
+          />
           <span className="hidden max-w-40 truncate text-sm font-medium sm:inline">
             {firstName(user)}
           </span>
@@ -102,11 +125,11 @@ export function UserMenu() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64 p-2">
         <div className="flex items-center gap-3 px-1 py-1.5">
-          <Avatar className="after:hidden">
-            <AvatarFallback className="bg-primary font-semibold text-primary-foreground">
-              {getInitials(user)}
-            </AvatarFallback>
-          </Avatar>
+          <UserAvatar
+            user={user}
+            photoURL={photoURL}
+            fallbackClassName="bg-primary font-semibold text-primary-foreground"
+          />
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">
               {user.name ?? "Cuenta"}
@@ -116,12 +139,6 @@ export function UserMenu() {
             </p>
           </div>
         </div>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem asChild>
-            <a href="/perfil">Mi perfil</a>
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem variant="destructive" onSelect={handleLogout}>

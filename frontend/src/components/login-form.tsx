@@ -1,12 +1,19 @@
 "use client";
 import { REGISTRATION_ONLY } from "@/lib/registration-only";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { EyeIcon, EyeOffIcon } from "lucide-react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import { CircleAlertIcon, EyeIcon, EyeOffIcon } from "lucide-react";
 import { toast } from "sonner";
 import type { User } from "firebase/auth";
 
 import { getUser } from "@/lib/auth";
+import { cn } from "@/lib/utils";
 import {
   refreshEmailVerification,
   shouldResumeFirebaseSession,
@@ -15,13 +22,6 @@ import {
 import { EMAIL_VERIFICATION_CHANNEL } from "@/lib/email-action";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Field,
   FieldContent,
@@ -109,7 +109,10 @@ export function LoginForm() {
       // reanudar aqui dispararia una segunda llamada por la misma entrada.
       busy ||
       unverified ||
-      !shouldResumeFirebaseSession(Boolean(getUser()), explicitVerificationReturn)
+      !shouldResumeFirebaseSession(
+        Boolean(getUser()),
+        explicitVerificationReturn,
+      )
     ) {
       return;
     }
@@ -309,39 +312,42 @@ export function LoginForm() {
 
   if (!configured) {
     return (
-      <Card className="mx-auto w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Iniciar sesión</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <section className="mx-auto w-full max-w-md">
+        <header className="mb-6 flex flex-col gap-1.5">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Iniciar sesión
+          </h1>
+        </header>
+        <div>
           <Alert variant="destructive">
             <AlertDescription>
               Este entorno todavía no tiene configurado Firebase Authentication.
             </AlertDescription>
           </Alert>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     );
   }
 
   if (unverified) {
     return (
-      <Card className="mx-auto w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Verifica tu correo</CardTitle>
-          <CardDescription>
-            Te enviamos un enlace a {unverified.email}. Ábrelo y vuelve a entrar.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+      <section className="mx-auto w-full max-w-md">
+        <header className="mb-6 flex flex-col gap-1.5">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Verifica tu correo
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Te enviamos un enlace a {unverified.email}. Ábrelo y vuelve a
+            entrar.
+          </p>
+        </header>
+        <div className="flex flex-col gap-3">
           <Button
             type="button"
             disabled={checkingVerification}
             onClick={() => verificationCheckRef.current?.(true)}
           >
-            {checkingVerification
-              ? "Comprobando..."
-              : "Ya verifiqué mi correo"}
+            {checkingVerification ? "Comprobando..." : "Ya verifiqué mi correo"}
           </Button>
           <Button
             type="button"
@@ -365,48 +371,39 @@ export function LoginForm() {
           <p className="text-center text-xs text-muted-foreground">
             Revisa también la carpeta de correo no deseado.
           </p>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     );
   }
 
   return (
-    <Card className="mx-auto w-full max-w-md">
-      <CardHeader>
-        <CardTitle>Iniciar sesión</CardTitle>
-        <CardDescription>Acceso para maestros y organizadores.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <GoogleButton
-          disabled={busy}
-          loading={googleBusy}
-          onClick={() => void handleGoogle()}
-        />
-
-        <div className="my-5 flex items-center gap-3">
-          <span className="h-px flex-1 bg-border" />
-          <span className="text-xs text-muted-foreground">o con tu correo</span>
-          <span className="h-px flex-1 bg-border" />
-        </div>
-
+    <section className="mx-auto w-full max-w-md">
+      <header className="mb-6 flex flex-col gap-1.5">
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Iniciar sesión
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Acceso para maestros y organizadores.
+        </p>
+      </header>
+      <div>
         <form
           className="flex flex-col gap-4"
           onSubmit={handleSubmit}
           noValidate
         >
-          {linkEmail && (
-            <Alert>
-              <AlertDescription>
-                Ya tienes una cuenta con contraseña para {linkEmail}. Ingresa esa
-                contraseña una vez y dejamos Google vinculado a tu cuenta.
-              </AlertDescription>
-            </Alert>
-          )}
-          {errors.form && (
-            <Alert variant="destructive">
-              <AlertDescription>{errors.form}</AlertDescription>
-            </Alert>
-          )}
+          <Reveal
+            className="-mb-4"
+            message={
+              linkEmail
+                ? `Ya tienes una cuenta con contraseña para ${linkEmail}. Ingresa esa contraseña una vez y dejamos Google vinculado a tu cuenta.`
+                : null
+            }
+          >
+            {(message) => (
+              <p className="text-sm text-muted-foreground">{message}</p>
+            )}
+          </Reveal>
           <Field data-invalid={Boolean(errors.email) || undefined}>
             <FieldLabel htmlFor="login-email">Correo</FieldLabel>
             <FieldContent>
@@ -483,12 +480,35 @@ export function LoginForm() {
               </FieldError>
             </FieldContent>
           </Field>
+          <Reveal className="-mt-4" message={errors.form}>
+            {(message) => (
+              <p
+                role="alert"
+                className="flex items-start gap-2 text-sm font-medium text-destructive"
+              >
+                <CircleAlertIcon className="mt-0.5 size-4 shrink-0" />
+                {message}
+              </p>
+            )}
+          </Reveal>
           <Button type="submit" className="w-full" disabled={busy}>
             {submitting ? "Entrando..." : "Entrar"}
           </Button>
         </form>
 
-        <div className="mt-6 border-t pt-5 text-center">
+        <div className="my-5 flex items-center gap-3">
+          <span className="h-px flex-1 bg-border" />
+          <span className="text-xs text-muted-foreground">o</span>
+          <span className="h-px flex-1 bg-border" />
+        </div>
+
+        <GoogleButton
+          disabled={busy}
+          loading={googleBusy}
+          onClick={() => void handleGoogle()}
+        />
+
+        <div className="mt-8 text-center">
           <p className="text-sm text-muted-foreground">
             ¿Todavía no tienes una cuenta de maestro?
           </p>
@@ -509,7 +529,45 @@ export function LoginForm() {
             .
           </p>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Aviso que se abre y se cierra deslizándose, sin empujar el formulario de
+ * golpe. Mientras se cierra conserva el último texto para que no desaparezca
+ * antes de terminar la animación. El margen negativo compensa el espacio del
+ * formulario cuando está cerrado.
+ */
+function Reveal({
+  message,
+  className,
+  children,
+}: {
+  message?: string | null;
+  className?: string;
+  children: (message: string) => ReactNode;
+}) {
+  const open = Boolean(message);
+  const [shown, setShown] = useState(message ?? null);
+  if (message && message !== shown) setShown(message);
+  return (
+    <div
+      aria-hidden={!open}
+      onTransitionEnd={() => {
+        if (!open) setShown(null);
+      }}
+      className={cn(
+        "grid transition-[grid-template-rows,opacity,margin] duration-300 ease-out motion-reduce:transition-none",
+        open
+          ? "grid-rows-[1fr] opacity-100"
+          : cn("grid-rows-[0fr] opacity-0", className),
+      )}
+    >
+      <div className="min-h-0 overflow-hidden">
+        {shown ? children(shown) : null}
+      </div>
+    </div>
   );
 }
