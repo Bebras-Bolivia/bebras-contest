@@ -1,15 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  CheckCircle2Icon,
-  LoaderCircleIcon,
-  RotateCcwIcon,
-  XCircleIcon,
-} from "lucide-react";
+import { LoaderCircleIcon, RotateCcwIcon } from "lucide-react";
 import { toast } from "sonner";
 
-import { TaskContentRenderer } from "@/components/task-content-renderer";
+import { AnswerResult } from "@/components/answer-result";
 import { TaskPlayContent } from "@/components/task-play-content";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -20,6 +15,7 @@ import {
 } from "@/lib/practice-api";
 import { answerHasResponse, type PlayTask } from "@/lib/play-api";
 import { readSavedAnswer, saveAnswer } from "@/lib/answer-memory";
+import { smoothReset } from "@/lib/smooth-reset";
 import {
   practiceCategoryHref,
   practiceOrigin,
@@ -58,6 +54,7 @@ export function PracticeSolver() {
     saved?.result ?? null,
   );
   const [checking, setChecking] = useState(false);
+  const [justChecked, setJustChecked] = useState(false);
 
   useEffect(() => {
     if (taskId) saveAnswer(memoryKey, { answer, result });
@@ -93,7 +90,10 @@ export function PracticeSolver() {
 
     setChecking(true);
     checkPracticeAnswer(taskId, answer)
-      .then((data) => setResult(data))
+      .then((data) => {
+        setJustChecked(true);
+        setResult(data);
+      })
       .catch((error) => {
         setResult(null);
         toast.error(
@@ -106,8 +106,10 @@ export function PracticeSolver() {
   };
 
   const retry = () => {
-    setResult(null);
-    setAnswer(undefined);
+    smoothReset(() => {
+      setResult(null);
+      setAnswer(undefined);
+    });
   };
 
   if (!taskId || failed) {
@@ -142,21 +144,11 @@ export function PracticeSolver() {
       </section>
 
       {result && (
-        <Alert variant={result.correct ? "default" : "destructive"}>
-          {result.correct ? (
-            <CheckCircle2Icon className="size-4" />
-          ) : (
-            <XCircleIcon className="size-4" />
-          )}
-          <AlertTitle>
-            {result.correct ? "¡Correcto!" : "Respuesta incorrecta"}
-          </AlertTitle>
-          {result.explanationBlocks?.length && (
-            <AlertDescription>
-              <TaskContentRenderer blocks={result.explanationBlocks} />
-            </AlertDescription>
-          )}
-        </Alert>
+        <AnswerResult
+          correct={result.correct}
+          explanationBlocks={result.explanationBlocks}
+          reveal={justChecked}
+        />
       )}
 
       <div className="flex items-center justify-between gap-3">

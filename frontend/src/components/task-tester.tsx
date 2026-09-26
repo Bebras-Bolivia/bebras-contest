@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertCircleIcon, PencilIcon, RotateCcwIcon } from "lucide-react";
 import { toast } from "sonner";
-import { TaskContentRenderer } from "@/components/task-content-renderer";
+import { AnswerResult } from "@/components/answer-result";
 import { TaskPlayContent } from "@/components/task-play-content";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -23,21 +23,8 @@ import { readSavedAnswer, saveAnswer } from "@/lib/answer-memory";
 import { answerHasResponse, type PlayTask } from "@/lib/play-api";
 import { BEBRAS_CATEGORIES } from "@/lib/contest-schema";
 import { cn } from "@/lib/utils";
-
-const difficultyStyles: Record<string, { label: string; className: string }> = {
-  easy: {
-    label: "Fácil",
-    className: "bg-difficulty-easy text-difficulty-easy-foreground",
-  },
-  medium: {
-    label: "Medio",
-    className: "bg-difficulty-medium text-difficulty-medium-foreground",
-  },
-  hard: {
-    label: "Difícil",
-    className: "bg-difficulty-hard text-difficulty-hard-foreground",
-  },
-};
+import { difficultyStyles } from "@/lib/difficulty";
+import { smoothReset } from "@/lib/smooth-reset";
 
 /** Ancla de la fila de dificultad de un rango en el editor («10–12» → «10-12»). */
 export function difficultyAnchor(ageRange: string) {
@@ -51,6 +38,7 @@ export function TaskTester() {
   const [answer, setAnswer] = useState<unknown>({});
   const [result, setResult] = useState<TaskCheckResult | null>(null);
   const [checking, setChecking] = useState(false);
+  const [justChecked, setJustChecked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [backHref, setBackHref] = useState<string | null>(null);
@@ -143,7 +131,7 @@ export function TaskTester() {
     setAnswer(payload);
   };
 
-  const handleReset = () => handleAnswerChange({});
+  const handleReset = () => smoothReset(() => handleAnswerChange({}));
 
   const handleCheckAnswer = async () => {
     if (!playTask || checking) return;
@@ -163,15 +151,8 @@ export function TaskTester() {
         : await checkTask(playTask.taskId, answer, controller.signal);
       // A result belongs only to the exact answer that initiated this request.
       if (checkedRevision !== revision.current) return;
+      setJustChecked(true);
       setResult(checked);
-      if (
-        !["image_hotspot", "state_grid", "text_cloze"].includes(
-          playTask.answerType,
-        )
-      ) {
-        if (checked.correct) toast.success("Respuesta correcta");
-        else toast.error("Respuesta incorrecta");
-      }
     } catch (error) {
       if (checkedRevision === revision.current) {
         toast.error(
@@ -256,13 +237,10 @@ export function TaskTester() {
                         ? `${editor}#${difficultyAnchor(category.ageRange)}`
                         : undefined
                     }
-                    aria-label={`${category.name}, ${category.ageRange} años: ${level?.label ?? "sin dificultad"}. Cambiar en el editor.`}
+                    aria-label={`${category.name}: ${level?.label ?? "sin dificultad"}. Cambiar en el editor.`}
                     title={level?.label ?? "Sin dificultad"}
                   >
                     {category.name}
-                    <span className="font-normal opacity-80">
-                      {category.ageRange}
-                    </span>
                   </a>
                 </Badge>
               );
@@ -279,24 +257,18 @@ export function TaskTester() {
           )}
 
           {result && (
-            <Alert
-              variant={result.correct ? "default" : "destructive"}
+            <AnswerResult
+              correct={result.correct}
+              explanationBlocks={result.explanationBlocks}
+              reveal={justChecked}
               className={
                 ["image_hotspot", "state_grid", "text_cloze"].includes(
                   playTask?.answerType ?? "",
                 )
-                  ? "order-1 gap-3"
-                  : "gap-3"
+                  ? "order-1"
+                  : undefined
               }
-            >
-              <AlertCircleIcon />
-              <AlertTitle>
-                {result.correct ? "Correcto" : "Incorrecto"}
-              </AlertTitle>
-              <AlertDescription>
-                <TaskContentRenderer blocks={result.explanationBlocks} />
-              </AlertDescription>
-            </Alert>
+            />
           )}
 
           <div className="flex flex-col gap-4 border-t pt-5 md:flex-row md:items-center md:justify-between">

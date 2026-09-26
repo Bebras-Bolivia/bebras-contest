@@ -666,6 +666,43 @@
   animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
+:root[data-answer-reset]::view-transition-old(root),
+:root[data-answer-reset]::view-transition-old(app-root),
+:root[data-answer-reset]::view-transition-old(app-content) {
+  animation: bebras-fade-out 260ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+:root[data-answer-reset]::view-transition-new(root),
+:root[data-answer-reset]::view-transition-new(app-root),
+:root[data-answer-reset]::view-transition-new(app-content) {
+  animation: bebras-fade-in 260ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+:root[data-answer-reset]::view-transition-group(root),
+:root[data-answer-reset]::view-transition-group(app-root),
+:root[data-answer-reset]::view-transition-group(app-content) {
+  animation-duration: 260ms;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+:root[data-answer-reset] .nav-pill {
+  view-transition-name: none;
+}
+
+[data-piece-transition] {
+  view-transition-class: answer-piece;
+}
+
+:root[data-answer-reset] [data-piece-transition] {
+  view-transition-name: var(--piece-transition-name, none);
+}
+
+::view-transition-group(*.answer-piece) {
+  z-index: 1;
+  animation-duration: 420ms;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
 /* La fila que viaja: más lenta que el fondo y con una curva que desacelera,
    para que se lea el recorrido. */
 [data-task-row] {

@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { HelpCircleIcon } from "lucide-react";
 
 import {
@@ -85,6 +92,10 @@ type DragDropPlayerProps = {
   disabled?: boolean;
   onChange: (placements: DragDropPlacements) => void;
 };
+
+function pieceTransitionName(itemId: string) {
+  return `piece-${itemId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+}
 
 function getStageBounds(stage: HTMLDivElement): StageBounds {
   const rect = stage.getBoundingClientRect();
@@ -826,11 +837,15 @@ export function DragDropPlayer({
                   selectedItemId === item.id && "ring-2 ring-primary",
                   dragPreview?.itemId === item.id && "opacity-50",
                 )}
-                style={{
-                  left: `${target.x}%`,
-                  top: `${target.y}%`,
-                  width: `${itemWidth(item)}%`,
-                }}
+                data-piece-transition=""
+                style={
+                  {
+                    left: `${target.x}%`,
+                    top: `${target.y}%`,
+                    width: `${itemWidth(item)}%`,
+                    "--piece-transition-name": pieceTransitionName(item.id),
+                  } as CSSProperties
+                }
                 type="button"
               >
                 {item.image ? (
@@ -973,7 +988,13 @@ export function DragDropPlayer({
                   dragPreview?.itemId === item.id && "opacity-50",
                 )}
                 data-tray-slot={slotIndex}
-                style={slotStyle(item)}
+                data-piece-transition=""
+                style={
+                  {
+                    ...slotStyle(item),
+                    "--piece-transition-name": pieceTransitionName(item.id),
+                  } as CSSProperties
+                }
                 type="button"
               >
                 {itemVisual(item)}

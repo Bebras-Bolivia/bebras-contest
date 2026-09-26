@@ -81,7 +81,7 @@ function slotKeyDown(
 }
 
 const floatingCard =
-  "border-2 [box-shadow:var(--shadow-hard)] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50";
+  "border-2 shadow-[0_6px_16px_-6px_rgba(0,0,0,0.2)] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
 /**
  * Lista que se abre pegada a una casilla o a un hueco: una tarjeta por opción,

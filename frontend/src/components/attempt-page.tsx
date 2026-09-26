@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { TaskContentRenderer } from "@/components/task-content-renderer";
+import { TaskExplanation } from "@/components/task-explanation";
 import { TaskPlayContent } from "@/components/task-play-content";
 import {
   AlertDialog,
@@ -668,7 +668,7 @@ export function AttemptPage({
                 </div>
                 {attempt.showSolutions && task.explanationBlocks?.length && (
                   <div className="text-sm text-muted-foreground">
-                    <TaskContentRenderer blocks={task.explanationBlocks} />
+                    <TaskExplanation blocks={task.explanationBlocks} />
                   </div>
                 )}
               </CardContent>
