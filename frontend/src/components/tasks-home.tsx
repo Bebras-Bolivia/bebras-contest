@@ -14,7 +14,9 @@ import {
   FilePlus2Icon,
   GraduationCapIcon,
   PlayCircleIcon,
+  SearchIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -46,24 +48,105 @@ import {
   answerTypes,
   type AnswerType,
 } from "@/lib/task-schema";
+import { BEBRAS_CATEGORIES } from "@/lib/contest-schema";
+import { difficultyStyles } from "@/lib/difficulty";
+import { cn } from "@/lib/utils";
 
-type TypeFilter = AnswerType | "all";
+type Filters = {
+  type: AnswerType | "all";
+  age: string;
+  difficulty: string;
+  practice: boolean;
+  query: string;
+};
 
-/** El filtro vive en `?tipo=` para sobrevivir a ir a editar y volver. */
-function readTypeFilter(): TypeFilter {
-  const value = new URLSearchParams(window.location.search).get("tipo");
-  return answerTypes.find((type) => type === value) ?? "all";
+const NO_FILTERS: Filters = {
+  type: "all",
+  age: "all",
+  difficulty: "all",
+  practice: false,
+  query: "",
+};
+
+const DIFFICULTIES = ["easy", "medium", "hard"] as const;
+
+function readFilters(): Filters {
+  const params = new URLSearchParams(window.location.search);
+  const type = params.get("tipo");
+  const age =
+    BEBRAS_CATEGORIES.find((category) => category.name === params.get("edad"))
+      ?.name ?? "all";
+  const difficulty = params.get("dificultad");
+  return {
+    type: answerTypes.find((value) => value === type) ?? "all",
+    age,
+    difficulty:
+      age !== "all" && DIFFICULTIES.some((value) => value === difficulty)
+        ? (difficulty as string)
+        : "all",
+    practice: params.get("practica") === "1",
+    query: params.get("q") ?? "",
+  };
 }
 
-function writeTypeFilter(filter: TypeFilter) {
+function writeFilters(filters: Filters) {
   const url = new URL(window.location.href);
-  if (filter === "all") {
-    url.searchParams.delete("tipo");
-  } else {
-    url.searchParams.set("tipo", filter);
+  for (const [key, value] of [
+    ["tipo", filters.type],
+    ["edad", filters.age],
+    ["dificultad", filters.difficulty],
+    ["practica", filters.practice ? "1" : "all"],
+    ["q", filters.query.trim() || "all"],
+  ] as const) {
+    if (value === "all") url.searchParams.delete(key);
+    else url.searchParams.set(key, value);
   }
   window.history.replaceState(window.history.state, "", url);
 }
+
+function fold(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+}
+
+function levelFor(task: HomeTaskItem, age: string) {
+  return task.levels.find((level) => level.name === age);
+}
+
+function matches(
+  task: HomeTaskItem,
+  filters: Filters,
+  skip?: "type" | "age" | "difficulty",
+) {
+  if (skip !== "type" && filters.type !== "all") {
+    if (task.answerType !== filters.type) return false;
+  }
+  if (skip !== "age" && filters.age !== "all") {
+    const level = levelFor(task, filters.age);
+    if (!level) return false;
+    if (skip !== "difficulty" && filters.difficulty !== "all") {
+      if (level.difficulty !== filters.difficulty) return false;
+    }
+  }
+  if (filters.practice && !task.isPractice) return false;
+  const query = fold(filters.query.trim());
+  if (query) {
+    const haystack = fold(
+      [task.title, task.sourceTaskCode, task.country].filter(Boolean).join(" "),
+    );
+    if (!haystack.includes(query)) return false;
+  }
+  return true;
+}
+
+function difficultyRank(task: HomeTaskItem, age: string) {
+  return difficultyStyles[levelFor(task, age)?.difficulty ?? ""]?.rank ?? 3;
+}
+
+const chipClass =
+  "flex h-7 shrink-0 items-center gap-1.5 px-2.5 text-xs whitespace-nowrap text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/60 disabled:pointer-events-none disabled:opacity-40 aria-pressed:bg-primary/10 aria-pressed:font-semibold aria-pressed:text-primary";
 
 /** Nombre de transición de cada fila: solo letras, dígitos y guiones. */
 function taskTransitionName(id: string) {
@@ -82,54 +165,104 @@ export function TasksHome() {
   const [revealing, setRevealing] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<HomeTaskItem | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  const typeFilter = filters.type;
+  const ageFilter = filters.age;
+  const filtered = JSON.stringify(filters) !== JSON.stringify(NO_FILTERS);
 
   useEffect(() => {
-    setTypeFilter(readTypeFilter());
+    setFilters(readFilters());
   }, []);
 
-  const typeCounts = useMemo(() => {
-    const counts = new Map<AnswerType, number>();
+  const counts = useMemo(() => {
+    const type = new Map<string, number>();
+    const age = new Map<string, number>();
+    const difficulty = new Map<string, number>();
+    const add = (map: Map<string, number>, key: string) =>
+      map.set(key, (map.get(key) ?? 0) + 1);
     for (const task of tasks) {
-      counts.set(task.answerType, (counts.get(task.answerType) ?? 0) + 1);
+      if (matches(task, filters, "type")) {
+        add(type, "all");
+        add(type, task.answerType);
+      }
+      if (matches(task, filters, "age")) {
+        add(age, "all");
+        for (const level of task.levels) add(age, level.name);
+      }
+      if (filters.age !== "all" && matches(task, filters, "difficulty")) {
+        add(difficulty, "all");
+        const level = levelFor(task, filters.age);
+        if (level) add(difficulty, level.difficulty);
+      }
     }
-    return counts;
-  }, [tasks]);
+    return { type, age, difficulty };
+  }, [tasks, filters]);
 
-  const visibleTasks =
-    typeFilter === "all"
-      ? tasks
-      : tasks.filter((task) => task.answerType === typeFilter);
+  const visibleTasks = useMemo(() => {
+    const matching = tasks.filter((task) => matches(task, filters));
+    return ageFilter === "all"
+      ? matching
+      : [...matching].sort(
+          (a, b) => difficultyRank(a, ageFilter) - difficultyRank(b, ageFilter),
+        );
+  }, [tasks, filters, ageFilter]);
 
   const filterTransition = useRef(0);
   const filterBar = useRef<HTMLDivElement>(null);
+  const chipBar = useRef<HTMLDivElement>(null);
 
   // En pantallas angostas la fila se desplaza de lado: la pestaña activa no
   // debe quedar cortada en el borde, ni al entrar con `?tipo=` ni al elegirla.
+  const scrolledOnce = useRef(false);
   useEffect(() => {
-    const bar = filterBar.current;
-    const active = bar?.querySelector<HTMLElement>('[aria-pressed="true"]');
-    if (!bar || !active) return;
-    const margin = 16;
-    const start = active.offsetLeft - margin;
-    const end = active.offsetLeft + active.offsetWidth + margin;
-    if (start < bar.scrollLeft) {
-      bar.scrollTo({ left: start, behavior: "smooth" });
-    } else if (end > bar.scrollLeft + bar.clientWidth) {
-      bar.scrollTo({ left: end - bar.clientWidth, behavior: "smooth" });
+    if (loading) return;
+    const behavior = scrolledOnce.current ? "smooth" : "instant";
+    scrolledOnce.current = true;
+    const difficultyChip =
+      filters.difficulty === "all"
+        ? null
+        : chipBar.current?.querySelector<HTMLElement>(
+            '[data-difficulty-group] [aria-pressed="true"]',
+          );
+    for (const [bar, active] of [
+      [
+        filterBar.current,
+        filterBar.current?.querySelector<HTMLElement>('[aria-pressed="true"]'),
+      ],
+      [
+        chipBar.current,
+        difficultyChip ??
+          chipBar.current?.querySelector<HTMLElement>(
+            '[data-category-group] [aria-pressed="true"]',
+          ),
+      ],
+    ] as const) {
+      if (!bar || !active) continue;
+      const margin = 16;
+      const start = active.offsetLeft - margin;
+      const end = active.offsetLeft + active.offsetWidth + margin;
+      if (start < bar.scrollLeft) {
+        bar.scrollTo({ left: start, behavior });
+      } else if (end > bar.scrollLeft + bar.clientWidth) {
+        bar.scrollTo({ left: end - bar.clientWidth, behavior });
+      }
     }
-  }, [typeFilter, tasks.length]);
+  }, [typeFilter, ageFilter, filters.difficulty, loading]);
 
   /**
    * Las filas que siguen visibles viajan a su nuevo lugar y las demás se
    * funden. `data-task-filter` activa los nombres de transición solo
    * mientras dura el filtrado, para no meterse en la navegación de Astro.
    */
-  const chooseTypeFilter = (filter: TypeFilter) => {
-    writeTypeFilter(filter);
+  const chooseFilters = (change: Partial<Filters>) => {
+    const next = { ...filters, ...change };
+    if (change.age !== undefined && change.age !== filters.age) {
+      next.difficulty = "all";
+    }
+    writeFilters(next);
 
     if (!document.startViewTransition || prefersReducedMotion()) {
-      setTypeFilter(filter);
+      setFilters(next);
       return;
     }
 
@@ -137,7 +270,7 @@ export function TasksHome() {
     const current = ++filterTransition.current;
     root.dataset.taskFilter = "";
     const transition = document.startViewTransition(() => {
-      flushSync(() => setTypeFilter(filter));
+      flushSync(() => setFilters(next));
     });
     void transition.finished.finally(() => {
       if (filterTransition.current === current) {
@@ -246,44 +379,165 @@ export function TasksHome() {
         </Alert>
       ) : (
         <div className="flex flex-col">
-          <div
-            ref={filterBar}
-            role="group"
-            aria-label="Filtrar por tipo de respuesta"
-            className="sticky top-0 z-10 -mx-4 flex gap-5 overflow-x-auto overflow-y-hidden bg-background px-4 shadow-[inset_0_-1px_0_var(--border)] sm:mx-0 sm:px-0"
-          >
-            {(["all", ...answerTypes] as const).map((type) => {
-              const active = typeFilter === type;
-              const count =
-                type === "all" ? tasks.length : (typeCounts.get(type) ?? 0);
-              return (
+          <div className="flex items-center justify-between gap-2 pb-2">
+            <label className="relative flex h-9 min-w-0 flex-1 items-center sm:max-w-xs">
+              <SearchIcon
+                aria-hidden="true"
+                className="pointer-events-none absolute left-2.5 size-4 text-muted-foreground"
+              />
+              <input
+                type="search"
+                value={filters.query}
+                onChange={(event) => {
+                  const next = { ...filters, query: event.target.value };
+                  writeFilters(next);
+                  setFilters(next);
+                }}
+                placeholder="Buscar tarea"
+                aria-label="Buscar tarea por nombre, código o país"
+                className="h-full w-full bg-muted/60 pr-8 pl-8 text-sm outline-none placeholder:text-muted-foreground focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-primary/60 [&::-webkit-search-cancel-button]:hidden"
+              />
+              {filters.query && (
                 <button
-                  key={type}
                   type="button"
-                  aria-pressed={active}
-                  disabled={count === 0 && !active}
-                  onClick={() => chooseTypeFilter(type)}
-                  className="relative flex shrink-0 items-baseline gap-1.5 py-2.5 text-sm whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground disabled:pointer-events-none disabled:opacity-40 aria-pressed:font-medium aria-pressed:text-foreground"
+                  aria-label="Borrar búsqueda"
+                  onClick={() => {
+                    const next = { ...filters, query: "" };
+                    writeFilters(next);
+                    setFilters(next);
+                  }}
+                  className="absolute right-1.5 grid size-6 place-items-center text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/60"
                 >
-                  {type === "all" ? "Todas" : answerTypeLabels[type]}
-                  <span className="text-xs tabular-nums opacity-60">
-                    {count}
-                  </span>
-                  {active && (
-                    <span
-                      aria-hidden="true"
-                      className="task-filter-indicator absolute inset-x-0 bottom-0 h-0.5 bg-primary"
-                    />
-                  )}
+                  <XIcon className="size-4" />
                 </button>
-              );
-            })}
+              )}
+            </label>
+            <button
+              type="button"
+              aria-pressed={filters.practice}
+              onClick={() => chooseFilters({ practice: !filters.practice })}
+              className={chipClass}
+            >
+              <GraduationCapIcon className="size-3.5" aria-hidden="true" />
+              Solo en práctica
+            </button>
+          </div>
+
+          <div className="sticky top-0 z-10 -mx-4 flex flex-col bg-background px-4 shadow-[inset_0_-1px_0_var(--border)] sm:mx-0 sm:px-0">
+            <div
+              ref={filterBar}
+              role="group"
+              aria-label="Filtrar por tipo de respuesta"
+              className="flex gap-5 overflow-x-auto overflow-y-hidden"
+            >
+              {(["all", ...answerTypes] as const).map((type) => {
+                const active = typeFilter === type;
+                const count = counts.type.get(type) ?? 0;
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    aria-pressed={active}
+                    disabled={count === 0 && !active}
+                    onClick={() => chooseFilters({ type })}
+                    className="relative flex shrink-0 items-baseline gap-1.5 py-2.5 text-sm whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground disabled:pointer-events-none disabled:opacity-40 aria-pressed:font-medium aria-pressed:text-foreground"
+                  >
+                    {type === "all" ? "Todas" : answerTypeLabels[type]}
+                    <span className="text-xs tabular-nums opacity-60">
+                      {count}
+                    </span>
+                    {active && (
+                      <span
+                        aria-hidden="true"
+                        className="task-filter-indicator absolute inset-x-0 bottom-0 h-0.5 bg-primary"
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <div
+              ref={chipBar}
+              className="relative flex items-center gap-1 overflow-x-auto pt-1 pb-2.5"
+            >
+              <div
+                role="group"
+                aria-label="Filtrar por categoría"
+                data-category-group=""
+                className="flex shrink-0 gap-1"
+              >
+                {[{ name: "all" }, ...BEBRAS_CATEGORIES].map((category) => {
+                  const active = ageFilter === category.name;
+                  const count = counts.age.get(category.name) ?? 0;
+                  return (
+                    <button
+                      key={category.name}
+                      type="button"
+                      aria-pressed={active}
+                      disabled={count === 0 && !active}
+                      onClick={() => chooseFilters({ age: category.name })}
+                      className={chipClass}
+                    >
+                      {category.name === "all"
+                        ? "Todas las categorías"
+                        : category.name}
+                      <span className="tabular-nums opacity-60">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {ageFilter !== "all" && (
+                <div
+                  role="group"
+                  aria-label={`Filtrar por dificultad en ${ageFilter}`}
+                  data-difficulty-group=""
+                  className="flex shrink-0 items-center gap-1 border-l border-border/20 pl-2 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-left-2 motion-safe:duration-200"
+                >
+                  {(["all", ...DIFFICULTIES] as const).map((difficulty) => {
+                    const active = filters.difficulty === difficulty;
+                    const count = counts.difficulty.get(difficulty) ?? 0;
+                    const style = difficultyStyles[difficulty];
+                    return (
+                      <button
+                        key={difficulty}
+                        type="button"
+                        aria-pressed={active}
+                        disabled={count === 0 && !active}
+                        onClick={() => chooseFilters({ difficulty })}
+                        className={chipClass}
+                      >
+                        {style && (
+                          <span
+                            aria-hidden="true"
+                            className={cn(
+                              "size-2.5 border border-foreground/40",
+                              style.className,
+                            )}
+                          />
+                        )}
+                        {style?.label ?? "Todas"}
+                        <span className="tabular-nums opacity-60">{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           {visibleTasks.length === 0 ? (
-            <p className="py-6 text-sm text-muted-foreground">
-              No hay tareas de este tipo.
-            </p>
+            <div className="flex flex-col items-start gap-2 py-8 text-sm text-muted-foreground">
+              <p>No hay tareas con estos filtros.</p>
+              {filtered && (
+                <button
+                  type="button"
+                  onClick={() => chooseFilters(NO_FILTERS)}
+                  className="font-medium text-primary underline-offset-4 outline-none hover:underline focus-visible:underline"
+                >
+                  Quitar filtros
+                </button>
+              )}
+            </div>
           ) : (
             <ul className="divide-y border-b">
               {visibleTasks.map((task, index) => (
@@ -329,11 +583,24 @@ export function TasksHome() {
                       >
                         {answerTypeLabels[task.answerType]}
                       </Badge>
-                      {task.levels.map((level) => (
-                        <Badge key={level} variant="outline">
-                          {level}
-                        </Badge>
-                      ))}
+                      {task.levels.map((level) => {
+                        const style = difficultyStyles[level.difficulty];
+                        return (
+                          <Badge
+                            key={level.name}
+                            variant={style ? "secondary" : "outline"}
+                            title={style?.label ?? level.difficulty}
+                            aria-label={`${level.name}: ${style?.label ?? level.difficulty}`}
+                            className={cn(
+                              "px-2 font-semibold",
+                              style?.className ??
+                                "border-dashed text-muted-foreground",
+                            )}
+                          >
+                            {level.name}
+                          </Badge>
+                        );
+                      })}
                       {task.categories.map((category) => (
                         <Badge key={category} variant="outline">
                           {category}
@@ -436,11 +703,23 @@ export function TasksHome() {
 function TasksSkeleton() {
   return (
     <div className="flex flex-col" role="status" aria-label="Cargando tareas">
-      <div className="flex gap-5 overflow-hidden py-3 shadow-[inset_0_-1px_0_var(--border)]">
+      <div className="pb-2">
+        <Skeleton className="h-9 w-full rounded-sm sm:max-w-xs" />
+      </div>
+      <div className="flex gap-5 overflow-hidden py-3">
         {[14, 28, 30, 32, 38, 34, 32].map((width, index) => (
           <Skeleton
             key={index}
             className="h-4 shrink-0 rounded-sm"
+            style={{ width: `${width * 0.25}rem` }}
+          />
+        ))}
+      </div>
+      <div className="flex gap-1 overflow-hidden pt-1 pb-2.5 shadow-[inset_0_-1px_0_var(--border)]">
+        {[34, 22, 20, 12, 20, 22, 16].map((width, index) => (
+          <Skeleton
+            key={index}
+            className="h-7 shrink-0 rounded-sm"
             style={{ width: `${width * 0.25}rem` }}
           />
         ))}

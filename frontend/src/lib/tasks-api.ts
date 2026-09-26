@@ -15,8 +15,7 @@ export type HomeTaskItem = {
   year: number | null;
   sourceTaskCode: string | null;
   categories: string[];
-  /** Categorías de Bebras que cubre, según los rangos de edad con dificultad. */
-  levels: string[];
+  levels: { name: string; ageRange: string; difficulty: string }[];
   answerType: AnswerType;
   isPractice: boolean;
 };
@@ -114,9 +113,11 @@ export function mapTaskToHomeItem(task: StoredTask): HomeTaskItem {
     year: task.year ?? null,
     sourceTaskCode: task.sourceTaskCode ?? null,
     categories: normalizeCategories(task.categories),
-    levels: BEBRAS_CATEGORIES.filter(
-      (category) => (task.difficulties[category.ageRange] ?? "").trim() !== "",
-    ).map((category) => category.name),
+    levels: BEBRAS_CATEGORIES.map((category) => ({
+      name: category.name,
+      ageRange: category.ageRange,
+      difficulty: (task.difficulties[category.ageRange] ?? "").trim(),
+    })).filter((level) => level.difficulty !== ""),
     answerType: task.answerType,
     isPractice: Boolean((task as { isPractice?: boolean }).isPractice),
   };
