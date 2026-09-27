@@ -1,19 +1,17 @@
 "use client";
-import { REGISTRATION_ONLY } from "@/lib/registration-only";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { EyeIcon, EyeOffIcon } from "lucide-react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+  type Ref,
+} from "react";
+import { CircleAlertIcon, EyeIcon, EyeOffIcon } from "lucide-react";
 import { toast } from "sonner";
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Field,
   FieldContent,
@@ -72,27 +70,8 @@ type RegisterErrors = {
   password?: string;
   confirmPassword?: string;
   school?: string;
-  letter?: string;
-  idFront?: string;
-  idBack?: string;
   form?: string;
 };
-
-type DocumentField = "letter" | "idFront" | "idBack";
-
-const DOC_MAX_BYTES = 5 * 1024 * 1024;
-const DOC_ALLOWED_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png"];
-
-function documentError(file: File) {
-  const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
-  if (!DOC_ALLOWED_EXTENSIONS.includes(extension)) {
-    return "Elige un archivo PDF, JPG, JPEG o PNG.";
-  }
-  if (file.size > DOC_MAX_BYTES) {
-    return "El archivo no debe superar los 5 MB.";
-  }
-  return undefined;
-}
 
 function confirmationError(password: string, confirmation: string) {
   if (!confirmation) return "Confirma tu contraseña.";
@@ -125,9 +104,6 @@ export function RegisterForm() {
     institutionType: "school",
   });
   const [phone, setPhone] = useState("");
-  const [letterFile, setLetterFile] = useState<File | null>(null);
-  const [idFrontFile, setIdFrontFile] = useState<File | null>(null);
-  const [idBackFile, setIdBackFile] = useState<File | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const confirmPasswordTouchedRef = useRef(false);
@@ -140,10 +116,7 @@ export function RegisterForm() {
   const passwordRef = useRef<HTMLInputElement>(null);
   const confirmPasswordRef = useRef<HTMLInputElement>(null);
   const schoolRef = useRef<HTMLInputElement>(null);
-  const letterRef = useRef<HTMLInputElement>(null);
-  const idFrontRef = useRef<HTMLInputElement>(null);
-  const idBackRef = useRef<HTMLInputElement>(null);
-  const formErrorRef = useRef<HTMLDivElement>(null);
+  const formErrorRef = useRef<HTMLParagraphElement>(null);
   const prefilledRef = useRef(false);
   const verificationCheckRef = useRef<((showPendingMessage?: boolean) => void) | null>(
     null,
@@ -155,7 +128,6 @@ export function RegisterForm() {
     | "email"
     | "phone"
     | "password"
-    | DocumentField
     | null
   >(null);
 
@@ -191,19 +163,6 @@ export function RegisterForm() {
     return !error;
   };
 
-  const updateDocument = (
-    field: DocumentField,
-    file: File | null,
-    setFile: (value: File | null) => void,
-  ) => {
-    setFile(file);
-    const error = file ? documentError(file) : undefined;
-    setErrors((current) => ({ ...current, [field]: error, form: undefined }));
-    if (error) {
-      toast.error(error);
-    }
-  };
-
   useEffect(() => {
     if (errors.form) {
       formErrorRef.current?.focus();
@@ -233,9 +192,6 @@ export function RegisterForm() {
       email: emailRef,
       phone: phoneRef,
       password: passwordRef,
-      letter: letterRef,
-      idFront: idFrontRef,
-      idBack: idBackRef,
     };
     refs[pendingResponseFocusRef.current].current?.focus();
     pendingResponseFocusRef.current = null;
@@ -353,12 +309,6 @@ export function RegisterForm() {
       school: hasSchoolChoice
         ? validatedSchool.error
         : "Indica tu colegio o selecciona educación en casa.",
-      // Los documentos son opcionales al registrarse: la carta necesita la
-      // firma del director y casi nadie la tiene a mano. Solo se revisa el
-      // formato de lo que sí adjunten.
-      letter: letterFile ? documentError(letterFile) : undefined,
-      idFront: idFrontFile ? documentError(idFrontFile) : undefined,
-      idBack: idBackFile ? documentError(idBackFile) : undefined,
     };
     const fieldOrder = [
       "firstName",
@@ -368,7 +318,6 @@ export function RegisterForm() {
       "password",
       "confirmPassword",
       "school",
-      ...(isSchool ? (["letter"] as const) : (["idFront", "idBack"] as const)),
     ] as const;
     const firstInvalid = fieldOrder.find((field) => nextErrors[field]);
 
@@ -382,9 +331,6 @@ export function RegisterForm() {
         password: passwordRef,
         confirmPassword: confirmPasswordRef,
         school: schoolRef,
-        letter: letterRef,
-        idFront: idFrontRef,
-        idBack: idBackRef,
       };
       refs[firstInvalid].current?.focus();
       return;
@@ -479,19 +425,6 @@ export function RegisterForm() {
       if (school.codUe) {
         form.append("schoolCodUe", school.codUe);
       }
-      // Lo que se haya adjuntado viaja; lo que no, se completa desde el perfil.
-      const attached = isSchool
-        ? [["letter", letterFile] as const]
-        : ([
-            ["idFront", idFrontFile],
-            ["idBack", idBackFile],
-          ] as const);
-
-      for (const [field, file] of attached) {
-        if (file) {
-          form.append(field, file);
-        }
-      }
 
       const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
         method: "POST",
@@ -507,8 +440,7 @@ export function RegisterForm() {
           | "schoolName"
           | "email"
           | "phone"
-          | "password"
-          | DocumentField;
+          | "password";
       };
 
       if (!response.ok) {
@@ -566,38 +498,28 @@ export function RegisterForm() {
 
   if (!configured) {
     return (
-      <Card className="mx-auto w-full max-w-2xl">
-        <CardHeader>
-          <CardTitle>Registro de maestro</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Alert variant="destructive">
-            <AlertDescription>
-              Este entorno todavía no tiene configurado Firebase Authentication.
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
+      <section className="mx-auto w-full max-w-md">
+        <Heading title="Registro de maestro" />
+        <FormMessage>
+          Este entorno todavía no tiene configurado Firebase Authentication.
+        </FormMessage>
+      </section>
     );
   }
 
   if (step === "verify") {
     return (
-      <Card className="mx-auto w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Verifica tu correo</CardTitle>
-          <CardDescription>
-            {verificationDeliveryFailed
+      <section className="mx-auto w-full max-w-md">
+        <Heading
+          title="Verifica tu correo"
+          description={
+            verificationDeliveryFailed
               ? `Tu cuenta quedó creada, pero el correo no pudo enviarse. Intenta reenviarlo a ${email.trim()}.`
-              : `Te enviamos un enlace a ${email.trim()}. Al verificarlo, iniciaremos tu sesión automáticamente.`}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          {verificationError && (
-            <Alert variant="destructive">
-              <AlertDescription>{verificationError}</AlertDescription>
-            </Alert>
-          )}
+              : `Te enviamos un enlace a ${email.trim()}. Al verificarlo, iniciaremos tu sesión automáticamente.`
+          }
+        />
+        <div className="flex flex-col gap-3">
+          {verificationError && <FormMessage>{verificationError}</FormMessage>}
           <Button
             type="button"
             variant="outline"
@@ -632,75 +554,37 @@ export function RegisterForm() {
           <p className="text-center text-xs text-muted-foreground">
             Revisa también la carpeta de correo no deseado.
           </p>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     );
   }
 
   if (step === "confirm") {
+    const summary = [
+      ["Nombres", formatPersonName(firstName)],
+      ["Apellidos", formatPersonName(lastName)],
+      ["Correo", email.trim()],
+      ["Teléfono", phone.trim()],
+      [isSchool ? "Colegio" : "Dónde enseñas", school.name.trim()],
+    ];
     return (
-      <Card className="mx-auto w-full max-w-2xl">
-        <CardHeader>
-          <CardTitle>Confirma tus datos</CardTitle>
-          <CardDescription>
-            Revisa que esté todo correcto antes de crear tu cuenta.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {errors.form && (
-            <Alert ref={formErrorRef} variant="destructive" tabIndex={-1}>
-              <AlertDescription>{errors.form}</AlertDescription>
-            </Alert>
-          )}
-          <dl className="flex flex-col gap-2 rounded-md border bg-background px-4 py-3 text-sm">
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Nombres</dt>
-              <dd className="text-right font-medium">
-                {formatPersonName(firstName)}
-              </dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Apellidos</dt>
-              <dd className="text-right font-medium">
-                {formatPersonName(lastName)}
-              </dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Correo</dt>
-              <dd className="text-right font-medium">{email.trim()}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Teléfono</dt>
-              <dd className="text-right font-medium">{phone.trim()}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Colegio</dt>
-              <dd className="text-right font-medium">{school.name.trim()}</dd>
-            </div>
-            {isSchool ? (
-              <div className="flex justify-between gap-4">
-                <dt className="text-muted-foreground">Carta</dt>
-                <dd className="text-right font-medium">
-                  {letterFile?.name ?? "—"}
-                </dd>
+      <section className="mx-auto w-full max-w-md">
+        <Heading
+          title="Confirma tus datos"
+          description="Revisa que esté todo correcto antes de crear tu cuenta."
+        />
+        <div className="flex flex-col gap-6">
+          <dl className="divide-y border-y text-sm">
+            {summary.map(([label, value]) => (
+              <div key={label} className="flex justify-between gap-4 py-3">
+                <dt className="text-muted-foreground">{label}</dt>
+                <dd className="text-right font-medium">{value}</dd>
               </div>
-            ) : (
-              <>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">Carnet anverso</dt>
-                  <dd className="text-right font-medium">
-                    {idFrontFile?.name ?? "—"}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">Carnet reverso</dt>
-                  <dd className="text-right font-medium">
-                    {idBackFile?.name ?? "—"}
-                  </dd>
-                </div>
-              </>
-            )}
+            ))}
           </dl>
+          {errors.form && (
+            <FormMessage ref={formErrorRef}>{errors.form}</FormMessage>
+          )}
           <div className="flex items-center justify-between gap-3">
             <Button
               type="button"
@@ -721,24 +605,20 @@ export function RegisterForm() {
               {submitting ? "Creando cuenta..." : "Confirmar y crear cuenta"}
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     );
   }
 
   return (
-    <Card className="mx-auto w-full max-w-2xl">
-      <CardHeader>
-        <CardTitle>Registro de maestro</CardTitle>
-        <CardDescription>
-          {completing
-            ? "Confirma tus datos y completa lo que falta para terminar tu registro."
-            : REGISTRATION_ONLY
-              ? "Crea tu cuenta y completa tus datos y documentos. Un administrador revisará tu registro."
-              : "Crea tu cuenta y entra enseguida. El administrador la aprueba para que puedas crear grupos e inscribir estudiantes."}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+    <section className="mx-auto w-full max-w-2xl">
+      <Heading
+        title="Registro de maestro"
+        description={
+          completing ? "Completa tus datos para terminar tu registro." : undefined
+        }
+      />
+      <div>
         {!completing && (
           <>
             <GoogleButton
@@ -756,9 +636,9 @@ export function RegisterForm() {
           </>
         )}
         {errors.form && (
-          <Alert ref={formErrorRef} variant="destructive" tabIndex={-1} className="mb-4">
-            <AlertDescription>{errors.form}</AlertDescription>
-          </Alert>
+          <FormMessage ref={formErrorRef} className="mb-4">
+            {errors.form}
+          </FormMessage>
         )}
         <form className="flex flex-col gap-6" onSubmit={goToConfirm} noValidate>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -834,15 +714,9 @@ export function RegisterForm() {
                   placeholder="tu@correo.com"
                   aria-invalid={Boolean(errors.email)}
                   aria-describedby={
-                    errors.email ? "reg-email-error" : "reg-email-hint"
+                    errors.email ? "reg-email-error" : undefined
                   }
                 />
-                {completing && (
-                  <p id="reg-email-hint" className="text-xs text-muted-foreground">
-                    Es el correo de la cuenta con la que entraste; no se puede
-                    cambiar.
-                  </p>
-                )}
                 <FieldError id="reg-email-error">{errors.email}</FieldError>
               </FieldContent>
             </Field>
@@ -995,9 +869,7 @@ export function RegisterForm() {
                 onChange={(value) => {
                   setSchool(value);
                   if (value.name.trim() && errors.school) {
-                    clearErrors("school", "letter", "idFront", "idBack");
-                  } else if (errors.letter || errors.idFront || errors.idBack) {
-                    clearErrors("letter", "idFront", "idBack");
+                    clearErrors("school");
                   }
                 }}
                 inputRef={schoolRef}
@@ -1007,156 +879,53 @@ export function RegisterForm() {
               <FieldError id="reg-school-error">{errors.school}</FieldError>
             </FieldContent>
           </Field>
-          <div
-            className={cn(
-              "grid transition-[grid-template-rows] duration-300 ease-out",
-              hasSchoolChoice && isSchool
-                ? "grid-rows-[1fr]"
-                : "grid-rows-[0fr]",
-            )}
-          >
-            <div className="overflow-hidden">
-              <Field
-                className="pt-2"
-                data-invalid={Boolean(errors.letter) || undefined}
-              >
-                <FieldLabel htmlFor="reg-letter">
-                  Carta de autorización del director{" "}
-                  <span className="font-normal text-muted-foreground">
-                    (opcional)
-                  </span>
-                </FieldLabel>
-                <FieldContent>
-                  <Input
-                    ref={letterRef}
-                    id="reg-letter"
-                    type="file"
-                    accept=".pdf,image/jpeg,image/png"
-                    onChange={(event) => {
-                      updateDocument(
-                        "letter",
-                        event.target.files?.[0] ?? null,
-                        setLetterFile,
-                      );
-                    }}
-                    aria-invalid={Boolean(errors.letter)}
-                    aria-describedby={
-                      errors.letter ? "reg-letter-error" : undefined
-                    }
-                  />
-                  <FieldError id="reg-letter-error">{errors.letter}</FieldError>
-                  {letterFile && (
-                    <p className="text-xs text-muted-foreground">
-                      Archivo: {letterFile.name}
-                    </p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    PDF o imagen (JPG, PNG), máximo 5 MB.{" "}
-                    <a
-                      href="/carta-modelo"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline underline-offset-4 hover:text-foreground"
-                    >
-                      Llenar la carta aquí
-                    </a>
-                  </p>
-                </FieldContent>
-              </Field>
-            </div>
-          </div>
-
-          <div
-            className={cn(
-              "grid transition-[grid-template-rows] duration-300 ease-out",
-              hasSchoolChoice && !isSchool
-                ? "grid-rows-[1fr]"
-                : "grid-rows-[0fr]",
-            )}
-          >
-            <div className="overflow-hidden">
-              <div className="mt-3 flex flex-col gap-3 rounded-md border bg-secondary/20 p-4">
-                <p className="text-sm text-muted-foreground">
-                  Como enseñas en casa, adjunta el anverso y el reverso de tu
-                  carnet de identidad para verificar tu registro.
-                </p>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field data-invalid={Boolean(errors.idFront) || undefined}>
-                    <FieldLabel htmlFor="reg-id-front">
-                      Carnet — anverso
-                    </FieldLabel>
-                    <FieldContent>
-                      <Input
-                        ref={idFrontRef}
-                        id="reg-id-front"
-                        type="file"
-                        accept=".pdf,image/jpeg,image/png"
-                        onChange={(event) => {
-                          updateDocument(
-                            "idFront",
-                            event.target.files?.[0] ?? null,
-                            setIdFrontFile,
-                          );
-                        }}
-                        aria-invalid={Boolean(errors.idFront)}
-                        aria-describedby={
-                          errors.idFront ? "reg-id-front-error" : undefined
-                        }
-                      />
-                      <FieldError id="reg-id-front-error">
-                        {errors.idFront}
-                      </FieldError>
-                      {idFrontFile && (
-                        <p className="truncate text-xs text-muted-foreground">
-                          {idFrontFile.name}
-                        </p>
-                      )}
-                    </FieldContent>
-                  </Field>
-                  <Field data-invalid={Boolean(errors.idBack) || undefined}>
-                    <FieldLabel htmlFor="reg-id-back">
-                      Carnet — reverso
-                    </FieldLabel>
-                    <FieldContent>
-                      <Input
-                        ref={idBackRef}
-                        id="reg-id-back"
-                        type="file"
-                        accept=".pdf,image/jpeg,image/png"
-                        onChange={(event) => {
-                          updateDocument(
-                            "idBack",
-                            event.target.files?.[0] ?? null,
-                            setIdBackFile,
-                          );
-                        }}
-                        aria-invalid={Boolean(errors.idBack)}
-                        aria-describedby={
-                          errors.idBack ? "reg-id-back-error" : undefined
-                        }
-                      />
-                      <FieldError id="reg-id-back-error">
-                        {errors.idBack}
-                      </FieldError>
-                      {idBackFile && (
-                        <p className="truncate text-xs text-muted-foreground">
-                          {idBackFile.name}
-                        </p>
-                      )}
-                    </FieldContent>
-                  </Field>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Imagen (JPG, PNG) o PDF, máximo 5 MB cada uno.
-                </p>
-              </div>
-            </div>
-          </div>
           <Button type="submit" className="w-full" disabled={googleBusy}>
             Continuar
           </Button>
         </form>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
+  );
+}
+
+function Heading({
+  title,
+  description,
+}: {
+  title: string;
+  description?: string;
+}) {
+  return (
+    <header className="mb-6 flex flex-col gap-1.5">
+      <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+      {description && (
+        <p className="text-sm text-muted-foreground">{description}</p>
+      )}
+    </header>
+  );
+}
+
+function FormMessage({
+  ref,
+  className,
+  children,
+}: {
+  ref?: Ref<HTMLParagraphElement>;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <p
+      ref={ref}
+      role="alert"
+      tabIndex={-1}
+      className={cn(
+        "flex items-start gap-2 text-sm font-medium text-destructive outline-none",
+        className,
+      )}
+    >
+      <CircleAlertIcon className="mt-0.5 size-4 shrink-0" />
+      {children}
+    </p>
   );
 }

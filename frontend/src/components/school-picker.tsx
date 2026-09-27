@@ -281,7 +281,7 @@ export function SchoolPicker({
         </div>
         <p className="text-xs text-muted-foreground">
           {allowHomeschool
-            ? "Con un colegio te pediremos la carta del director; si enseñas en casa, tu carnet de identidad."
+            ? "Después, desde tu perfil, subirás la carta del director o, si enseñas en casa, tu carnet de identidad."
             : "Después de elegir el colegio podrás adjuntar la carta de su director."}
         </p>
       </div>
