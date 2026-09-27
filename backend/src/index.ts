@@ -7,7 +7,7 @@ import ExcelJS from "exceljs";
 import { createAuthorizationLetter } from "./lib/documents-pdf";
 import { Readable } from "node:stream";
 import { extname } from "node:path";
-import { prisma } from "./lib/prisma";
+import { prisma, withRequestPrisma } from "./lib/prisma";
 import type { Prisma } from "./generated/prisma/client";
 import { formatPersonName } from "./lib/person-name";
 import { validatePhone } from "./lib/phone";
@@ -155,7 +155,7 @@ function normalizeHeader(value: unknown) {
     .replace(/\p{Diacritic}/gu, "");
 }
 
-function gradeFromCell(value: unknown, contestCategory: string) {
+function gradeFromCell(value: unknown, categories: string[]) {
   const raw = String(value ?? "").trim();
 
   if (!raw) {
@@ -171,7 +171,7 @@ function gradeFromCell(value: unknown, contestCategory: string) {
     throw new Error(`Curso "${raw}" no reconocido.`);
   }
 
-  return parseGrade(known.value, contestCategory);
+  return parseGrade(known.value, categories);
 }
 
 function registerUploadMiddleware(
@@ -869,42 +869,60 @@ function scoresForDifficulty(
   };
 }
 
-function parseContestTasks(body: Record<string, unknown>) {
+type ContestTaskInput = { taskId: string; category: string };
+
+function parseContestTasks(
+  body: Record<string, unknown>,
+  categories: string[],
+): ContestTaskInput[] {
   const rawTasks = Array.isArray(body.tasks) ? body.tasks : [];
-  const taskIds = rawTasks
-    .filter(
-      (item): item is Record<string, unknown> =>
-        item !== null && typeof item === "object",
-    )
-    .map((item) => (typeof item.taskId === "string" ? item.taskId.trim() : ""))
-    .filter(Boolean);
+  const fallbackCategory = categories.length === 1 ? categories[0] : "";
+  const seen = new Set<string>();
 
-  const ids = taskIds.length > 0 ? taskIds : parseTaskIds(body.taskIds);
+  return rawTasks.flatMap((item) => {
+    if (item === null || typeof item !== "object") {
+      return [];
+    }
 
-  return [...new Set(ids)];
+    const record = item as Record<string, unknown>;
+    const taskId = typeof record.taskId === "string" ? record.taskId.trim() : "";
+    const category =
+      typeof record.category === "string" && record.category.trim()
+        ? record.category.trim()
+        : fallbackCategory;
+    const key = `${category}|${taskId}`;
+
+    if (!taskId || seen.has(key)) {
+      return [];
+    }
+
+    seen.add(key);
+    return [{ taskId, category }];
+  });
 }
 
 async function buildContestTaskWrites(
-  taskIds: string[],
-  category: string,
+  tasks: ContestTaskInput[],
+  categories: string[],
   scoring: ContestScoring,
 ) {
-  const ageRange = CATEGORY_AGE_RANGE[category];
-
-  if (!ageRange) {
-    throw new Error(
-      `La categoría "${category}" no tiene un rango de edad definido.`,
-    );
-  }
-
   const drafts = await prisma.taskDraft.findMany({
-    where: { id: { in: taskIds } },
+    where: { id: { in: [...new Set(tasks.map((task) => task.taskId))] } },
     select: { id: true, title: true, difficulties: true },
   });
 
   const byId = new Map(drafts.map((draft) => [draft.id, draft]));
+  const positions = new Map<string, number>();
 
-  return taskIds.map((taskId, index) => {
+  return tasks.map(({ taskId, category }) => {
+    const ageRange = CATEGORY_AGE_RANGE[category];
+
+    if (!ageRange || !categories.includes(category)) {
+      throw new Error(
+        `La categoría "${category || "sin nombre"}" no es parte de este desafío.`,
+      );
+    }
+
     const draft = byId.get(taskId);
 
     if (!draft) {
@@ -919,25 +937,72 @@ async function buildContestTaskWrites(
 
     if (!isDifficultyKey(difficulty)) {
       throw new Error(
-        `La tarea "${draft.title}" no tiene dificultad definida para el rango ${ageRange} (categoría ${category}).`,
+        `La tarea "${draft.title}" no tiene dificultad para ${category}.`,
       );
     }
 
+    const position = (positions.get(category) ?? 0) + 1;
+    positions.set(category, position);
+
     return {
       taskDraftId: taskId,
-      position: index + 1,
+      category,
+      position,
       ...scoresForDifficulty(difficulty, scoring),
     };
   });
 }
 
-function computeInitialScore(writes: Array<{ minScore: number }>) {
-  return writes.reduce((total, write) => total - write.minScore, 0);
+function initialScoreOf(tasks: Array<{ minScore: number }>) {
+  return tasks.reduce((total, task) => total - task.minScore, 0);
+}
+
+/** Lo que el estudiante lee antes de empezar: cuánto vale cada pregunta. */
+function contestRules(
+  tasks: Array<{ difficulty: string; minScore: number; maxScore: number }>,
+) {
+  return {
+    initialScore: initialScoreOf(tasks),
+    scoring: DIFFICULTY_KEYS.flatMap((difficulty) => {
+      const ofDifficulty = tasks.filter((task) => task.difficulty === difficulty);
+      return ofDifficulty.length > 0
+        ? [
+            {
+              difficulty,
+              count: ofDifficulty.length,
+              correct: ofDifficulty[0].maxScore,
+              wrong: ofDifficulty[0].minScore,
+            },
+          ]
+        : [];
+    }),
+  };
 }
 
 const CONTEST_CATEGORY_NAMES: string[] = BEBRAS_CATEGORIES.map(
   (category) => category.name,
 );
+
+/** Categorías válidas, sin repetir y en el orden oficial. */
+function normalizeCategories(value: unknown): string[] {
+  const list = Array.isArray(value) ? value : [];
+  return CONTEST_CATEGORY_NAMES.filter((name) => list.includes(name));
+}
+
+function contestCategories(contest: { categories: string }) {
+  return normalizeCategories(parseJsonValue<unknown>(contest.categories, []));
+}
+
+/** Categorías en las que se puede inscribir un grupo: la suya o, si no tiene, las del desafío. */
+function groupCategories(group: {
+  category: string | null;
+  contest: { categories: string };
+}) {
+  const categories = contestCategories(group.contest);
+  return group.category && categories.includes(group.category)
+    ? [group.category]
+    : categories;
+}
 
 const SCHOOL_GRADES = [
   { value: "P1", label: "1.º de primaria", category: "Guacamayo" },
@@ -954,11 +1019,15 @@ const SCHOOL_GRADES = [
   { value: "S6", label: "6.º de secundaria", category: "Kuntur" },
 ] as const;
 
-function gradesForCategory(category: string) {
-  return SCHOOL_GRADES.filter((grade) => grade.category === category);
+/** Cursos que admite un desafío; sin categorías, los doce. */
+function gradesForCategories(categories: string[]) {
+  const grades = SCHOOL_GRADES.filter((grade) =>
+    categories.includes(grade.category),
+  );
+  return grades.length > 0 ? grades : SCHOOL_GRADES.slice();
 }
 
-function parseGrade(value: unknown, contestCategory: string) {
+function parseGrade(value: unknown, categories: string[]) {
   const grade = typeof value === "string" ? value.trim() : "";
 
   if (!grade) {
@@ -971,16 +1040,34 @@ function parseGrade(value: unknown, contestCategory: string) {
     throw new Error("El curso indicado no es válido.");
   }
 
-  if (contestCategory && known.category !== contestCategory) {
-    const allowed = gradesForCategory(contestCategory)
-      .map((item) => item.label)
-      .join(" o ");
+  if (categories.length > 0 && !categories.includes(known.category)) {
     throw new Error(
-      `${known.label} no corresponde a la categoría ${contestCategory}. Este desafío es para ${allowed}.`,
+      `${known.label} es de la categoría ${known.category}, que no participa en este desafío (${categories.join(", ")}).`,
     );
   }
 
   return grade;
+}
+
+/**
+ * Categoría en la que rinde un equipo: la de su curso. Los equipos sin curso
+ * (las prácticas) rinden la única categoría del desafío.
+ */
+function teamCategory(grade: string | null, categories: string[]) {
+  const fromGrade = SCHOOL_GRADES.find((item) => item.value === grade)?.category;
+
+  if (fromGrade && categories.includes(fromGrade)) {
+    return fromGrade;
+  }
+
+  return categories.length === 1 ? categories[0] : null;
+}
+
+function tasksOfCategory<T extends { category: string }>(
+  tasks: T[],
+  category: string | null,
+) {
+  return category ? tasks.filter((task) => task.category === category) : [];
 }
 
 type ContestState =
@@ -1050,43 +1137,40 @@ function registrationWindowMessage(contest: {
   return "La fase de inscripción ya terminó.";
 }
 
-function computeContestState(contest: {
-  publishedAt: Date | null;
-  suspendedAt?: Date | null;
-  consolidatedAt?: Date | null;
-  resultsPublishedAt?: Date | null;
-  registrationStartsAt?: Date | null;
-  registrationEndsAt?: Date | null;
-  startsAt: Date | null;
-  endsAt: Date | null;
-}): { state: ContestState; isOpen: boolean } {
+function computeContestState(
+  contest: {
+    publishedAt: Date | null;
+    suspendedAt?: Date | null;
+    consolidatedAt?: Date | null;
+    resultsPublishedAt?: Date | null;
+    registrationStartsAt?: Date | null;
+    registrationEndsAt?: Date | null;
+    startsAt: Date | null;
+    endsAt: Date | null;
+    isPractice?: boolean;
+  },
+): { state: ContestState; isOpen: boolean } {
   const now = currentDate();
 
   if (!contest.publishedAt) {
     return { state: "borrador", isOpen: false };
   }
 
-  // Para publicar basta la ventana de inscripción; la de rendición puede
-  // fijarse después, y hasta entonces el desafío no pasa de la preparación.
-  if (!contest.startsAt || !contest.endsAt) {
-    if (contest.registrationStartsAt && contest.registrationEndsAt) {
-      if (now < contest.registrationStartsAt) {
-        return { state: "programada", isOpen: false };
-      }
-
-      if (now < contest.registrationEndsAt) {
-        return { state: "inscripcion", isOpen: false };
-      }
+  if (!contest.startsAt || !contest.endsAt || now < contest.startsAt) {
+    // Una práctica no tiene inscripción: solo espera su horario.
+    if (contest.isPractice) {
+      return {
+        state: contest.startsAt ? "programada" : "preparacion",
+        isOpen: false,
+      };
     }
 
-    return { state: "preparacion", isOpen: false };
-  }
+    // Las fechas son opcionales al publicar: sin ventana de inscripción, la
+    // inscripción queda abierta hasta que empiece la rendición.
+    if (!contest.registrationStartsAt || !contest.registrationEndsAt) {
+      return { state: "inscripcion", isOpen: false };
+    }
 
-  if (
-    contest.registrationStartsAt &&
-    contest.registrationEndsAt &&
-    now < contest.startsAt
-  ) {
     if (now < contest.registrationStartsAt) {
       return { state: "programada", isOpen: false };
     }
@@ -1096,10 +1180,6 @@ function computeContestState(contest: {
     }
 
     return { state: "preparacion", isOpen: false };
-  }
-
-  if (now < contest.startsAt) {
-    return { state: "programada", isOpen: false };
   }
 
   if (now > contest.endsAt) {
@@ -1124,13 +1204,12 @@ function computeContestState(contest: {
 function deserializeContest(contest: {
   id: string;
   title: string;
-  category: string;
+  categories: string;
   durationMinutes: number;
   registrationStartsAt: Date | null;
   registrationEndsAt: Date | null;
   startsAt: Date | null;
   endsAt: Date | null;
-  initialScore: number;
   scoring?: string | null;
   questionDisplayMode: string;
   allowPairs: boolean;
@@ -1138,14 +1217,19 @@ function deserializeContest(contest: {
   showFeedback: boolean;
   showSolutions: boolean;
   showTotalScore: boolean;
+  showScoreOnSubmit: boolean;
+  showFeedbackOnSubmit: boolean;
+  showSolutionsOnSubmit: boolean;
   publishedAt: Date | null;
   suspendedAt: Date | null;
   consolidatedAt: Date | null;
   resultsPublishedAt: Date | null;
+  resultsAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   tasks?: Array<{
     id: string;
+    category: string;
     position: number;
     difficulty: string;
     minScore: number;
@@ -1163,17 +1247,26 @@ function deserializeContest(contest: {
   }>;
 }) {
   const { state, isOpen } = computeContestState(contest);
+  const categories = contestCategories(contest);
+  const tasks = (contest.tasks ?? []).filter((task) =>
+    categories.includes(task.category),
+  );
 
   return {
     id: contest.id,
     title: contest.title,
-    category: contest.category,
+    categories,
     durationMinutes: contest.durationMinutes,
     registrationStartsAt: contest.registrationStartsAt?.toISOString() ?? null,
     registrationEndsAt: contest.registrationEndsAt?.toISOString() ?? null,
     startsAt: contest.startsAt?.toISOString() ?? null,
     endsAt: contest.endsAt?.toISOString() ?? null,
-    initialScore: contest.initialScore,
+    initialScores: Object.fromEntries(
+      categories.map((category) => [
+        category,
+        initialScoreOf(tasksOfCategory(tasks, category)),
+      ]),
+    ),
     scoring: parseContestScoring(
       parseJsonValue<Record<string, unknown>>(contest.scoring ?? "{}", {}),
     ),
@@ -1183,18 +1276,22 @@ function deserializeContest(contest: {
     showFeedback: contest.showFeedback,
     showSolutions: contest.showSolutions,
     showTotalScore: contest.showTotalScore,
+    showScoreOnSubmit: contest.showScoreOnSubmit,
+    showFeedbackOnSubmit: contest.showFeedbackOnSubmit,
+    showSolutionsOnSubmit: contest.showSolutionsOnSubmit,
     publishedAt: contest.publishedAt?.toISOString() ?? null,
     suspendedAt: contest.suspendedAt?.toISOString() ?? null,
     consolidatedAt: contest.consolidatedAt?.toISOString() ?? null,
     resultsPublishedAt: contest.resultsPublishedAt?.toISOString() ?? null,
+    resultsAt: contest.resultsAt?.toISOString() ?? null,
     state,
     isOpen,
     createdAt: contest.createdAt.toISOString(),
     updatedAt: contest.updatedAt.toISOString(),
-    taskCount: contest.tasks?.length ?? 0,
-    tasks:
-      contest.tasks?.map((task) => ({
+    taskCount: tasks.length,
+    tasks: tasks.map((task) => ({
         id: task.id,
+        category: task.category,
         position: task.position,
         taskId: task.taskDraft.id,
         difficulty: task.difficulty,
@@ -1202,7 +1299,7 @@ function deserializeContest(contest: {
         noAnswerScore: task.noAnswerScore,
         maxScore: task.maxScore,
         task: deserializeTaskSummary(task.taskDraft),
-      })) ?? [],
+      })),
   };
 }
 
@@ -1211,24 +1308,33 @@ const DEFAULT_DURATION_MINUTES = 45;
 
 function parseContestPayload(body: Record<string, unknown>) {
   const title = typeof body.title === "string" ? body.title.trim() : "";
-  const category =
-    typeof body.category === "string" ? body.category.trim() : "";
+  // «category» es la forma anterior, de una sola categoría.
+  const requested = Array.isArray(body.categories)
+    ? body.categories
+    : typeof body.category === "string"
+      ? [body.category.trim()]
+      : [];
+  const categories = normalizeCategories(requested);
   const durationMinutes = body.durationMinutes
     ? Number(body.durationMinutes)
     : DEFAULT_DURATION_MINUTES;
-  const tasks = parseContestTasks(body);
 
   if (!title) {
     throw new Error("El nombre del desafío es obligatorio.");
   }
 
-  if (!category) {
-    throw new Error("Debes elegir la categoría del desafío.");
+  if (categories.length === 0 || categories.length !== new Set(requested).size) {
+    throw new Error(
+      requested.length === 0
+        ? "Elige al menos una categoría."
+        : "Hay una categoría que no es válida.",
+    );
   }
 
-  if (!CONTEST_CATEGORY_NAMES.includes(category)) {
-    throw new Error("La categoría seleccionada no es válida.");
-  }
+  // Las preguntas de una categoría que se quitó se van con ella.
+  const tasks = parseContestTasks(body, categories).filter((task) =>
+    categories.includes(task.category),
+  );
 
   if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
     throw new Error("La duración debe ser un número mayor que cero.");
@@ -1239,7 +1345,7 @@ function parseContestPayload(body: Record<string, unknown>) {
 
   const basePayload = {
     title,
-    category,
+    categories,
     durationMinutes,
     scoring: parseContestScoring(body.scoring),
     questionDisplayMode,
@@ -1247,12 +1353,15 @@ function parseContestPayload(body: Record<string, unknown>) {
     shuffleOptions: body.shuffleOptions === true,
     showFeedback: body.showFeedback === true,
     showSolutions: body.showSolutions === true,
-    showTotalScore: body.showTotalScore === true,
+    showTotalScore:
+      body.showTotalScore === true || body.showScoreOnSubmit === true,
+    showScoreOnSubmit: body.showScoreOnSubmit === true,
+    showFeedbackOnSubmit: body.showFeedbackOnSubmit === true,
+    showSolutionsOnSubmit: body.showSolutionsOnSubmit === true,
     tasks,
   };
 
-  // El calendario se define cuando el organizador quiere: un borrador puede
-  // guardarse sin fechas y solo se exigen completas al publicar.
+  // Las fechas son opcionales, también al publicar; solo tienen que cuadrar.
   const startsAt = body.startsAt
     ? parseDateInput(body.startsAt, "startsAt")
     : null;
@@ -1263,6 +1372,15 @@ function parseContestPayload(body: Record<string, unknown>) {
   const registrationEndsAt = body.registrationEndsAt
     ? parseDateInput(body.registrationEndsAt, "registrationEndsAt")
     : null;
+  const resultsAt = body.resultsAt
+    ? parseDateInput(body.resultsAt, "resultsAt")
+    : null;
+
+  if (resultsAt && endsAt && resultsAt < endsAt) {
+    throw new Error(
+      "Los resultados no pueden publicarse antes de que cierre la rendición.",
+    );
+  }
 
   if (Boolean(startsAt) !== Boolean(endsAt)) {
     throw new Error(
@@ -1300,8 +1418,11 @@ function parseContestPayload(body: Record<string, unknown>) {
     registrationEndsAt,
     startsAt,
     endsAt,
+    resultsAt,
   };
 }
+
+app.use((_req, _res, next) => withRequestPrisma(next));
 
 app.use((req, res, next) => {
   const startedAt = Date.now();
@@ -2001,7 +2122,7 @@ app.get("/api/public-contests", async (_req, res) => {
     select: {
       id: true,
       title: true,
-      category: true,
+      categories: true,
       durationMinutes: true,
       registrationStartsAt: true,
       registrationEndsAt: true,
@@ -2020,7 +2141,7 @@ app.get("/api/public-contests", async (_req, res) => {
       return {
         id: contest.id,
         title: contest.title,
-        category: contest.category,
+        categories: contestCategories(contest),
         durationMinutes: contest.durationMinutes,
         registrationStartsAt:
           contest.registrationStartsAt?.toISOString() ?? null,
@@ -2059,6 +2180,15 @@ function taskMatchesCategory(
   const ranges = taskRanges(task);
   return ranges.some((range) => category.ranges.includes(range));
 }
+
+/** Tareas que un maestro puede usar en sus prácticas. */
+const TEACHER_TASKS = { OR: [{ isPractice: true }, { forTeachers: true }] };
+
+const TASK_VISIBILITY = {
+  practica: { isPractice: true, forTeachers: false },
+  maestros: { isPractice: false, forTeachers: true },
+  privada: { isPractice: false, forTeachers: false },
+} as const;
 
 async function loadPracticeTasks() {
   const tasks = await prisma.taskDraft.findMany({
@@ -2185,7 +2315,7 @@ function practiceOwnerWhere(req: express.Request) {
 function serializePractice(contest: {
   id: string;
   title: string;
-  category: string;
+  categories: string;
   durationMinutes: number;
   startsAt: Date | null;
   endsAt: Date | null;
@@ -2200,7 +2330,7 @@ function serializePractice(contest: {
     // cualquier otro.
     accessCode: contest.groups[0]?.accessCode ?? null,
     title: contest.title,
-    category: contest.category,
+    category: contestCategories(contest)[0] ?? "",
     durationMinutes: contest.durationMinutes,
     startsAt: contest.startsAt?.toISOString() ?? null,
     endsAt: contest.endsAt?.toISOString() ?? null,
@@ -2215,6 +2345,7 @@ function serializePractice(contest: {
       publishedAt: contest.createdAt,
       startsAt: contest.startsAt,
       endsAt: contest.endsAt,
+      isPractice: true,
     }).state,
   };
 }
@@ -2239,7 +2370,7 @@ app.get("/api/practices/tasks", async (req, res) => {
   }
 
   const drafts = await prisma.taskDraft.findMany({
-    where: { isPractice: true },
+    where: TEACHER_TASKS,
     select: { id: true, title: true, difficulties: true },
     orderBy: { title: "asc" },
   });
@@ -2351,7 +2482,7 @@ app.post("/api/practices", async (req, res) => {
   // Solo del conjunto que el administrador libero: una practica no puede
   // filtrar tareas del banco reservadas para los desafios oficiales.
   const released = await prisma.taskDraft.count({
-    where: { id: { in: taskIds }, isPractice: true },
+    where: { id: { in: taskIds }, ...TEACHER_TASKS },
   });
 
   if (released !== taskIds.length) {
@@ -2365,7 +2496,11 @@ app.post("/api/practices", async (req, res) => {
   let taskWrites;
 
   try {
-    taskWrites = await buildContestTaskWrites(taskIds, category, scoring);
+    taskWrites = await buildContestTaskWrites(
+      taskIds.map((taskId: string) => ({ taskId, category })),
+      [category],
+      scoring,
+    );
   } catch (error) {
     res.status(400).json({
       message: error instanceof Error ? error.message : "Tareas inválidas.",
@@ -2378,11 +2513,10 @@ app.post("/api/practices", async (req, res) => {
   const practice = await prisma.contest.create({
     data: {
       title,
-      category,
+      categories: JSON.stringify([category]),
       durationMinutes,
       startsAt,
       endsAt,
-      initialScore: computeInitialScore(taskWrites),
       scoring: JSON.stringify(scoring),
       questionDisplayMode: "one_by_one",
       allowPairs: false,
@@ -2390,6 +2524,9 @@ app.post("/api/practices", async (req, res) => {
       showFeedback: true,
       showSolutions: true,
       showTotalScore: true,
+      showScoreOnSubmit: true,
+      showFeedbackOnSubmit: true,
+      showSolutionsOnSubmit: true,
       isPractice: true,
       createdById: req.user.id,
       publishedAt: currentDate(),
@@ -2594,10 +2731,29 @@ app.put("/api/tasks/:id", async (req, res) => {
   res.json(deserializeTask(task));
 });
 
+app.patch("/api/tasks/:id/visibility", async (req, res) => {
+  const visibility = String(req.body?.visibility ?? "");
+
+  if (!Object.hasOwn(TASK_VISIBILITY, visibility)) {
+    res.status(400).json({ message: "Visibilidad no válida." });
+    return;
+  }
+
+  const task = await prisma.taskDraft.update({
+    where: { id: req.params.id },
+    data: TASK_VISIBILITY[visibility as keyof typeof TASK_VISIBILITY],
+    select: { id: true, isPractice: true, forTeachers: true },
+  });
+  res.json(task);
+});
+
 app.patch("/api/tasks/:id/practice", async (req, res) => {
   const task = await prisma.taskDraft.update({
     where: { id: req.params.id },
-    data: { isPractice: req.body?.isPractice === true },
+    data: {
+      isPractice: req.body?.isPractice === true,
+      forTeachers: false,
+    },
     select: { id: true, isPractice: true },
   });
   res.json(task);
@@ -2625,6 +2781,7 @@ app.delete("/api/tasks/:id", async (req, res) => {
 });
 
 app.get("/api/contests", async (_req, res) => {
+  await releaseDueResults();
   const contests = await prisma.contest.findMany({
     where: { isPractice: false },
     include: {
@@ -2646,6 +2803,7 @@ app.get("/api/contests", async (_req, res) => {
 });
 
 app.get("/api/contests/:id", async (req, res) => {
+  await releaseDueResults(String(req.params.id));
   const contest = await prisma.contest.findUnique({
     where: {
       id: req.params.id,
@@ -2690,7 +2848,7 @@ app.post("/api/contests", async (req, res) => {
   try {
     taskWrites = await buildContestTaskWrites(
       payload.tasks,
-      payload.category,
+      payload.categories,
       payload.scoring,
     );
   } catch (error) {
@@ -2703,13 +2861,13 @@ app.post("/api/contests", async (req, res) => {
   const contest = await prisma.contest.create({
     data: {
       title: payload.title,
-      category: payload.category,
+      categories: JSON.stringify(payload.categories),
       durationMinutes: payload.durationMinutes,
       registrationStartsAt: payload.registrationStartsAt,
       registrationEndsAt: payload.registrationEndsAt,
       startsAt: payload.startsAt,
       endsAt: payload.endsAt,
-      initialScore: computeInitialScore(taskWrites),
+      resultsAt: payload.resultsAt,
       scoring: JSON.stringify(payload.scoring),
       questionDisplayMode: payload.questionDisplayMode,
       allowPairs: payload.allowPairs,
@@ -2717,6 +2875,9 @@ app.post("/api/contests", async (req, res) => {
       showFeedback: payload.showFeedback,
       showSolutions: payload.showSolutions,
       showTotalScore: payload.showTotalScore,
+      showScoreOnSubmit: payload.showScoreOnSubmit,
+      showFeedbackOnSubmit: payload.showFeedbackOnSubmit,
+      showSolutionsOnSubmit: payload.showSolutionsOnSubmit,
       tasks: {
         create: taskWrites,
       },
@@ -2787,23 +2948,47 @@ app.put("/api/contests/:id", async (req, res) => {
     return;
   }
 
+  // Quitar una categoría dejaría sin preguntas a quienes ya se inscribieron.
+  const orphanedGrades = SCHOOL_GRADES.filter(
+    (grade) => !payload.categories.includes(grade.category),
+  ).map((grade) => grade.value);
+  const orphaned = await prisma.team.findFirst({
+    where: {
+      grade: { in: orphanedGrades },
+      group: { contestId: req.params.id },
+    },
+    select: { grade: true },
+  });
+
+  if (orphaned) {
+    const category = SCHOOL_GRADES.find(
+      (grade) => grade.value === orphaned.grade,
+    )?.category;
+    res.status(409).json({
+      message: `No se puede quitar ${category}: ya hay estudiantes inscritos en esa categoría.`,
+    });
+    return;
+  }
+
   const keepsTasks = !Array.isArray(req.body?.tasks);
-  const taskIds = keepsTasks
+  const tasks = keepsTasks
     ? (
         await prisma.contestTask.findMany({
           where: { contestId: req.params.id },
-          orderBy: { position: "asc" },
-          select: { taskDraftId: true },
+          orderBy: [{ category: "asc" }, { position: "asc" }],
+          select: { taskDraftId: true, category: true },
         })
-      ).map((task) => task.taskDraftId)
+      )
+        .map((task) => ({ taskId: task.taskDraftId, category: task.category }))
+        .filter((task) => payload.categories.includes(task.category))
     : payload.tasks;
 
   let taskWrites;
 
   try {
     taskWrites = await buildContestTaskWrites(
-      taskIds,
-      payload.category,
+      tasks,
+      payload.categories,
       payload.scoring,
     );
   } catch (error) {
@@ -2820,23 +3005,26 @@ app.put("/api/contests/:id", async (req, res) => {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM "ContestTask" WHERE "contestId" = ?').bind(contestId),
     env.DB.prepare(`UPDATE "Contest" SET
-      "title" = ?, "category" = ?, "durationMinutes" = ?,
-      "registrationStartsAt" = ?, "registrationEndsAt" = ?, "startsAt" = ?, "endsAt" = ?,
-      "initialScore" = ?, "scoring" = ?, "questionDisplayMode" = ?,
+      "title" = ?, "categories" = ?, "durationMinutes" = ?,
+      "registrationStartsAt" = ?, "registrationEndsAt" = ?, "startsAt" = ?, "endsAt" = ?, "resultsAt" = ?,
+      "scoring" = ?, "questionDisplayMode" = ?,
       "allowPairs" = ?, "shuffleOptions" = ?, "showFeedback" = ?, "showSolutions" = ?, "showTotalScore" = ?,
+      "showScoreOnSubmit" = ?, "showFeedbackOnSubmit" = ?, "showSolutionsOnSubmit" = ?,
       "updatedAt" = ? WHERE "id" = ?`).bind(
-      payload.title, payload.category, payload.durationMinutes,
+      payload.title, JSON.stringify(payload.categories), payload.durationMinutes,
       payload.registrationStartsAt?.toISOString() ?? null,
       payload.registrationEndsAt?.toISOString() ?? null,
       payload.startsAt?.toISOString() ?? null, payload.endsAt?.toISOString() ?? null,
-      computeInitialScore(taskWrites), JSON.stringify(payload.scoring), payload.questionDisplayMode,
+      payload.resultsAt?.toISOString() ?? null,
+      JSON.stringify(payload.scoring), payload.questionDisplayMode,
       Number(payload.allowPairs), Number(payload.shuffleOptions), Number(payload.showFeedback), Number(payload.showSolutions),
-      Number(payload.showTotalScore), now, contestId,
+      Number(payload.showTotalScore), Number(payload.showScoreOnSubmit),
+      Number(payload.showFeedbackOnSubmit), Number(payload.showSolutionsOnSubmit), now, contestId,
     ),
     ...taskWrites.map((task) => env.DB.prepare(`INSERT INTO "ContestTask"
-      ("id", "contestId", "taskDraftId", "position", "difficulty", "minScore", "noAnswerScore", "maxScore", "options", "createdAt")
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, '{}', ?)`).bind(
-      randomUUID(), contestId, task.taskDraftId, task.position, task.difficulty,
+      ("id", "contestId", "category", "taskDraftId", "position", "difficulty", "minScore", "noAnswerScore", "maxScore", "options", "createdAt")
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?)`).bind(
+      randomUUID(), contestId, task.category, task.taskDraftId, task.position, task.difficulty,
       task.minScore, task.noAnswerScore, task.maxScore, now,
     )),
   ]);
@@ -2855,6 +3043,14 @@ const contestPreviewInclude = {
   },
 };
 
+/** La categoría pedida, o la primera del desafío. */
+function previewCategory(contest: { categories: string }, requested: unknown) {
+  const categories = contestCategories(contest);
+  return typeof requested === "string" && categories.includes(requested)
+    ? requested
+    : (categories[0] ?? null);
+}
+
 /**
  * Vista previa de un desafío para el administrador: el mismo contenido que
  * recibe el estudiante, con la misma forma. No crea intento ni equipo, así que
@@ -2871,7 +3067,9 @@ app.get("/api/contests/:id/preview", async (req, res) => {
     return;
   }
 
-  const tasks = contest.tasks.map((contestTask) =>
+  const category = previewCategory(contest, req.query.categoria);
+  const categoryTasks = tasksOfCategory(contest.tasks, category);
+  const tasks = categoryTasks.map((contestTask) =>
     renderSafeTask(
       contestTask,
       deserializeTask(contestTask.taskDraft) as PlayTask,
@@ -2880,6 +3078,11 @@ app.get("/api/contests/:id/preview", async (req, res) => {
 
   res.json({
     contestTitle: contest.title,
+    category,
+    categories: contestCategories(contest),
+    rules: contestRules(categoryTasks),
+    resultsAt: (contest.resultsAt ?? contest.endsAt)?.toISOString() ?? null,
+    participationMode: "individual",
     durationMinutes: contest.durationMinutes,
     questionDisplayMode: contest.questionDisplayMode,
     contestStartsAt: contest.startsAt?.toISOString() ?? null,
@@ -2894,6 +3097,9 @@ app.get("/api/contests/:id/preview", async (req, res) => {
     showFeedback: contest.showFeedback,
     showSolutions: contest.showSolutions,
     showTotalScore: contest.showTotalScore,
+    showScoreOnSubmit: contest.showScoreOnSubmit,
+    showFeedbackOnSubmit: contest.showFeedbackOnSubmit,
+    showSolutionsOnSubmit: contest.showSolutionsOnSubmit,
     tasks,
     answers: {},
     result: null,
@@ -2920,11 +3126,15 @@ app.post("/api/contests/:id/preview/score", async (req, res) => {
     body.answers && typeof body.answers === "object" ? body.answers : {}
   ) as Record<string, unknown>;
 
-  let totalScore = contest.initialScore;
+  const categoryTasks = tasksOfCategory(
+    contest.tasks,
+    previewCategory(contest, body.category),
+  );
+  let totalScore = initialScoreOf(categoryTasks);
   let correctCount = 0;
   let answeredCount = 0;
 
-  const tasks = contest.tasks.map((contestTask) => {
+  const tasks = categoryTasks.map((contestTask) => {
     const task = deserializeTask(contestTask.taskDraft) as PlayTask;
     const payload = answers[contestTask.taskDraftId] ?? null;
     const answered = answerHasResponse(task.answerType, payload);
@@ -2957,7 +3167,7 @@ app.post("/api/contests/:id/preview/score", async (req, res) => {
     totalScore,
     correctCount,
     answeredCount,
-    taskCount: contest.tasks.length,
+    taskCount: categoryTasks.length,
     tasks,
   });
 });
@@ -2992,14 +3202,7 @@ app.post("/api/contests/:id/publish", async (req, res) => {
     readinessErrors.push("El desafío necesita nombre.");
   }
 
-  if (!contest.registrationStartsAt || !contest.registrationEndsAt) {
-    readinessErrors.push(
-      "El desafío necesita su ventana de inscripción antes de publicarse.",
-    );
-  }
-
-  // La ventana de rendición puede quedar para después; si ya está, tiene que
-  // ser coherente.
+  // Las fechas pueden quedar para después; si ya están, tienen que cuadrar.
   if (
     contest.startsAt &&
     contest.endsAt &&
@@ -3023,8 +3226,20 @@ app.post("/api/contests/:id/publish", async (req, res) => {
     );
   }
 
-  if (contest.tasks.length === 0) {
-    readinessErrors.push("El desafío necesita al menos una tarea.");
+  const categories = contestCategories(contest);
+
+  if (categories.length === 0) {
+    readinessErrors.push("Elige al menos una categoría.");
+  }
+
+  const empty = categories.filter(
+    (category) => tasksOfCategory(contest.tasks, category).length === 0,
+  );
+
+  if (empty.length > 0) {
+    readinessErrors.push(
+      `${empty.length === 1 ? "La categoría" : "Las categorías"} ${empty.join(", ")} no ${empty.length === 1 ? "tiene" : "tienen"} preguntas.`,
+    );
   }
 
   if (contest.tasks.some((task) => task.maxScore < task.minScore)) {
@@ -3228,16 +3443,20 @@ app.post("/api/contests/:id/results/unpublish", async (req, res) => {
 });
 
 app.delete("/api/contests/:id", async (req, res) => {
-  const played = await prisma.attempt.count({
-    where: {
-      status: { not: "pending" },
-      team: { group: { contestId: req.params.id } },
-    },
+  const contest = await prisma.contest.findUnique({
+    where: { id: req.params.id },
+    select: { publishedAt: true },
   });
 
-  if (played > 0) {
+  if (!contest) {
+    res.status(404).json({ message: "Desafío no encontrado." });
+    return;
+  }
+
+  // Publicado, ya lo ven los maestros y puede tener inscritos o resultados.
+  if (contest.publishedAt) {
     res.status(409).json({
-      message: `Este desafío tiene ${played} participante(s) que ya rindieron; no se puede eliminar sin perder sus resultados.`,
+      message: "Solo se puede eliminar un desafío en borrador.",
     });
     return;
   }
@@ -3312,12 +3531,13 @@ function nameKey(first: string, last: string) {
 function serializeGroup(group: {
   id: string;
   name: string;
+  category: string | null;
   accessCode: string;
   contestId: string;
   firstUsedAt: Date | null;
   expiresAt: Date | null;
   createdAt: Date;
-  contest?: { title: string; category: string; allowPairs: boolean } | null;
+  contest?: { title: string; categories: string; allowPairs: boolean } | null;
   teams?: Array<{
     id: string;
     participationMode: string;
@@ -3337,7 +3557,8 @@ function serializeGroup(group: {
     accessCode: group.accessCode,
     contestId: group.contestId,
     contestTitle: group.contest?.title ?? "",
-    contestCategory: group.contest?.category ?? "",
+    category: group.category,
+    contestCategories: group.contest ? contestCategories(group.contest) : [],
     contestAllowPairs: group.contest?.allowPairs ?? false,
     firstUsedAt: group.firstUsedAt?.toISOString() ?? null,
     expiresAt: group.expiresAt?.toISOString() ?? null,
@@ -3360,7 +3581,7 @@ function serializeGroup(group: {
 }
 
 const groupContestSelect = {
-  contest: { select: { title: true, category: true, allowPairs: true } },
+  contest: { select: { title: true, categories: true, allowPairs: true } },
 };
 
 // ---- Gestión de maestros (solo admin) ----
@@ -3538,7 +3759,7 @@ app.get("/api/published-contests", requireAuth, async (req, res) => {
     select: {
       id: true,
       title: true,
-      category: true,
+      categories: true,
       publishedAt: true,
       registrationStartsAt: true,
       registrationEndsAt: true,
@@ -3549,6 +3770,7 @@ app.get("/api/published-contests", requireAuth, async (req, res) => {
   res.json(
     contests.filter(contestRegistrationIsOpen).map((contest) => ({
       ...contest,
+      categories: contestCategories(contest),
       registrationStartsAt: contest.registrationStartsAt?.toISOString() ?? null,
       registrationEndsAt: contest.registrationEndsAt?.toISOString() ?? null,
       startsAt: contest.startsAt?.toISOString() ?? null,
@@ -3642,6 +3864,23 @@ app.post("/api/groups", async (req, res) => {
     return;
   }
 
+  const categories = contestCategories(contest);
+  const requestedCategory =
+    typeof req.body?.category === "string" ? req.body.category.trim() : "";
+  const category =
+    requestedCategory || (categories.length === 1 ? categories[0] : "");
+
+  if (!categories.includes(category)) {
+    res.status(400).json({
+      message: requestedCategory
+        ? "Esa categoría no participa en este desafío."
+        : "Elige la categoría del grupo.",
+      code: "GROUP_CATEGORY_REQUIRED",
+      field: "category",
+    });
+    return;
+  }
+
   const accessCode = await generateUniqueAccessCode();
   const recoveryCode = generateCode(10);
 
@@ -3649,6 +3888,7 @@ app.post("/api/groups", async (req, res) => {
     data: {
       contestId,
       name,
+      category,
       accessCode,
       recoveryCode,
       createdById: req.user?.id ?? null,
@@ -3773,7 +4013,7 @@ app.put("/api/teams/:id", async (req, res) => {
   let grade: string;
 
   try {
-    grade = parseGrade(req.body?.grade, team.group.contest.category);
+    grade = parseGrade(req.body?.grade, groupCategories(team.group));
   } catch (error) {
     res.status(400).json({
       message: error instanceof Error ? error.message : "Curso inválido.",
@@ -3883,11 +4123,7 @@ app.get("/api/groups/:id/roster-template", async (req, res) => {
     return;
   }
 
-  const categoryGrades = gradesForCategory(group.contest.category);
-  // Sin categoria asignada el importador acepta cualquiera de los doce cursos,
-  // asi que se ofrecen todos en vez de dejar la columna sin lista.
-  const grades =
-    categoryGrades.length > 0 ? categoryGrades : SCHOOL_GRADES.slice();
+  const grades = gradesForCategories(groupCategories(group));
   const allowPairs = group.contest.allowPairs;
   // Si el desafio es solo individual, Modalidad tendria un unico valor posible
   // y las columnas del companero solo podrian provocar errores: la planilla se
@@ -3980,12 +4216,7 @@ app.get("/api/groups/:id/roster-template", async (req, res) => {
     showErrorMessage: true,
     errorStyle: "error",
     errorTitle: "Curso no válido",
-    error:
-      categoryGrades.length > 0
-        ? `Elige uno de la lista. Esta categoría admite: ${categoryGrades
-            .map((grade) => grade.label)
-            .join(" o ")}.`
-        : "Elige uno de la lista desplegable.",
+    error: "Elige uno de los cursos de la lista.",
   });
 
   if (allowPairs) {
@@ -4045,11 +4276,9 @@ app.get("/api/groups/:id/roster-template", async (req, res) => {
       : "La columna Curso tiene lista desplegable: elige de la lista en vez de escribir.",
   ]);
   notes.addRow([
-    categoryGrades.length > 0
-      ? `Cursos válidos para la categoría ${group.contest.category}: ${categoryGrades
-          .map((grade) => `${grade.label} (${grade.value})`)
-          .join(", ")}.`
-      : "Este desafío todavía no tiene categoría asignada, así que la lista ofrece los doce cursos. Pídele al administrador que asigne la categoría para que la planilla solo acepte los que corresponden.",
+    `Cursos válidos en este desafío: ${grades
+      .map((grade) => `${grade.label} (${grade.value})`)
+      .join(", ")}. Cada estudiante rinde las preguntas de la categoría de su curso.`,
   ]);
   notes.addRow([
     allowPairs
@@ -4338,7 +4567,7 @@ app.post("/api/groups/:id/roster", rosterUploadMiddleware, async (req, res) => {
 
       let grade: string | null = null;
       try {
-        grade = gradeFromCell(gradeText, group.contest.category);
+        grade = gradeFromCell(gradeText, groupCategories(group));
       } catch (error) {
         addIssue(error instanceof Error ? error.message : "Curso inválido.");
       }
@@ -4516,7 +4745,7 @@ app.post("/api/groups/:id/teams", async (req, res) => {
   let grade: string;
 
   try {
-    grade = parseGrade(req.body?.grade, group.contest.category);
+    grade = parseGrade(req.body?.grade, groupCategories(group));
   } catch (error) {
     res.status(400).json({
       message: error instanceof Error ? error.message : "Curso inválido.",
@@ -4634,7 +4863,7 @@ app.get("/api/play/group/:code", async (req, res) => {
   res.json({
     groupName: group.name,
     contestTitle: group.contest.title,
-    contestCategory: group.contest.category,
+    contestCategories: contestCategories(group.contest),
     // Una practica no se inscribe: se entra con el nombre y ya.
     isPractice: group.contest.isPractice,
     allowPairs: group.contest.allowPairs,
@@ -4642,9 +4871,10 @@ app.get("/api/play/group/:code", async (req, res) => {
     registrationStartsAt:
       group.contest.registrationStartsAt?.toISOString() ?? null,
     registrationEndsAt: group.contest.registrationEndsAt?.toISOString() ?? null,
-    grades: group.contest.category
-      ? gradesForCategory(group.contest.category)
-      : SCHOOL_GRADES,
+    contestStartsAt: group.contest.startsAt?.toISOString() ?? null,
+    contestEndsAt: group.contest.endsAt?.toISOString() ?? null,
+    category: group.category,
+    grades: gradesForCategories(groupCategories(group)),
     state,
   });
 });
@@ -4801,7 +5031,7 @@ app.post("/api/play/join", async (req, res) => {
   let grade: string;
 
   try {
-    grade = parseGrade(req.body?.grade, group.contest.category);
+    grade = parseGrade(req.body?.grade, groupCategories(group));
   } catch (error) {
     res.status(400).json({
       message: error instanceof Error ? error.message : "Curso inválido.",
@@ -4965,35 +5195,56 @@ function attemptElapsedMs(attempt: {
   return attempt.finishedAt.getTime() - attempt.startedAt.getTime();
 }
 
+/** Cada categoría tiene su propio ranking: sus preguntas son otras. */
 async function recomputeRanking(contestId: string) {
+  const contest = await prisma.contest.findUnique({
+    where: { id: contestId },
+    select: { categories: true },
+  });
+  const categories = contest ? contestCategories(contest) : [];
   const results = await prisma.result.findMany({
     where: { attempt: { team: { group: { contestId } } } },
     select: {
       id: true,
       totalScore: true,
-      attempt: { select: { startedAt: true, finishedAt: true } },
+      attempt: {
+        select: {
+          startedAt: true,
+          finishedAt: true,
+          team: { select: { grade: true } },
+        },
+      },
     },
   });
 
-  const ranked = results
-    .map((result) => ({
-      id: result.id,
-      totalScore: result.totalScore,
-      elapsedMs: attemptElapsedMs(result.attempt),
-    }))
-    .sort((left, right) => {
-      if (left.totalScore !== right.totalScore) {
-        return right.totalScore - left.totalScore;
-      }
+  const byCategory = new Map<string, typeof results>();
 
-      return left.elapsedMs - right.elapsedMs;
-    });
+  for (const result of results) {
+    const category = teamCategory(result.attempt.team.grade, categories) ?? "";
+    byCategory.set(category, [...(byCategory.get(category) ?? []), result]);
+  }
 
-  for (let i = 0; i < ranked.length; i += 1) {
-    await prisma.result.update({
-      where: { id: ranked[i].id },
-      data: { rankPosition: i + 1 },
-    });
+  for (const group of byCategory.values()) {
+    const ranked = group
+      .map((result) => ({
+        id: result.id,
+        totalScore: result.totalScore,
+        elapsedMs: attemptElapsedMs(result.attempt),
+      }))
+      .sort((left, right) => {
+        if (left.totalScore !== right.totalScore) {
+          return right.totalScore - left.totalScore;
+        }
+
+        return left.elapsedMs - right.elapsedMs;
+      });
+
+    for (let i = 0; i < ranked.length; i += 1) {
+      await prisma.result.update({
+        where: { id: ranked[i].id },
+        data: { rankPosition: i + 1 },
+      });
+    }
   }
 }
 
@@ -5021,12 +5272,16 @@ async function finalizeAttempt(attemptId: string, recomputeRank = true) {
   const answersByTask = new Map(
     attempt.answers.map((answer) => [answer.taskDraftId, answer]),
   );
+  const categoryTasks = tasksOfCategory(
+    contest.tasks,
+    teamCategory(attempt.team.grade, contestCategories(contest)),
+  );
 
-  let totalScore = contest.initialScore;
+  let totalScore = initialScoreOf(categoryTasks);
   let correctCount = 0;
   let answeredCount = 0;
 
-  for (const contestTask of contest.tasks) {
+  for (const contestTask of categoryTasks) {
     const task = deserializeTask(contestTask.taskDraft) as PlayTask;
     const existing = answersByTask.get(contestTask.taskDraftId);
     let payload: unknown = null;
@@ -5082,6 +5337,58 @@ async function finalizeAttempt(attemptId: string, recomputeRank = true) {
   }
 
   return { totalScore, correctCount, answeredCount };
+}
+
+/**
+ * Publica solos los resultados cuya hora ya llegó: cierra los intentos que
+ * quedaron abiertos, arma el ranking y los publica. Corre una sola vez por
+ * desafío, así que si el administrador los oculta después no vuelven.
+ */
+async function releaseDueResults(contestId?: string) {
+  const now = currentDate();
+  const due = await prisma.contest.findMany({
+    where: {
+      ...(contestId ? { id: contestId } : {}),
+      isPractice: false,
+      publishedAt: { not: null },
+      resultsReleasedAt: null,
+      endsAt: { not: null, lt: now },
+    },
+    select: { id: true, endsAt: true, resultsAt: true },
+  });
+  let released = false;
+
+  for (const contest of due) {
+    const releaseAt =
+      contest.resultsAt && contest.resultsAt > contest.endsAt!
+        ? contest.resultsAt
+        : contest.endsAt!;
+
+    if (releaseAt > now) {
+      continue;
+    }
+
+    const stamp = now.toISOString();
+    const claim = await env.DB.prepare(
+      'UPDATE "Contest" SET "resultsReleasedAt" = ? WHERE "id" = ? AND "resultsReleasedAt" IS NULL',
+    )
+      .bind(stamp, contest.id)
+      .run();
+
+    if (!claim.meta.changes) {
+      continue;
+    }
+
+    await consolidateContest(contest.id);
+    await env.DB.prepare(
+      'UPDATE "Contest" SET "consolidatedAt" = COALESCE("consolidatedAt", ?), "resultsPublishedAt" = COALESCE("resultsPublishedAt", ?) WHERE "id" = ?',
+    )
+      .bind(stamp, stamp, contest.id)
+      .run();
+    released = true;
+  }
+
+  return released;
 }
 
 async function consolidateContest(contestId: string) {
@@ -5183,7 +5490,7 @@ const PLAY_AUTH_ERRORS: Record<
   not_found: { status: 404, message: "Registro no encontrado." },
   session_gone: {
     status: 401,
-    message: "Tu sesión se cerró. Vuelve a entrar con tu nombre.",
+    message: "Tu sesión se abrió en otro dispositivo. Para seguir aquí, vuelve a entrar con tu código personal.",
   },
   session_taken: {
     status: 409,
@@ -5283,14 +5590,8 @@ app.post("/api/play/session", async (req, res) => {
     return;
   }
 
-  if (playSessionIsLive(team)) {
-    res.status(409).json({
-      message:
-        "Ya hay una sesión abierta con tu código. Ciérrala o espera medio minuto e inténtalo otra vez.",
-    });
-    return;
-  }
-
+  // Entrar con el código personal se queda con la sesión: la que estuviera
+  // abierta en otro dispositivo se cierra sola en su próxima consulta.
   if (
     !group.firstUsedAt &&
     computeContestState(group.contest).state === "abierta"
@@ -5397,6 +5698,15 @@ app.post("/api/play/start", async (req, res) => {
     return;
   }
 
+  const category = teamCategory(team.grade, contestCategories(contest));
+
+  if (tasksOfCategory(contest.tasks, category).length === 0) {
+    res.status(409).json({
+      message: "Este desafío no tiene preguntas para tu curso. Avísale a tu maestro.",
+    });
+    return;
+  }
+
   if (team.attempt.status === "pending") {
     const now = currentDate();
 
@@ -5457,6 +5767,18 @@ const playAttemptHandler: express.RequestHandler = async (req, res) => {
 
   let attempt = team.attempt;
   const contest = team.group.contest;
+
+  if (await releaseDueResults(contest.id)) {
+    const fresh = await prisma.contest.findUniqueOrThrow({
+      where: { id: contest.id },
+      select: { consolidatedAt: true, resultsPublishedAt: true },
+    });
+    contest.consolidatedAt = fresh.consolidatedAt;
+    contest.resultsPublishedAt = fresh.resultsPublishedAt;
+    attempt =
+      (await prisma.attempt.findUnique({ where: { id: attempt.id } })) ??
+      attempt;
+  }
   const contestState = computeContestState(contest).state;
 
   if (
@@ -5487,11 +5809,23 @@ const playAttemptHandler: express.RequestHandler = async (req, res) => {
 
   const finished = attempt.status === "finished";
   const resultsPublished = Boolean(contest.resultsPublishedAt);
-  const showResults =
-    finished &&
-    resultsPublished &&
-    (contest.showFeedback || contest.showSolutions);
-  const tasks = contest.tasks.map((contestTask) => {
+  // Lo marcado «al entregar» se ve apenas entrega; lo demás, con los resultados.
+  const visible = {
+    score:
+      finished &&
+      (contest.showScoreOnSubmit || (resultsPublished && contest.showTotalScore)),
+    feedback:
+      finished &&
+      (contest.showFeedbackOnSubmit ||
+        (resultsPublished && contest.showFeedback)),
+    solutions:
+      finished &&
+      (contest.showSolutionsOnSubmit ||
+        (resultsPublished && contest.showSolutions)),
+  };
+  const showResults = visible.feedback || visible.solutions;
+  const category = teamCategory(team.grade, contestCategories(contest));
+  const tasks = tasksOfCategory(contest.tasks, category).map((contestTask) => {
     const task = deserializeTask(contestTask.taskDraft) as PlayTask;
     const safe: ReturnType<typeof renderSafeTask> & {
       correct?: boolean | null;
@@ -5504,19 +5838,33 @@ const playAttemptHandler: express.RequestHandler = async (req, res) => {
     if (showResults) {
       safe.correct = correctnessByTask[task.id] ?? null;
     }
-    if (showResults && contest.showSolutions) {
+    if (visible.solutions) {
       safe.explanationBlocks = task.explanationBlocks;
     }
     return safe;
   });
 
-  const result =
-    finished && resultsPublished && contest.showTotalScore
-      ? await prisma.result.findUnique({ where: { attemptId: attempt.id } })
-      : null;
+  const result = visible.score
+    ? await prisma.result.findUnique({ where: { attemptId: attempt.id } })
+    : null;
 
   res.json({
     contestTitle: contest.title,
+    category,
+    rules: contestRules(tasksOfCategory(contest.tasks, category)),
+    participationMode: team.participationMode,
+    accessCode: team.group.accessCode,
+    resultsAt: (contest.resultsAt ?? contest.endsAt)?.toISOString() ?? null,
+    // Para que el estudiante confirme que entró con su propio código.
+    participant: {
+      members: [
+        `${team.memberOneFirstName} ${team.memberOneLastName}`.trim(),
+        ...(team.memberTwoFirstName
+          ? [`${team.memberTwoFirstName} ${team.memberTwoLastName ?? ""}`.trim()]
+          : []),
+      ],
+      grade: team.grade,
+    },
     durationMinutes: contest.durationMinutes,
     questionDisplayMode: contest.questionDisplayMode,
     contestStartsAt: contest.startsAt?.toISOString() ?? null,
@@ -5530,9 +5878,9 @@ const playAttemptHandler: express.RequestHandler = async (req, res) => {
     finishedAt: attempt.finishedAt?.toISOString() ?? null,
     suspendedAt: contest.suspendedAt?.toISOString() ?? null,
     resultsPublished,
-    showFeedback: resultsPublished && contest.showFeedback,
-    showSolutions: resultsPublished && contest.showSolutions,
-    showTotalScore: resultsPublished && contest.showTotalScore,
+    showFeedback: visible.feedback,
+    showSolutions: visible.solutions,
+    showTotalScore: visible.score,
     tasks,
     answers,
     result: result
@@ -5540,7 +5888,7 @@ const playAttemptHandler: express.RequestHandler = async (req, res) => {
           totalScore: result.totalScore,
           correctCount: result.correctCount,
           answeredCount: result.answeredCount,
-          rankPosition: result.rankPosition,
+          rankPosition: resultsPublished ? result.rankPosition : null,
         }
       : null,
   });
@@ -5595,8 +5943,10 @@ app.post("/api/play/answer", async (req, res) => {
 
   const contestTask = await prisma.contestTask.findUnique({
     where: {
-      contestId_taskDraftId: {
+      contestId_category_taskDraftId: {
         contestId: team.group.contestId,
+        category:
+          teamCategory(team.grade, contestCategories(team.group.contest)) ?? "",
         taskDraftId: taskId,
       },
     },
@@ -5682,6 +6032,7 @@ app.post("/api/play/submit", async (req, res) => {
 });
 
 app.get("/api/contests/:id/results", async (req, res) => {
+  await releaseDueResults(String(req.params.id));
   const contest = await prisma.contest.findUnique({
     where: { id: req.params.id },
     include: {
@@ -5699,9 +6050,11 @@ app.get("/api/contests/:id/results", async (req, res) => {
     return;
   }
 
+  const categories = contestCategories(contest);
   const rows = contest.groups.flatMap((group) =>
     group.teams.map((team) => ({
       teamId: team.id,
+      category: teamCategory(team.grade, categories),
       groupName: group.name,
       participationMode: team.participationMode,
       grade: team.grade,
@@ -5736,7 +6089,13 @@ app.get("/api/contests/:id/results", async (req, res) => {
 
   res.json({
     contestTitle: contest.title,
-    taskCount: contest.tasks.length,
+    categories,
+    taskCounts: Object.fromEntries(
+      categories.map((category) => [
+        category,
+        tasksOfCategory(contest.tasks, category).length,
+      ]),
+    ),
     state: computeContestState(contest).state,
     rows,
   });

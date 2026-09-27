@@ -17,7 +17,7 @@ import type { ContestState } from "@/lib/contest-schema";
 type PublicContest = {
   id: string;
   title: string;
-  category: string;
+  categories: string[];
   durationMinutes: number;
   registrationStartsAt: string | null;
   registrationEndsAt: string | null;
@@ -310,9 +310,12 @@ export function LiveContests() {
               >
                 {STATE_LABEL[state]}
               </span>
-              {contest.category && (
-                <Badge variant="outline">{contest.category}</Badge>
-              )}
+              {contest.categories.length > 0 &&
+                contest.categories.length < 6 && (
+                  <Badge variant="outline">
+                    {contest.categories.join(", ")}
+                  </Badge>
+                )}
               {remaining && (
                 <span className="ml-auto rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
                   Faltan {remaining} {target.label}

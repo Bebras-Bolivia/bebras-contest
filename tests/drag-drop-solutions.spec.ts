@@ -392,7 +392,7 @@ test("recovers partial placements, preserves valid saves after invalid input, an
         .getByRole("alertdialog")
         .getByRole("button", { name: "Entregar", exact: true })
         .click();
-      await expect(page.getByText(/Desafío terminado/i)).toBeVisible({
+      await expect(page.getByText("¡Terminaste!", { exact: true })).toBeVisible({
         timeout: 15000,
       });
     } else {

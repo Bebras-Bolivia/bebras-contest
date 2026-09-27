@@ -108,7 +108,7 @@ test("results appear only after consolidating and publishing", async ({
 
   await loginAdminPage(page);
   await page.goto(`/desafios/resultados?id=${contest.id}`);
-  await expect(page.getByText("Consolidado", { exact: true })).toBeVisible();
+  await expect(page.getByText("Resultados listos", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Publicar resultados" }).click();
   await page
     .getByRole("alertdialog")
@@ -125,7 +125,7 @@ test("results appear only after consolidating and publishing", async ({
   expect(afterPublish.result).not.toBeNull();
   expect(afterPublish.result.rankPosition).toBe(1);
   expect(afterPublish.result.totalScore).toBe(
-    contest.initialScore +
+    contest.initialScores[contest.categories[0]] +
       contest.tasks[0].maxScore +
       contest.tasks[1].minScore,
   );
@@ -140,7 +140,7 @@ test("results appear only after consolidating and publishing", async ({
   }, participant.sessionToken);
   await page.goto("/rendir");
   await expect(
-    page.getByText("¡Desafío terminado!", { exact: true }),
+    page.getByText("¡Terminaste!", { exact: true }),
   ).toBeVisible();
 
   const expectedStatuses = ["Correcta", "Incorrecta", "Sin responder"];

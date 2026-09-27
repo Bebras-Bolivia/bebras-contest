@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ApiError } from "@/lib/api-client";
 import { getUser } from "@/lib/auth";
-import { gradeLabel, gradesForCategory } from "@/lib/contest-schema";
+import { gradeLabel, gradesForCategories } from "@/lib/contest-schema";
 
 import {
   createGroup,
@@ -187,6 +187,14 @@ async function copyToClipboard(value: string) {
   }
 }
 
+/** Categorías cuyos cursos acepta un grupo: la suya o, si no tiene, las del desafío. */
+function groupGradeCategories(
+  group?: { category: string | null; contestCategories: string[] } | null,
+) {
+  if (!group) return [];
+  return group.category ? [group.category] : group.contestCategories;
+}
+
 export function GroupsHome() {
   const [isMaestro] = useState(() => getUser()?.role === "maestro");
   const [groups, setGroups] = useState<StoredGroup[]>([]);
@@ -194,9 +202,11 @@ export function GroupsHome() {
     PublishedContest[]
   >([]);
   const [contestId, setContestId] = useState("");
+  const [category, setCategory] = useState("");
   const [name, setName] = useState("");
   const [createErrors, setCreateErrors] = useState<{
     contestId?: string;
+    category?: string;
     name?: string;
     form?: string;
   }>({});
@@ -242,6 +252,16 @@ export function GroupsHome() {
     | null
   >(null);
   const contestRef = useRef<HTMLButtonElement>(null);
+  const selectedContest = publishedContests.find(
+    (contest) => contest.id === contestId,
+  );
+  const contestCategoryOptions = selectedContest?.categories ?? [];
+  const chosenCategory =
+    contestCategoryOptions.length === 1
+      ? contestCategoryOptions[0]
+      : contestCategoryOptions.includes(category)
+        ? category
+        : "";
   const nameRef = useRef<HTMLInputElement>(null);
   const createErrorRef = useRef<HTMLDivElement>(null);
   const pendingCreateFocusRef = useRef<"contestId" | "name" | null>(null);
@@ -308,6 +328,9 @@ export function GroupsHome() {
         }
         setGroups(loadedGroups);
         setPublishedContests(loadedContests);
+        if (loadedContests.length === 1) {
+          setContestId((current) => current || loadedContests[0].id);
+        }
       } catch (error: unknown) {
         if (!active) return;
         setLoadError(
@@ -365,10 +388,14 @@ export function GroupsHome() {
 
     const nextErrors = {
       contestId: contestId ? undefined : "Elige un desafío publicado.",
+      category:
+        contestId && !chosenCategory
+          ? "Elige la categoría de tus estudiantes."
+          : undefined,
       name: name.trim() ? undefined : "Ingresa el nombre del grupo.",
     };
 
-    if (nextErrors.contestId || nextErrors.name) {
+    if (nextErrors.contestId || nextErrors.category || nextErrors.name) {
       setCreateErrors(nextErrors);
       if (nextErrors.contestId) {
         contestRef.current?.focus();
@@ -384,6 +411,7 @@ export function GroupsHome() {
     try {
       const group = await createGroup({
         contestId,
+        category: chosenCategory,
         name: name.trim(),
       });
       setGroups((current) => [group, ...current]);
@@ -981,11 +1009,70 @@ export function GroupsHome() {
                           </SelectGroup>
                         </SelectContent>
                       </Select>
+
                       <FieldError id="group-contest-error">
                         {createErrors.contestId}
                       </FieldError>
                     </FieldContent>
                   </Field>
+                  {contestCategoryOptions.length > 1 && (
+                    <Field
+                      data-invalid={Boolean(createErrors.category) || undefined}
+                    >
+                      <FieldLabel>Categoría de tus estudiantes</FieldLabel>
+                      <FieldContent>
+                        <div
+                          role="radiogroup"
+                          aria-label="Categoría del grupo"
+                          className="grid grid-cols-2 gap-2 sm:grid-cols-3"
+                        >
+                          {contestCategoryOptions.map((item) => {
+                            const selected = chosenCategory === item;
+                            return (
+                              <button
+                                key={item}
+                                type="button"
+                                role="radio"
+                                aria-checked={selected}
+                                disabled={creating}
+                                onClick={() => {
+                                  setCategory(item);
+                                  if (createErrors.category) {
+                                    setCreateErrors((current) => ({
+                                      ...current,
+                                      category: undefined,
+                                    }));
+                                  }
+                                }}
+                                className={cn(
+                                  "flex flex-col items-start border-2 px-3 py-2 text-left text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
+                                  selected
+                                    ? "border-primary bg-primary/5 font-semibold"
+                                    : "border-border/30 hover:border-primary/60",
+                                )}
+                              >
+                                {item}
+                                <span className="text-xs font-normal text-muted-foreground">
+                                  {gradesForCategories([item])
+                                    .map(
+                                      (grade) => grade.label.split(" de ")[0],
+                                    )
+                                    .join(" y ")}{" "}
+                                  de{" "}
+                                  {
+                                    gradesForCategories([item])[0].label.split(
+                                      " de ",
+                                    )[1]
+                                  }
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <FieldError>{createErrors.category}</FieldError>
+                      </FieldContent>
+                    </Field>
+                  )}
                   <Field data-invalid={Boolean(createErrors.name) || undefined}>
                     <FieldLabel htmlFor="group-name">
                       Nombre del grupo
@@ -1061,10 +1148,8 @@ export function GroupsHome() {
                           >
                             {group.contestTitle}
                           </Badge>
-                          {group.contestCategory && (
-                            <Badge variant="outline">
-                              {group.contestCategory}
-                            </Badge>
+                          {group.category && (
+                            <Badge variant="outline">{group.category}</Badge>
                           )}
                           <button
                             type="button"
@@ -1443,12 +1528,15 @@ export function GroupsHome() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        {gradesForCategory(
-                          groups.find((group) => group.id === editing?.groupId)
-                            ?.contestCategory ?? "",
+                        {gradesForCategories(
+                          groupGradeCategories(
+                            groups.find(
+                              (group) => group.id === editing?.groupId,
+                            ),
+                          ),
                         ).map((grade) => (
                           <SelectItem key={grade.value} value={grade.value}>
-                            {grade.label}
+                            {grade.label} · {grade.category}
                           </SelectItem>
                         ))}
                       </SelectGroup>
@@ -1716,20 +1804,18 @@ export function GroupsHome() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        {gradesForCategory(
-                          enrolling?.contestCategory ?? "",
+                        {gradesForCategories(
+                          groupGradeCategories(enrolling),
                         ).map((grade) => (
                           <SelectItem key={grade.value} value={grade.value}>
-                            {grade.label}
+                            {grade.label} · {grade.category}
                           </SelectItem>
                         ))}
                       </SelectGroup>
                     </SelectContent>
                   </Select>
                   <FieldDescription id="enroll-grade-description">
-                    {enrolling?.contestCategory
-                      ? `Este desafío es de categoría ${enrolling.contestCategory}.`
-                      : "Este desafío no tiene categoría asignada."}
+                    Rendirá las preguntas de la categoría de su curso.
                   </FieldDescription>
                   <FieldError id="enroll-grade-error">
                     {enrollErrors.grade}

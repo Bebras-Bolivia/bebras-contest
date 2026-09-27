@@ -20,7 +20,10 @@ test("solves a v2 drag-drop practice task with pointer and touch input", async (
   await api.dispose();
 
   await page.goto(`/practica/tarea?id=${task.id}&nombre=Titi`);
-  await expect(page.getByRole("heading", { name: task.title })).toBeVisible();
+  // Primera página de la corrida: el servidor de desarrollo aún compila.
+  await expect(page.getByRole("heading", { name: task.title })).toBeVisible({
+    timeout: 20000,
+  });
 
   const stage = page.locator('[aria-label^="Escenario de la tarea."]');
   // La bandeja conserva el hueco de cada objeto, así que el nombre tiene que
@@ -110,12 +113,13 @@ test("solves a v2 drag-drop practice task with pointer and touch input", async (
     (await itemButton(label).boundingBox())!.x;
   const alphaLeft = await trayLeft(DRAG_DROP_ITEMS[0].label);
   const betaLeft = await trayLeft(DRAG_DROP_ITEMS[1].label);
+  // Las piezas se deslizan a su lugar nuevo: se mide cuando terminan.
   await dragOnto(DRAG_DROP_ITEMS[0].label, DRAG_DROP_ITEMS[1].label);
-  expect(await trayLeft(DRAG_DROP_ITEMS[0].label)).toBeGreaterThan(alphaLeft);
-  expect(await trayLeft(DRAG_DROP_ITEMS[1].label)).toBeLessThan(betaLeft);
+  await expect.poll(() => trayLeft(DRAG_DROP_ITEMS[0].label)).toBe(betaLeft);
+  await expect.poll(() => trayLeft(DRAG_DROP_ITEMS[1].label)).toBe(alphaLeft);
   await dragOnto(DRAG_DROP_ITEMS[1].label, DRAG_DROP_ITEMS[0].label);
-  expect(await trayLeft(DRAG_DROP_ITEMS[0].label)).toBe(alphaLeft);
-  expect(await trayLeft(DRAG_DROP_ITEMS[1].label)).toBe(betaLeft);
+  await expect.poll(() => trayLeft(DRAG_DROP_ITEMS[0].label)).toBe(alphaLeft);
+  await expect.poll(() => trayLeft(DRAG_DROP_ITEMS[1].label)).toBe(betaLeft);
   await expect(stage.getByRole("button")).toHaveCount(0);
 
   const alpha = itemButton(DRAG_DROP_ITEMS[0].label);

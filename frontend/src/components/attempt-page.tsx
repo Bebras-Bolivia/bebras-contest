@@ -10,19 +10,17 @@ import {
 } from "react";
 import {
   ArrowLeftIcon,
-  CheckCircle2Icon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  CircleIcon,
   ClockIcon,
   LoaderCircleIcon,
   SendIcon,
-  XCircleIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { TaskExplanation } from "@/components/task-explanation";
 import { TaskPlayContent } from "@/components/task-play-content";
+import { ContestIntro } from "@/components/contest-intro";
+import { ContestFinish } from "@/components/contest-finish";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,11 +33,10 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   answerHasResponse,
+  closePlaySession,
   forgetPlaySession,
   getAttempt,
   readPlaySession,
@@ -132,6 +129,11 @@ export function AttemptPage({
     return new URLSearchParams(window.location.search).get("id");
   });
   const preview = Boolean(previewContestId);
+  const [previewCategory, setPreviewCategory] = useState(() =>
+    typeof window === "undefined"
+      ? null
+      : new URLSearchParams(window.location.search).get("categoria"),
+  );
   const [sessionToken] = useState(() =>
     previewContestId ? "preview" : readPlaySession(),
   );
@@ -157,7 +159,10 @@ export function AttemptPage({
     }
     try {
       const data = previewContestId
-        ? ((await getContestPreview(previewContestId)) as AttemptState)
+        ? ((await getContestPreview(
+            previewContestId,
+            previewCategory,
+          )) as AttemptState)
         : await getAttempt();
       setAttempt(data);
       answersRef.current = data.answers ?? {};
@@ -175,7 +180,7 @@ export function AttemptPage({
     } finally {
       setLoading(false);
     }
-  }, [sessionToken, previewContestId]);
+  }, [sessionToken, previewContestId, previewCategory]);
 
   useEffect(() => {
     void load();
@@ -191,7 +196,10 @@ export function AttemptPage({
     attempt?.status === "pending" &&
     ["programada", "inscripcion", "preparacion"].includes(attempt.state);
   const attemptActive = starting || attempt?.status === "in_progress";
-  const chromeHidden = loading || attemptActive;
+  // Probar simula la pantalla del estudiante: sin cabecera ni pie del sitio.
+  // Desde las reglas hasta el final la pantalla es solo del desafío: sin
+  // cabecera ni pie del sitio, con su propio botón para salir.
+  const chromeHidden = preview || loading || attempt !== null;
   const contestStartsAtMs = attempt?.contestStartsAt
     ? new Date(attempt.contestStartsAt).getTime()
     : 0;
@@ -291,6 +299,7 @@ export function AttemptPage({
     const summary = await scoreContestPreview(
       previewContestId,
       answersRef.current,
+      previewCategory,
     );
 
     setAttempt((current) =>
@@ -307,10 +316,8 @@ export function AttemptPage({
 
               return {
                 ...task,
-                correct: graded?.correct ?? false,
-                explanationBlocks: current.showSolutions
-                  ? graded?.explanationBlocks
-                  : undefined,
+                correct: graded?.answered ? graded.correct : null,
+                explanationBlocks: graded?.explanationBlocks,
               };
             }),
             result: {
@@ -443,7 +450,6 @@ export function AttemptPage({
 
       if (preview) {
         await finishPreview();
-        toast.success("Vista previa entregada.");
         return;
       }
 
@@ -463,22 +469,61 @@ export function AttemptPage({
   // La cabecera del sitio se oculta durante el intento para que la prueba se
   // vea igual que la del estudiante, asi que la salida vive aqui: este aviso
   // acompana a todas las pantallas de la vista previa.
+  const [previewView, setPreviewView] = useState<"submit" | "results">(
+    "submit",
+  );
+
+  const leaveAttempt = () => {
+    void closePlaySession()
+      .catch(() => undefined)
+      .finally(() => {
+        forgetPlaySession();
+        window.location.href = "/entrar";
+      });
+  };
+
+  const studentExit = (
+    <div>
+      <Button type="button" variant="outline" size="sm" onClick={leaveAttempt}>
+        <ArrowLeftIcon data-icon="inline-start" />
+        Salir
+      </Button>
+    </div>
+  );
+
+  const homeLink = (
+    <div>
+      <Button asChild variant="outline" size="sm">
+        <a href="/">
+          <ArrowLeftIcon data-icon="inline-start" />
+          Ir al inicio
+        </a>
+      </Button>
+    </div>
+  );
+
+  const choosePreviewCategory = (category: string) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("categoria", category);
+    window.history.replaceState(window.history.state, "", url);
+    setPreviewCategory(category);
+  };
+
   const previewNotice = preview ? (
-    <Alert>
-      <AlertTitle>Vista previa del desafío</AlertTitle>
-      <AlertDescription className="flex flex-col items-start gap-3">
-        <span>
-          Es la misma pantalla que verá el estudiante. Nada de lo que respondas
-          aquí se guarda, y el tiempo corre solo para que puedas probarlo.
-        </span>
-        <Button asChild variant="outline" size="sm">
-          <a href={`/desafios/editar?id=${previewContestId}`}>
-            <ArrowLeftIcon data-icon="inline-start" />
-            Salir de la prueba
-          </a>
-        </Button>
-      </AlertDescription>
-    </Alert>
+    <div>
+      <Button asChild variant="outline" size="sm">
+        <a
+          href={`/desafios/editar?id=${previewContestId}${
+            previewCategory
+              ? `&categoria=${encodeURIComponent(previewCategory)}`
+              : ""
+          }`}
+        >
+          <ArrowLeftIcon data-icon="inline-start" />
+          Volver al desafío
+        </a>
+      </Button>
+    </div>
   ) : null;
 
   if (loading) {
@@ -494,8 +539,11 @@ export function AttemptPage({
       <Alert>
         <AlertTitle>Tu sesión se cerró</AlertTitle>
         <AlertDescription>
-          Se abrió tu prueba en otro dispositivo o pasó demasiado tiempo sin
-          conexión. Vuelve a entrar con tu nombre para seguir donde estabas.
+          Se abrió tu prueba en otro dispositivo. Para seguir aquí, vuelve a
+          entrar con tu código personal: tus respuestas siguen guardadas.
+          <Button asChild size="sm" className="mt-3 w-fit">
+            <a href="/entrar">Volver a entrar</a>
+          </Button>
         </AlertDescription>
       </Alert>
     );
@@ -513,70 +561,96 @@ export function AttemptPage({
   }
 
   if (attempt.status === "pending") {
-    return (
-      <div className="mx-auto flex w-full max-w-lg flex-col gap-4">
+    const previewTop = preview ? (
+      <div className="flex flex-col gap-4">
         {previewNotice}
-        <Card className="w-full">
-          <CardContent className="flex flex-col gap-4 pt-6 text-center">
-            <h1 className="text-2xl font-semibold">{attempt.contestTitle}</h1>
-            {startsWithReducedTime ? (
-              <Alert>
-                <ClockIcon />
-                <AlertTitle>Entraste después de la hora de inicio</AlertTitle>
-                <AlertDescription>
-                  Si empiezas ahora tendrás{" "}
-                  {formatStartCountdown(availableStartTime)} hasta que cierre el
-                  desafío. El tiempo no se detiene.
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Tendrás {attempt.durationMinutes} minutos desde que empieces. El
-                tiempo no se detiene.
-              </p>
-            )}
-            {attempt.state !== "abierta" ? (
-              <Alert>
-                {!suspended && contestStartsAtMs > 0 && <ClockIcon />}
-                <AlertTitle>
-                  {suspended
-                    ? "El desafío está suspendido"
-                    : contestStartsAtMs > 0
-                      ? scheduledStartReached
-                        ? "El desafío está por comenzar"
-                        : "El desafío comienza en"
-                      : "El horario aún no está definido"}
-                </AlertTitle>
-                <AlertDescription className="flex flex-col gap-2">
-                  {suspended ? (
-                    "Tu maestro la pausó. Deja esta página abierta: se habilita sola cuando la reanuden."
-                  ) : contestStartsAtMs > 0 ? (
-                    <>
-                      <span
-                        role="timer"
-                        className="font-mono text-2xl font-semibold tabular-nums text-foreground"
-                      >
-                        {formatStartCountdown(startsIn)}
-                      </span>
-                      <span>
-                        {scheduledStartReached
-                          ? "Estamos habilitando el desafío."
-                          : "Esta pantalla se actualizará automáticamente."}
-                      </span>
-                    </>
-                  ) : (
-                    "Tu maestro definirá la hora. Esta pantalla se actualizará automáticamente."
+        {(attempt.categories?.length ?? 0) > 1 && (
+          <div
+            role="tablist"
+            aria-label="Categoría que vas a probar"
+            className="-mx-4 flex gap-5 overflow-x-auto px-4 shadow-[inset_0_-1px_0_var(--border)] sm:mx-0 sm:px-0"
+          >
+            {attempt.categories!.map((item) => {
+              const selected = item === attempt.category;
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => choosePreviewCategory(item)}
+                  className="relative shrink-0 py-2.5 text-sm whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground aria-selected:font-medium aria-selected:text-foreground"
+                >
+                  {item}
+                  {selected && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-x-0 bottom-0 h-0.5 bg-primary"
+                    />
                   )}
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <Button onClick={handleStart} disabled={starting}>
-                {starting ? "Empezando..." : "Empezar el desafío"}
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
+    ) : null;
+
+    const notice = startsWithReducedTime ? (
+      <Alert>
+        <ClockIcon />
+        <AlertTitle>Entraste después de la hora de inicio</AlertTitle>
+        <AlertDescription>
+          Si empiezas ahora tendrás {formatStartCountdown(availableStartTime)}{" "}
+          hasta que cierre el desafío. El tiempo no se detiene.
+        </AlertDescription>
+      </Alert>
+    ) : attempt.state !== "abierta" ? (
+      <Alert>
+        {!suspended && contestStartsAtMs > 0 && <ClockIcon />}
+        <AlertTitle>
+          {suspended
+            ? "El desafío está suspendido"
+            : contestStartsAtMs > 0
+              ? scheduledStartReached
+                ? "El desafío está por comenzar"
+                : "El desafío comienza en"
+              : "El horario aún no está definido"}
+        </AlertTitle>
+        <AlertDescription className="flex flex-col gap-2">
+          {suspended ? (
+            "Tu maestro la pausó. Deja esta página abierta: se habilita sola cuando la reanuden."
+          ) : contestStartsAtMs > 0 ? (
+            <>
+              <span
+                role="timer"
+                className="font-mono text-2xl font-semibold text-foreground tabular-nums"
+              >
+                {formatStartCountdown(startsIn)}
+              </span>
+              <span>
+                {scheduledStartReached
+                  ? "Estamos habilitando el desafío."
+                  : "Esta pantalla se actualizará automáticamente."}
+              </span>
+            </>
+          ) : (
+            "Tu maestro definirá la hora. Esta pantalla se actualizará automáticamente."
+          )}
+        </AlertDescription>
+      </Alert>
+    ) : null;
+
+    return (
+      <ContestIntro
+        attempt={attempt}
+        top={previewTop ?? studentExit}
+        notice={notice}
+        canStart={attempt.state === "abierta"}
+        starting={starting}
+        onStart={handleStart}
+        onLeave={preview ? undefined : leaveAttempt}
+      />
     );
   }
 
@@ -589,97 +663,80 @@ export function AttemptPage({
     const outOfTime =
       finishedAtMs > 0 && endsAtMs > 0 && finishedAtMs >= endsAtMs;
 
-    return (
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-        {previewNotice}
-        <Card>
-          <CardContent className="flex flex-col items-center gap-3 pt-6 text-center">
-            {outOfTime ? (
-              <ClockIcon className="size-8 text-muted-foreground" />
-            ) : (
-              <CheckCircle2Icon className="size-8 text-primary" />
-            )}
-            <h1 className="text-2xl font-semibold">
-              {outOfTime ? "Se acabó el tiempo" : "¡Desafío terminado!"}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              {attempt.contestTitle}
-            </p>
-            {outOfTime && (
-              <p className="text-sm text-muted-foreground">
-                Entregamos tus respuestas tal como estaban. Ya no puedes
-                cambiarlas.
-              </p>
-            )}
-            {attempt.result ? (
-              <div className="flex flex-wrap justify-center gap-3 pt-2">
-                <Badge variant="secondary">
-                  Puntaje: {attempt.result.totalScore}
-                </Badge>
-                <Badge variant="outline">
-                  Correctas: {attempt.result.correctCount}
-                </Badge>
-                {attempt.result.rankPosition && (
-                  <Badge variant="outline">
-                    Posición: #{attempt.result.rankPosition}
-                  </Badge>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {attempt.resultsPublished
-                  ? "Tu maestro te compartirá los resultados."
-                  : "Los resultados se publicarán unos días después del desafío."}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+    // En la prueba se ve cualquiera de los dos momentos; al estudiante, el
+    // servidor ya le manda solo lo que le toca ver ahora.
+    const visible = preview
+      ? previewView === "submit"
+        ? {
+            score: Boolean(attempt.showScoreOnSubmit),
+            feedback: Boolean(attempt.showFeedbackOnSubmit),
+            solutions: Boolean(attempt.showSolutionsOnSubmit),
+          }
+        : {
+            score: attempt.showTotalScore || Boolean(attempt.showScoreOnSubmit),
+            feedback:
+              attempt.showFeedback || Boolean(attempt.showFeedbackOnSubmit),
+            solutions:
+              attempt.showSolutions || Boolean(attempt.showSolutionsOnSubmit),
+          }
+      : {
+          score: attempt.showTotalScore,
+          feedback: attempt.showFeedback,
+          solutions: attempt.showSolutions,
+        };
 
-        {(attempt.showFeedback || attempt.showSolutions) &&
-          attempt.tasks.map((task) => (
-            <Card key={task.taskId}>
-              <CardContent className="flex flex-col gap-2 pt-6">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-lg font-semibold">
-                    {task.position}. {task.title}
-                  </h2>
-                  <Badge
-                    variant={
-                      task.correct === true
-                        ? "default"
-                        : task.correct === false
-                          ? "destructive"
-                          : "outline"
-                    }
-                  >
-                    {task.correct === true ? (
-                      <CheckCircle2Icon data-icon="inline-start" />
-                    ) : task.correct === false ? (
-                      <XCircleIcon data-icon="inline-start" />
-                    ) : (
-                      <CircleIcon data-icon="inline-start" />
-                    )}
-                    {task.correct === true
-                      ? "Correcta"
-                      : task.correct === false
-                        ? "Incorrecta"
-                        : "Sin responder"}
-                  </Badge>
-                </div>
-                {attempt.showSolutions && task.explanationBlocks?.length && (
-                  <div className="text-sm text-muted-foreground">
-                    <TaskExplanation blocks={task.explanationBlocks} />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+    const finishTop = preview ? (
+      <div className="flex flex-col gap-4">
+        {previewNotice}
+        <div
+          role="tablist"
+          aria-label="Momento que estás viendo"
+          className="-mx-4 flex gap-5 overflow-x-auto px-4 shadow-[inset_0_-1px_0_var(--border)] sm:mx-0 sm:px-0"
+        >
+          {(
+            [
+              ["submit", "Al entregar su prueba"],
+              ["results", "Al publicar los resultados"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={previewView === value}
+              onClick={() => setPreviewView(value)}
+              className="relative shrink-0 py-2.5 text-sm whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground aria-selected:font-medium aria-selected:text-foreground"
+            >
+              {label}
+              {previewView === value && (
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-x-0 bottom-0 h-0.5 bg-primary"
+                />
+              )}
+            </button>
           ))}
+        </div>
       </div>
+    ) : null;
+
+    return (
+      <ContestFinish
+        attempt={
+          preview && previewView === "submit"
+            ? { ...attempt, resultsPublished: false }
+            : attempt
+        }
+        outOfTime={outOfTime}
+        visible={visible}
+        top={finishTop ?? homeLink}
+        onResultsDue={preview ? undefined : () => void load()}
+      />
     );
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
       {previewNotice}
       <div className="sticky top-2 z-10 flex items-center justify-between gap-4 rounded-md border bg-background px-4 py-3 shadow-sm">
         <div className="min-w-0">

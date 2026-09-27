@@ -41,12 +41,33 @@ export type AttemptResult = {
   rankPosition: number | null;
 };
 
+export type ContestRules = {
+  initialScore: number;
+  scoring: Array<{
+    difficulty: string;
+    count: number;
+    correct: number;
+    wrong: number;
+  }>;
+};
+
 export type AttemptState = {
   contestTitle: string;
+  category?: string | null;
+  /** Solo en la vista previa: las categorías que se pueden probar. */
+  categories?: string[];
+  rules?: ContestRules;
+  participationMode?: string;
+  /** Código del grupo del equipo; no viene en la vista previa. */
+  accessCode?: string;
+  /** Quién entró, para que lo confirme; no viene en la vista previa. */
+  participant?: { members: string[]; grade: string | null };
   durationMinutes: number;
   questionDisplayMode: "one_by_one" | "all";
   contestStartsAt: string | null;
   contestEndsAt: string | null;
+  /** Cuándo se publican los resultados (o el cierre, si no hay otra fecha). */
+  resultsAt?: string | null;
   state: string;
   status: "pending" | "in_progress" | "finished";
   startedAt: string | null;
@@ -58,6 +79,10 @@ export type AttemptState = {
   showFeedback: boolean;
   showSolutions: boolean;
   showTotalScore: boolean;
+  /** Solo en la vista previa: lo que se ve apenas se entrega. */
+  showScoreOnSubmit?: boolean;
+  showFeedbackOnSubmit?: boolean;
+  showSolutionsOnSubmit?: boolean;
   tasks: PlayTask[];
   answers: Record<string, unknown>;
   result: AttemptResult | null;

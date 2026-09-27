@@ -1,18 +1,25 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { CheckCircle2Icon, CopyIcon, LoaderCircleIcon } from "lucide-react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+  type RefObject,
+} from "react";
+import {
+  CalendarClockIcon,
+  CheckIcon,
+  CircleCheckBigIcon,
+  CopyIcon,
+  KeyRoundIcon,
+  LoaderCircleIcon,
+  UsersIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Field,
   FieldContent,
@@ -20,14 +27,8 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { API_BASE_URL } from "@/lib/api-client";
+import { formatCountdown, formatDateTime, useNow } from "@/lib/countdown";
 import {
   forgetPlaySession,
   getAttempt,
@@ -36,6 +37,7 @@ import {
   readPlaySession,
   storePlaySession,
 } from "@/lib/play-api";
+import { cn } from "@/lib/utils";
 
 type GroupGrade = {
   value: string;
@@ -47,11 +49,14 @@ type GroupInfo = {
   groupName: string;
   contestTitle: string;
   isPractice: boolean;
-  contestCategory: string;
+  contestCategories: string[];
   allowPairs: boolean;
   durationMinutes: number;
   registrationStartsAt: string | null;
   registrationEndsAt: string | null;
+  contestStartsAt: string | null;
+  contestEndsAt: string | null;
+  category: string | null;
   grades: GroupGrade[];
   state: string;
 };
@@ -238,11 +243,15 @@ export function JoinForm() {
       setMode("individual");
       setGrade("");
 
+      // Una sesión guardada de este mismo grupo lleva directo al desafío; la
+      // de otro desafío anterior no, así puede inscribirse en este.
       if (readPlaySession()) {
         try {
-          await getAttempt();
-          window.location.href = "/rendir";
-          return;
+          const current = await getAttempt();
+          if (current.accessCode === code) {
+            window.location.href = "/rendir";
+            return;
+          }
         } catch {
           forgetPlaySession();
         }
@@ -410,431 +419,570 @@ export function JoinForm() {
     }
   };
 
+  const gradeLabelOf = (value: string) =>
+    group?.grades.find((item) => item.value === value)?.label ?? "—";
+
   if (step === "done" && result) {
     return (
-      <Card className="mx-auto w-full max-w-md">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <CheckCircle2Icon className="size-5 text-primary" />
-            <CardTitle>¡Listo, te registraste!</CardTitle>
-          </div>
-          <CardDescription>
-            Quedaste inscrito en {result.contestTitle} ({result.groupName}).
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2 rounded-md border bg-background px-4 py-3">
-            <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Tu código personal
+      <Screen
+        eyebrow={result.contestTitle}
+        title="¡Listo, ya estás inscrito!"
+        icon={
+          <CircleCheckBigIcon
+            aria-hidden="true"
+            className="size-14 text-difficulty-easy motion-safe:animate-in motion-safe:zoom-in-0 motion-safe:-spin-in-45 motion-safe:duration-500 motion-safe:ease-[cubic-bezier(0.34,1.56,0.64,1)]"
+          />
+        }
+      >
+        <div className="flex flex-col items-center gap-2 border-2 border-dashed border-primary/50 px-4 py-5 text-center">
+          <span className="text-sm text-muted-foreground">
+            Tu código personal
+          </span>
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-3xl font-semibold tracking-[0.2em]">
+              {result.personalCode}
             </span>
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-mono text-2xl font-semibold tracking-widest">
-                {result.personalCode}
-              </span>
-              <Button
-                size="icon-sm"
-                type="button"
-                variant="outline"
-                aria-label="Copiar mi código"
-                onClick={() => copyPersonalCode(result.personalCode)}
-              >
-                <CopyIcon />
-              </Button>
-            </div>
+            <Button
+              size="icon-sm"
+              type="button"
+              variant="outline"
+              aria-label="Copiar mi código"
+              onClick={() => copyPersonalCode(result.personalCode)}
+            >
+              <CopyIcon />
+            </Button>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Guárdalo: es solo tuyo y es lo que necesitas para entrar al desafío.
-            Si se te pierde, pídeselo a tu maestro.
-          </p>
-          <Button asChild className="w-full">
-            <a href="/rendir">Ir al desafío</a>
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            Si aún no inicia, podrás empezar cuando tu maestro la abra.
-          </p>
-        </CardContent>
-      </Card>
+          <span className="text-sm leading-6 text-muted-foreground">
+            Anótalo: lo necesitas para entrar a la prueba. Si lo pierdes,
+            pídeselo a tu maestro.
+          </span>
+        </div>
+
+        <StartsIn startsAt={group?.contestStartsAt ?? null} />
+
+        <Button asChild size="lg" className="w-full">
+          <a href="/rendir">Ir al desafío</a>
+        </Button>
+      </Screen>
     );
   }
 
   if (step === "practice" && group) {
     return (
-      <Card className="mx-auto w-full max-w-md">
-        <CardHeader>
-          <CardTitle>{group.contestTitle}</CardTitle>
-          <CardDescription>
-            Práctica de {group.durationMinutes} minutos. Escribe tu nombre y
-            empieza.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="flex flex-col gap-4" onSubmit={startPractice}>
-            {errors.form && (
-              <Alert ref={formErrorRef} variant="destructive" tabIndex={-1}>
-                <AlertDescription>{errors.form}</AlertDescription>
-              </Alert>
+      <Screen
+        eyebrow="Práctica"
+        title={group.contestTitle}
+        description={`Tienes ${group.durationMinutes} minutos. Escribe tu nombre y empieza.`}
+      >
+        <form className="flex flex-col gap-5" onSubmit={startPractice}>
+          <Field data-invalid={Boolean(errors.oneFirst) || undefined}>
+            <FieldLabel htmlFor="practice-name">¿Cómo te llamas?</FieldLabel>
+            <FieldContent>
+              <Input
+                ref={practiceNameRef}
+                id="practice-name"
+                autoComplete="name"
+                autoFocus
+                value={practiceName}
+                onChange={(event) => {
+                  setPracticeName(event.target.value);
+                  if (errors.oneFirst || errors.form) {
+                    clearErrors("oneFirst");
+                  }
+                }}
+                aria-invalid={Boolean(errors.oneFirst)}
+                aria-describedby={
+                  errors.oneFirst ? "practice-name-error" : undefined
+                }
+              />
+              <FieldError id="practice-name-error">
+                {errors.oneFirst}
+              </FieldError>
+            </FieldContent>
+          </Field>
+          <FormError message={errors.form} errorRef={formErrorRef} />
+          <Button type="submit" size="lg" className="w-full" disabled={loading}>
+            {loading && (
+              <LoaderCircleIcon
+                data-icon="inline-start"
+                className="animate-spin"
+              />
             )}
+            {loading ? "Entrando..." : "Empezar"}
+          </Button>
+        </form>
+      </Screen>
+    );
+  }
+
+  if (step === "confirm" && group) {
+    const rows: Array<[string, string]> = [
+      ["Desafío", group.contestTitle],
+      ["Curso", gradeLabelOf(grade)],
+      ...(group.allowPairs
+        ? [["Modalidad", mode === "pareja" ? "En pareja" : "Individual"]]
+        : []),
+      [
+        mode === "pareja" ? "Integrante 1" : "Nombre",
+        `${fmt(oneFirst)} ${fmt(oneLast)}`,
+      ],
+      ...(mode === "pareja"
+        ? [["Integrante 2", `${fmt(twoFirst)} ${fmt(twoLast)}`]]
+        : []),
+    ] as Array<[string, string]>;
+
+    return (
+      <Screen
+        eyebrow={group.contestTitle}
+        title="¿Está todo bien?"
+        description="Revisa tus datos: así aparecerás en los resultados."
+      >
+        <dl className="flex flex-col border-t text-sm">
+          {rows.map(([label, value]) => (
+            <div
+              key={label}
+              className="flex items-baseline justify-between gap-4 border-b py-3"
+            >
+              <dt className="text-muted-foreground">{label}</dt>
+              <dd className="text-right font-medium">{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <FormError message={errors.form} errorRef={formErrorRef} />
+        <div className="flex items-center justify-between gap-3">
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={loading}
+            onClick={() => setStep("register")}
+          >
+            Corregir
+          </Button>
+          <Button
+            type="button"
+            size="lg"
+            disabled={loading}
+            onClick={() => void join()}
+          >
+            {loading ? "Inscribiendo..." : "Sí, inscribirme"}
+          </Button>
+        </div>
+      </Screen>
+    );
+  }
+
+  if (step === "register" && group) {
+    return (
+      <Screen
+        eyebrow={`${group.contestTitle} · ${group.groupName}`}
+        title="Inscríbete"
+        description={`Cuando empieces tendrás ${group.durationMinutes} minutos para resolver la prueba.`}
+      >
+        <StartsIn startsAt={group.contestStartsAt} compact />
+        <form className="flex flex-col gap-6" onSubmit={goToConfirm}>
+          <Field data-invalid={Boolean(errors.grade) || undefined}>
+            <FieldLabel id="grade-label">¿En qué curso estás?</FieldLabel>
+            <FieldContent>
+              <div
+                role="radiogroup"
+                aria-labelledby="grade-label"
+                aria-describedby={errors.grade ? "grade-error" : undefined}
+                className="grid grid-cols-2 gap-2"
+              >
+                {group.grades.map((item, index) => {
+                  const selected = grade === item.value;
+                  return (
+                    <button
+                      key={item.value}
+                      ref={index === 0 ? gradeRef : undefined}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => {
+                        setGrade(item.value);
+                        if (errors.grade || errors.form) {
+                          clearErrors("grade");
+                        }
+                      }}
+                      className={cn(
+                        "flex min-h-12 items-center justify-center gap-2 border-2 px-3 py-2 text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
+                        selected
+                          ? "border-primary bg-primary/5 font-semibold text-foreground"
+                          : "border-border/30 text-muted-foreground hover:border-primary/60 hover:text-foreground",
+                      )}
+                    >
+                      {selected && (
+                        <CheckIcon
+                          className="size-4 text-primary"
+                          aria-hidden="true"
+                        />
+                      )}
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <FieldError id="grade-error">{errors.grade}</FieldError>
+            </FieldContent>
+          </Field>
+
+          {group.allowPairs && (
+            <Field>
+              <FieldLabel id="mode-label">¿Cómo vas a rendir?</FieldLabel>
+              <FieldContent>
+                <div
+                  role="radiogroup"
+                  aria-labelledby="mode-label"
+                  className="grid grid-cols-2 gap-2"
+                >
+                  {(
+                    [
+                      ["individual", "Solo"],
+                      ["pareja", "En pareja"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={mode === value}
+                      onClick={() => {
+                        setMode(value);
+                        if (value === "individual") {
+                          clearErrors("twoFirst", "twoLast");
+                        } else if (errors.form) {
+                          clearErrors();
+                        }
+                      }}
+                      className={cn(
+                        "min-h-12 border-2 px-3 py-2 text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
+                        mode === value
+                          ? "border-primary bg-primary/5 font-semibold text-foreground"
+                          : "border-border/30 text-muted-foreground hover:border-primary/60 hover:text-foreground",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </FieldContent>
+            </Field>
+          )}
+
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field data-invalid={Boolean(errors.oneFirst) || undefined}>
-              <FieldLabel htmlFor="practice-name">¿Cómo te llamas?</FieldLabel>
+              <FieldLabel htmlFor="one-first">
+                {mode === "pareja" ? "Tus nombres" : "Nombres"}
+              </FieldLabel>
               <FieldContent>
                 <Input
-                  ref={practiceNameRef}
-                  id="practice-name"
-                  autoComplete="name"
-                  autoFocus
-                  value={practiceName}
+                  ref={oneFirstRef}
+                  id="one-first"
+                  value={oneFirst}
                   onChange={(event) => {
-                    setPracticeName(event.target.value);
+                    setOneFirst(event.target.value);
                     if (errors.oneFirst || errors.form) {
                       clearErrors("oneFirst");
                     }
                   }}
                   aria-invalid={Boolean(errors.oneFirst)}
                   aria-describedby={
-                    errors.oneFirst ? "practice-name-error" : undefined
+                    errors.oneFirst ? "one-first-error" : undefined
                   }
                 />
-                <FieldError id="practice-name-error">
-                  {errors.oneFirst}
-                </FieldError>
+                <FieldError id="one-first-error">{errors.oneFirst}</FieldError>
               </FieldContent>
             </Field>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? (
-                <LoaderCircleIcon
-                  data-icon="inline-start"
-                  className="animate-spin"
+            <Field data-invalid={Boolean(errors.oneLast) || undefined}>
+              <FieldLabel htmlFor="one-last">
+                {mode === "pareja" ? "Tus apellidos" : "Apellidos"}
+              </FieldLabel>
+              <FieldContent>
+                <Input
+                  ref={oneLastRef}
+                  id="one-last"
+                  value={oneLast}
+                  onChange={(event) => {
+                    setOneLast(event.target.value);
+                    if (errors.oneLast || errors.form) {
+                      clearErrors("oneLast");
+                    }
+                  }}
+                  aria-invalid={Boolean(errors.oneLast)}
+                  aria-describedby={
+                    errors.oneLast ? "one-last-error" : undefined
+                  }
                 />
-              ) : null}
-              {loading ? "Entrando..." : "Empezar"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    );
-  }
+                <FieldError id="one-last-error">{errors.oneLast}</FieldError>
+              </FieldContent>
+            </Field>
+          </div>
 
-  if (step === "confirm" && group) {
-    return (
-      <Card className="mx-auto w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Confirma tus datos</CardTitle>
-          <CardDescription>
-            Revisa que esté todo correcto antes de entrar.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <dl className="flex flex-col gap-2 rounded-md border bg-background px-4 py-3 text-sm">
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Desafío</dt>
-              <dd className="text-right font-medium">{group.contestTitle}</dd>
+          {mode === "pareja" && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field data-invalid={Boolean(errors.twoFirst) || undefined}>
+                <FieldLabel htmlFor="two-first">
+                  Nombres de tu compañero
+                </FieldLabel>
+                <FieldContent>
+                  <Input
+                    ref={twoFirstRef}
+                    id="two-first"
+                    value={twoFirst}
+                    onChange={(event) => {
+                      setTwoFirst(event.target.value);
+                      if (errors.twoFirst || errors.form) {
+                        clearErrors("twoFirst");
+                      }
+                    }}
+                    aria-invalid={Boolean(errors.twoFirst)}
+                    aria-describedby={
+                      errors.twoFirst ? "two-first-error" : undefined
+                    }
+                  />
+                  <FieldError id="two-first-error">
+                    {errors.twoFirst}
+                  </FieldError>
+                </FieldContent>
+              </Field>
+              <Field data-invalid={Boolean(errors.twoLast) || undefined}>
+                <FieldLabel htmlFor="two-last">
+                  Apellidos de tu compañero
+                </FieldLabel>
+                <FieldContent>
+                  <Input
+                    ref={twoLastRef}
+                    id="two-last"
+                    value={twoLast}
+                    onChange={(event) => {
+                      setTwoLast(event.target.value);
+                      if (errors.twoLast || errors.form) {
+                        clearErrors("twoLast");
+                      }
+                    }}
+                    aria-invalid={Boolean(errors.twoLast)}
+                    aria-describedby={
+                      errors.twoLast ? "two-last-error" : undefined
+                    }
+                  />
+                  <FieldError id="two-last-error">{errors.twoLast}</FieldError>
+                </FieldContent>
+              </Field>
             </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Curso</dt>
-              <dd className="text-right font-medium">
-                {group.grades.find((item) => item.value === grade)?.label ??
-                  "—"}
-              </dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Modalidad</dt>
-              <dd className="font-medium">
-                {mode === "pareja" ? "Pareja" : "Individual"}
-              </dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Integrante 1</dt>
-              <dd className="text-right font-medium">
-                {fmt(oneFirst)} {fmt(oneLast)}
-              </dd>
-            </div>
-            {mode === "pareja" && (
-              <div className="flex justify-between gap-4">
-                <dt className="text-muted-foreground">Integrante 2</dt>
-                <dd className="text-right font-medium">
-                  {fmt(twoFirst)} {fmt(twoLast)}
-                </dd>
-              </div>
-            )}
-          </dl>
+          )}
+
+          <FormError message={errors.form} errorRef={formErrorRef} />
+
           <div className="flex items-center justify-between gap-3">
             <Button
               type="button"
               variant="ghost"
-              disabled={loading}
-              onClick={() => setStep("register")}
+              onClick={() => {
+                setErrors({});
+                setStep("code");
+              }}
             >
-              Editar
+              Volver
             </Button>
-            <Button
-              type="button"
-              disabled={loading}
-              onClick={() => void join()}
-            >
-              {loading ? "Entrando..." : "Confirmar y entrar"}
+            <Button type="submit" size="lg">
+              Continuar
             </Button>
           </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (step === "register" && group) {
-    return (
-      <Card className="mx-auto w-full max-w-md">
-        <CardHeader>
-          <CardTitle>{group.contestTitle}</CardTitle>
-          <CardDescription>
-            {group.groupName}
-            {group.contestCategory ? ` · ${group.contestCategory}` : ""} ·{" "}
-            {group.durationMinutes} minutos por equipo
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="flex flex-col gap-4" onSubmit={goToConfirm}>
-            {errors.form && (
-              <Alert ref={formErrorRef} variant="destructive" tabIndex={-1}>
-                <AlertDescription>{errors.form}</AlertDescription>
-              </Alert>
-            )}
-            {(group.state === "programada" ||
-              group.state === "inscripcion") && (
-              <Alert>
-                <AlertTitle>Inscripción abierta</AlertTitle>
-                <AlertDescription>
-                  Puedes registrarte ahora. La rendición comenzará después de la
-                  fase de preparación.
-                </AlertDescription>
-              </Alert>
-            )}
-            <Field data-invalid={Boolean(errors.grade) || undefined}>
-              <FieldLabel htmlFor="grade">¿En qué curso estás?</FieldLabel>
-              <FieldContent>
-                <Select
-                  value={grade}
-                  onValueChange={(value) => {
-                    setGrade(value);
-                    if (errors.grade || errors.form) {
-                      clearErrors("grade");
-                    }
-                  }}
-                >
-                  <SelectTrigger
-                    ref={gradeRef}
-                    id="grade"
-                    className="w-full"
-                    aria-invalid={Boolean(errors.grade)}
-                    aria-describedby={errors.grade ? "grade-error" : undefined}
-                  >
-                    <SelectValue placeholder="Elige tu curso" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {group.grades.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FieldError id="grade-error">{errors.grade}</FieldError>
-              </FieldContent>
-            </Field>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field data-invalid={Boolean(errors.oneFirst) || undefined}>
-                <FieldLabel htmlFor="one-first">Nombres</FieldLabel>
-                <FieldContent>
-                  <Input
-                    ref={oneFirstRef}
-                    id="one-first"
-                    value={oneFirst}
-                    onChange={(event) => {
-                      setOneFirst(event.target.value);
-                      if (errors.oneFirst || errors.form) {
-                        clearErrors("oneFirst");
-                      }
-                    }}
-                    aria-invalid={Boolean(errors.oneFirst)}
-                    aria-describedby={
-                      errors.oneFirst ? "one-first-error" : undefined
-                    }
-                  />
-                  <FieldError id="one-first-error">
-                    {errors.oneFirst}
-                  </FieldError>
-                </FieldContent>
-              </Field>
-              <Field data-invalid={Boolean(errors.oneLast) || undefined}>
-                <FieldLabel htmlFor="one-last">Apellidos</FieldLabel>
-                <FieldContent>
-                  <Input
-                    ref={oneLastRef}
-                    id="one-last"
-                    value={oneLast}
-                    onChange={(event) => {
-                      setOneLast(event.target.value);
-                      if (errors.oneLast || errors.form) {
-                        clearErrors("oneLast");
-                      }
-                    }}
-                    aria-invalid={Boolean(errors.oneLast)}
-                    aria-describedby={
-                      errors.oneLast ? "one-last-error" : undefined
-                    }
-                  />
-                  <FieldError id="one-last-error">{errors.oneLast}</FieldError>
-                </FieldContent>
-              </Field>
-            </div>
-
-            {group.allowPairs && (
-              <Field>
-                <FieldLabel>Modalidad</FieldLabel>
-                <FieldContent>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant={mode === "individual" ? "default" : "outline"}
-                      onClick={() => {
-                        setMode("individual");
-                        clearErrors("twoFirst", "twoLast");
-                      }}
-                    >
-                      Individual
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={mode === "pareja" ? "default" : "outline"}
-                      onClick={() => {
-                        setMode("pareja");
-                        if (errors.form) {
-                          clearErrors();
-                        }
-                      }}
-                    >
-                      Pareja
-                    </Button>
-                  </div>
-                </FieldContent>
-              </Field>
-            )}
-
-            {mode === "pareja" && (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field data-invalid={Boolean(errors.twoFirst) || undefined}>
-                  <FieldLabel htmlFor="two-first">
-                    Nombres del 2.º integrante
-                  </FieldLabel>
-                  <FieldContent>
-                    <Input
-                      ref={twoFirstRef}
-                      id="two-first"
-                      value={twoFirst}
-                      onChange={(event) => {
-                        setTwoFirst(event.target.value);
-                        if (errors.twoFirst || errors.form) {
-                          clearErrors("twoFirst");
-                        }
-                      }}
-                      aria-invalid={Boolean(errors.twoFirst)}
-                      aria-describedby={
-                        errors.twoFirst ? "two-first-error" : undefined
-                      }
-                    />
-                    <FieldError id="two-first-error">
-                      {errors.twoFirst}
-                    </FieldError>
-                  </FieldContent>
-                </Field>
-                <Field data-invalid={Boolean(errors.twoLast) || undefined}>
-                  <FieldLabel htmlFor="two-last">
-                    Apellidos del 2.º integrante
-                  </FieldLabel>
-                  <FieldContent>
-                    <Input
-                      ref={twoLastRef}
-                      id="two-last"
-                      value={twoLast}
-                      onChange={(event) => {
-                        setTwoLast(event.target.value);
-                        if (errors.twoLast || errors.form) {
-                          clearErrors("twoLast");
-                        }
-                      }}
-                      aria-invalid={Boolean(errors.twoLast)}
-                      aria-describedby={
-                        errors.twoLast ? "two-last-error" : undefined
-                      }
-                    />
-                    <FieldError id="two-last-error">
-                      {errors.twoLast}
-                    </FieldError>
-                  </FieldContent>
-                </Field>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between gap-3">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  setErrors({});
-                  setStep("code");
-                }}
-              >
-                Volver
-              </Button>
-              <Button type="submit">Continuar</Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+        </form>
+      </Screen>
     );
   }
 
   return (
-    <Card className="mx-auto w-full max-w-md">
-      <CardHeader>
-        <CardTitle>Entrar al desafío</CardTitle>
-        <CardDescription>
-          Si ya te inscribiste, escribe tu código personal. Si todavía no,
-          escribe el código del grupo que te dio tu maestro.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form className="flex flex-col gap-4" onSubmit={lookupCode}>
-          <Field data-invalid={Boolean(errors.code) || undefined}>
-            <FieldLabel htmlFor="access-code">Tu código</FieldLabel>
-            <FieldContent>
-              <Input
-                ref={accessCodeRef}
-                id="access-code"
-                value={accessCode}
-                onChange={(event) => {
-                  setAccessCode(event.target.value.toUpperCase());
-                  if (errors.code) {
-                    clearErrors("code");
-                  }
-                }}
-                placeholder="Ej. K7M2P9 o R4TQ8XVZ"
-                className="font-mono tracking-widest uppercase"
-                autoComplete="off"
-                aria-invalid={Boolean(errors.code)}
-                aria-describedby={errors.code ? "access-code-error" : undefined}
-              />
-              <FieldError id="access-code-error">{errors.code}</FieldError>
-            </FieldContent>
-          </Field>
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? (
-              <LoaderCircleIcon className="size-4 animate-spin" />
-            ) : (
-              "Continuar"
-            )}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+    <Screen title="Entrar al desafío">
+      <ul className="flex flex-col gap-3 text-sm leading-6">
+        <li className="flex gap-3">
+          <UsersIcon
+            className="mt-0.5 size-5 shrink-0 text-primary"
+            aria-hidden="true"
+          />
+          <span>
+            <strong>¿Primera vez?</strong> Escribe el código del grupo que te
+            dio tu maestro (6 letras y números).
+          </span>
+        </li>
+        <li className="flex gap-3">
+          <KeyRoundIcon
+            className="mt-0.5 size-5 shrink-0 text-primary"
+            aria-hidden="true"
+          />
+          <span>
+            <strong>¿Ya te inscribiste?</strong> Escribe tu código personal (8
+            letras y números).
+          </span>
+        </li>
+      </ul>
+      <form className="flex flex-col gap-4" onSubmit={lookupCode}>
+        <Field data-invalid={Boolean(errors.code) || undefined}>
+          <FieldLabel htmlFor="access-code" className="sr-only">
+            Tu código
+          </FieldLabel>
+          <FieldContent>
+            <input
+              ref={accessCodeRef}
+              id="access-code"
+              value={accessCode}
+              onChange={(event) => {
+                setAccessCode(event.target.value.toUpperCase());
+                if (errors.code) {
+                  clearErrors("code");
+                }
+              }}
+              placeholder="TU CÓDIGO"
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              aria-invalid={Boolean(errors.code)}
+              aria-describedby={errors.code ? "access-code-error" : undefined}
+              className="h-16 w-full border-2 border-border/30 bg-transparent px-4 text-center font-mono text-3xl tracking-[0.3em] uppercase transition-colors outline-none placeholder:text-xl placeholder:tracking-widest placeholder:text-muted-foreground/50 focus-visible:border-primary aria-invalid:border-destructive"
+            />
+            <FieldError id="access-code-error">{errors.code}</FieldError>
+          </FieldContent>
+        </Field>
+        <Button type="submit" size="lg" className="w-full" disabled={loading}>
+          {loading ? (
+            <LoaderCircleIcon className="size-4 animate-spin" />
+          ) : (
+            "Continuar"
+          )}
+        </Button>
+      </form>
+      <p className="text-center text-sm leading-6 text-muted-foreground">
+        ¿Perdiste tu código personal? Pídeselo a tu maestro: lo tiene en la
+        lista de su grupo.
+      </p>
+    </Screen>
+  );
+}
+
+function Screen({
+  eyebrow,
+  title,
+  description,
+  icon,
+  children,
+}: {
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  icon?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="mx-auto flex w-full max-w-md flex-col gap-6 py-2">
+      <header
+        className={cn(
+          "flex flex-col gap-1",
+          icon && "items-center gap-2 text-center",
+        )}
+      >
+        {icon}
+        {eyebrow && (
+          <span className="text-sm font-semibold tracking-wide text-primary uppercase">
+            {eyebrow}
+          </span>
+        )}
+        <h1 className="font-heading text-3xl font-semibold tracking-tight">
+          {title}
+        </h1>
+        {description && (
+          <p className="text-sm leading-6 text-muted-foreground">
+            {description}
+          </p>
+        )}
+      </header>
+      {children}
+    </div>
+  );
+}
+
+function FormError({
+  message,
+  errorRef,
+}: {
+  message?: string;
+  errorRef: RefObject<HTMLDivElement | null>;
+}) {
+  if (!message) return null;
+  return (
+    <div
+      ref={errorRef}
+      tabIndex={-1}
+      role="alert"
+      className="text-sm font-medium text-destructive outline-none"
+    >
+      {message}
+    </div>
+  );
+}
+
+/** Cuánto falta para que empiece la prueba, o cuándo empieza. */
+function StartsIn({
+  startsAt,
+  compact = false,
+}: {
+  startsAt: string | null;
+  compact?: boolean;
+}) {
+  const startsAtMs = startsAt ? new Date(startsAt).getTime() : 0;
+  const now = useNow(Boolean(startsAtMs));
+  const remaining = startsAtMs - now;
+
+  if (!startsAtMs) {
+    return (
+      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+        <CalendarClockIcon className="size-4 shrink-0" aria-hidden="true" />
+        Tu maestro te dirá cuándo empieza la prueba.
+      </p>
+    );
+  }
+
+  if (remaining <= 0) {
+    return (
+      <p className="flex items-center gap-2 text-sm font-medium text-primary">
+        <CalendarClockIcon className="size-4 shrink-0" aria-hidden="true" />
+        La prueba ya empezó: puedes entrar ahora.
+      </p>
+    );
+  }
+
+  if (compact) {
+    return (
+      <p className="flex items-start gap-2 text-sm text-muted-foreground">
+        <CalendarClockIcon
+          className="mt-0.5 size-4 shrink-0"
+          aria-hidden="true"
+        />
+        <span>
+          La prueba empieza el {formatDateTime(startsAt!)} (faltan{" "}
+          <span className="font-medium text-foreground tabular-nums">
+            {formatCountdown(remaining)}
+          </span>
+          ).
+        </span>
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-1 text-center">
+      <span className="text-sm text-muted-foreground">
+        La prueba empieza en
+      </span>
+      <span
+        role="timer"
+        className="font-heading text-3xl font-semibold tabular-nums"
+      >
+        {formatCountdown(remaining)}
+      </span>
+      <span className="text-sm text-muted-foreground">
+        el {formatDateTime(startsAt!)}
+      </span>
+    </div>
   );
 }

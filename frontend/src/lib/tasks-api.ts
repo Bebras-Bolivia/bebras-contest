@@ -5,6 +5,7 @@ import {
 } from "@/lib/task-schema";
 import { BEBRAS_CATEGORIES } from "@/lib/contest-schema";
 import { apiRequest as request } from "@/lib/api-client";
+import { taskVisibility, type TaskVisibility } from "@/lib/task-visibility";
 import type { PlayTask } from "@/lib/play-api";
 import type { ContentBlock } from "@/lib/task-schema";
 
@@ -17,7 +18,7 @@ export type HomeTaskItem = {
   categories: string[];
   levels: { name: string; ageRange: string; difficulty: string }[];
   answerType: AnswerType;
-  isPractice: boolean;
+  visibility: TaskVisibility;
 };
 
 export function listTasks() {
@@ -95,14 +96,11 @@ export function removeTask(taskId: string) {
   });
 }
 
-export function setTaskPractice(taskId: string, isPractice: boolean) {
-  return request<{ id: string; isPractice: boolean }>(
-    `/api/tasks/${taskId}/practice`,
-    {
-      method: "PATCH",
-      body: JSON.stringify({ isPractice }),
-    },
-  );
+export function setTaskVisibility(taskId: string, visibility: TaskVisibility) {
+  return request<{ id: string }>(`/api/tasks/${taskId}/visibility`, {
+    method: "PATCH",
+    body: JSON.stringify({ visibility }),
+  });
 }
 
 export function mapTaskToHomeItem(task: StoredTask): HomeTaskItem {
@@ -119,6 +117,6 @@ export function mapTaskToHomeItem(task: StoredTask): HomeTaskItem {
       difficulty: (task.difficulties[category.ageRange] ?? "").trim(),
     })).filter((level) => level.difficulty !== ""),
     answerType: task.answerType,
-    isPractice: Boolean((task as { isPractice?: boolean }).isPractice),
+    visibility: taskVisibility(task),
   };
 }

@@ -16,7 +16,7 @@ test("applies the easy, medium and hard Bebras scoring scales", async () => {
     tasks: SCORING_TASKS.map(({ taskId }) => ({ taskId })),
   });
 
-  expect(contest.initialScore).toBe(9);
+  expect(contest.initialScores[contest.categories[0]]).toBe(9);
   expect(
     contest.tasks.map(
       (task: {
@@ -130,7 +130,7 @@ test("scores the standard 15-task Bebras distribution from zero to 180", async (
   const contest = await createContest(api, headers, {
     tasks: standardTasks.map(({ taskId }) => ({ taskId })),
   });
-  expect(contest.initialScore).toBe(45);
+  expect(contest.initialScores[contest.categories[0]]).toBe(45);
   expect(contest.tasks).toHaveLength(15);
   expect(
     contest.tasks.reduce(

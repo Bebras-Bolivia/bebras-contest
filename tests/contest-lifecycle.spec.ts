@@ -77,8 +77,8 @@ test("uses the 17-18 range and S5-S6 grades for Kuntur", async () => {
     tasks: [{ taskId: task.id }],
   });
 
-  expect(contest.category).toBe("Kuntur");
-  expect(contest.initialScore).toBe(4);
+  expect(contest.categories).toEqual(["Kuntur"]);
+  expect(contest.initialScores.Kuntur).toBe(4);
   expect(contest.tasks[0]).toMatchObject({
     difficulty: "hard",
     minScore: -4,
@@ -162,7 +162,7 @@ test("creates a contest without tasks and schedules every phase", async () => {
     { headers },
   );
   expect(emptyPublish.status()).toBe(400);
-  expect((await emptyPublish.json()).message).toContain("al menos una tarea");
+  expect((await emptyPublish.json()).message).toContain("no tiene preguntas");
 
   const updateResponse = await api.put(`${API}/api/contests/${contest.id}`, {
     headers,
@@ -258,12 +258,31 @@ test("allows deleting unused contests, groups, participants and tasks", async ()
   });
   expect(removeGroup.status(), await removeGroup.text()).toBe(204);
 
-  const removeContest = await api.delete(`${API}/api/contests/${contest.id}`, {
+  // Publicado ya no se borra; un borrador sí, y con él se libera su tarea.
+  const removePublished = await api.delete(
+    `${API}/api/contests/${contest.id}`,
+    { headers },
+  );
+  expect(removePublished.status()).toBe(409);
+  expect((await removePublished.json()).message).toContain("borrador");
+
+  const draftTask = await createScoringTask(api, headers, "easy", Date.now());
+  const draft = await api
+    .post(`${API}/api/contests`, {
+      headers,
+      data: {
+        title: `PW Borrador ${Date.now()}`,
+        categories: ["Capibara"],
+        tasks: [{ taskId: draftTask.taskId, category: "Capibara" }],
+      },
+    })
+    .then((response) => response.json());
+  const removeDraft = await api.delete(`${API}/api/contests/${draft.id}`, {
     headers,
   });
-  expect(removeContest.status(), await removeContest.text()).toBe(204);
+  expect(removeDraft.status(), await removeDraft.text()).toBe(204);
 
-  const removeTask = await api.delete(`${API}/api/tasks/${task.taskId}`, {
+  const removeTask = await api.delete(`${API}/api/tasks/${draftTask.taskId}`, {
     headers,
   });
   expect(removeTask.status(), await removeTask.text()).toBe(204);
@@ -336,7 +355,7 @@ test("protects tasks and played contest records from deletion", async () => {
     headers,
   });
   expect(removeContest.status()).toBe(409);
-  expect((await removeContest.json()).message).toContain("ya rindieron");
+  expect((await removeContest.json()).message).toContain("borrador");
 
   await api.dispose();
 });
@@ -706,6 +725,160 @@ test("enrolls a complete roster atomically from a spreadsheet", async () => {
   });
   expect(wrong.status()).toBe(400);
   expect((await wrong.json()).code).toBe("ROSTER_SHEET_NOT_FOUND");
+
+  await api.dispose();
+});
+
+test("runs one contest with its own questions for each category", async () => {
+  const api = await request.newContext();
+  const headers = await loginAdmin(api);
+  await resetE2EClock(api);
+  const suffix = Date.now();
+  const titiTask = await api
+    .post(`${API}/api/tasks`, {
+      headers,
+      data: {
+        title: `PW Titi ${suffix}`,
+        categories: ["Algoritmos y programación"],
+        difficulties: { "10–12": "hard" },
+        bodyBlocks: [taskBlock(`titi-body-${suffix}`, "Contenido")],
+        challengeBlocks: [taskBlock(`titi-challenge-${suffix}`, "Elige B")],
+        answerType: "multiple_choice",
+        multipleChoiceOrderMode: "fixed",
+        answers: [
+          { id: "A", blocks: [taskBlock(`titi-a-${suffix}`, "Incorrecta")] },
+          { id: "B", blocks: [taskBlock(`titi-b-${suffix}`, "Correcta")] },
+        ],
+        correctAnswerId: "single:B",
+        explanationBlocks: [taskBlock(`titi-exp-${suffix}`, "B.")],
+      },
+    })
+    .then((response) => response.json());
+
+  const created = await api.post(`${API}/api/contests`, {
+    headers,
+    data: {
+      title: `PW Categorías ${Date.now()}`,
+      categories: ["Capibara", "Titi"],
+      durationMinutes: 30,
+      tasks: [
+        { taskId: "seed-bebras-easy", category: "Capibara" },
+        { taskId: "seed-bebras-medium", category: "Capibara" },
+        { taskId: titiTask.id, category: "Titi" },
+      ],
+    },
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const contest = await created.json();
+  expect(contest.categories).toEqual(["Capibara", "Titi"]);
+  expect(contest.initialScores).toEqual({ Capibara: 5, Titi: 4 });
+
+  const published = await api.post(
+    `${API}/api/contests/${contest.id}/publish`,
+    { headers },
+  );
+  expect(published.ok(), await published.text()).toBe(true);
+  expect((await published.json()).state).toBe("inscripcion");
+
+  const group = await api
+    .post(`${API}/api/groups`, {
+      headers,
+      data: { contestId: contest.id, name: "PW Categorías" },
+    })
+    .then((response) => response.json());
+
+  const join = async (grade: string, firstName: string) =>
+    api.post(`${API}/api/play/join`, {
+      data: {
+        accessCode: group.accessCode,
+        participationMode: "individual",
+        grade,
+        memberOneFirstName: firstName,
+        memberOneLastName: "Tester",
+      },
+    });
+
+  const capibara = await join("P3", "Capibara");
+  expect(capibara.ok(), await capibara.text()).toBe(true);
+  const titi = await join("P5", "Titi");
+  expect(titi.ok(), await titi.text()).toBe(true);
+  const kuntur = await join("S5", "Kuntur");
+  expect(kuntur.status()).toBe(400);
+  expect((await kuntur.json()).message).toContain("Kuntur");
+  const capibaraCode = (await capibara.json()).personalCode;
+  const titiCode = (await titi.json()).personalCode;
+
+  const base = {
+    title: contest.title,
+    durationMinutes: 30,
+  };
+  const dropTiti = await api.put(`${API}/api/contests/${contest.id}`, {
+    headers,
+    data: { ...base, categories: ["Capibara"] },
+  });
+  expect(dropTiti.status()).toBe(409);
+  expect((await dropTiti.json()).message).toContain("Titi");
+
+  const now = Date.now();
+  const scheduled = await api.put(`${API}/api/contests/${contest.id}`, {
+    headers,
+    data: {
+      ...base,
+      categories: ["Capibara", "Titi"],
+      startsAt: new Date(now + 60000).toISOString(),
+      endsAt: new Date(now + 3600000).toISOString(),
+    },
+  });
+  expect(scheduled.ok(), await scheduled.text()).toBe(true);
+  expect((await scheduled.json()).taskCount).toBe(3);
+  await setE2EClock(api, new Date(now + 120000));
+
+  for (const [code, expected] of [
+    [capibaraCode, ["seed-bebras-easy", "seed-bebras-medium"]],
+    [titiCode, [titiTask.id]],
+  ] as const) {
+    const start = await api.post(`${API}/api/play/start`, {
+      data: { personalCode: code },
+    });
+    expect(start.ok(), await start.text()).toBe(true);
+    const attempt = await api
+      .get(`${API}/api/play/attempt/${code}`)
+      .then((response) => response.json());
+    expect(attempt.tasks.map((task: { taskId: string }) => task.taskId)).toEqual(
+      expected,
+    );
+  }
+
+  const foreign = await api.post(`${API}/api/play/answer`, {
+    data: {
+      personalCode: capibaraCode,
+      taskId: titiTask.id,
+      payload: "A",
+    },
+  });
+  expect(foreign.status()).toBe(404);
+
+  for (const code of [capibaraCode, titiCode]) {
+    const submit = await api.post(`${API}/api/play/submit`, {
+      data: { personalCode: code },
+    });
+    expect(submit.ok(), await submit.text()).toBe(true);
+  }
+
+  const results = await api
+    .get(`${API}/api/contests/${contest.id}/results`, { headers })
+    .then((response) => response.json());
+  expect(results.taskCounts).toEqual({ Capibara: 2, Titi: 1 });
+  const byCategory = Object.fromEntries(
+    results.rows.map(
+      (row: { category: string; totalScore: number; rankPosition: number }) => [
+        row.category,
+        row,
+      ],
+    ),
+  );
+  expect(byCategory.Capibara).toMatchObject({ totalScore: 5, rankPosition: 1 });
+  expect(byCategory.Titi).toMatchObject({ totalScore: 4, rankPosition: 1 });
 
   await api.dispose();
 });

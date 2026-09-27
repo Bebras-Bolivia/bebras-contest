@@ -43,6 +43,7 @@ export type ContestTaskSumAggregateOutputType = {
 export type ContestTaskMinAggregateOutputType = {
   id: string | null
   contestId: string | null
+  category: string | null
   taskDraftId: string | null
   position: number | null
   difficulty: string | null
@@ -56,6 +57,7 @@ export type ContestTaskMinAggregateOutputType = {
 export type ContestTaskMaxAggregateOutputType = {
   id: string | null
   contestId: string | null
+  category: string | null
   taskDraftId: string | null
   position: number | null
   difficulty: string | null
@@ -69,6 +71,7 @@ export type ContestTaskMaxAggregateOutputType = {
 export type ContestTaskCountAggregateOutputType = {
   id: number
   contestId: number
+  category: number
   taskDraftId: number
   position: number
   difficulty: number
@@ -98,6 +101,7 @@ export type ContestTaskSumAggregateInputType = {
 export type ContestTaskMinAggregateInputType = {
   id?: true
   contestId?: true
+  category?: true
   taskDraftId?: true
   position?: true
   difficulty?: true
@@ -111,6 +115,7 @@ export type ContestTaskMinAggregateInputType = {
 export type ContestTaskMaxAggregateInputType = {
   id?: true
   contestId?: true
+  category?: true
   taskDraftId?: true
   position?: true
   difficulty?: true
@@ -124,6 +129,7 @@ export type ContestTaskMaxAggregateInputType = {
 export type ContestTaskCountAggregateInputType = {
   id?: true
   contestId?: true
+  category?: true
   taskDraftId?: true
   position?: true
   difficulty?: true
@@ -224,6 +230,7 @@ export type ContestTaskGroupByArgs<ExtArgs extends runtime.Types.Extensions.Inte
 export type ContestTaskGroupByOutputType = {
   id: string
   contestId: string
+  category: string
   taskDraftId: string
   position: number
   difficulty: string
@@ -260,6 +267,7 @@ export type ContestTaskWhereInput = {
   NOT?: Prisma.ContestTaskWhereInput | Prisma.ContestTaskWhereInput[]
   id?: Prisma.StringFilter<"ContestTask"> | string
   contestId?: Prisma.StringFilter<"ContestTask"> | string
+  category?: Prisma.StringFilter<"ContestTask"> | string
   taskDraftId?: Prisma.StringFilter<"ContestTask"> | string
   position?: Prisma.IntFilter<"ContestTask"> | number
   difficulty?: Prisma.StringFilter<"ContestTask"> | string
@@ -275,6 +283,7 @@ export type ContestTaskWhereInput = {
 export type ContestTaskOrderByWithRelationInput = {
   id?: Prisma.SortOrder
   contestId?: Prisma.SortOrder
+  category?: Prisma.SortOrder
   taskDraftId?: Prisma.SortOrder
   position?: Prisma.SortOrder
   difficulty?: Prisma.SortOrder
@@ -289,12 +298,13 @@ export type ContestTaskOrderByWithRelationInput = {
 
 export type ContestTaskWhereUniqueInput = Prisma.AtLeast<{
   id?: string
-  contestId_taskDraftId?: Prisma.ContestTaskContestIdTaskDraftIdCompoundUniqueInput
-  contestId_position?: Prisma.ContestTaskContestIdPositionCompoundUniqueInput
+  contestId_category_taskDraftId?: Prisma.ContestTaskContestIdCategoryTaskDraftIdCompoundUniqueInput
+  contestId_category_position?: Prisma.ContestTaskContestIdCategoryPositionCompoundUniqueInput
   AND?: Prisma.ContestTaskWhereInput | Prisma.ContestTaskWhereInput[]
   OR?: Prisma.ContestTaskWhereInput[]
   NOT?: Prisma.ContestTaskWhereInput | Prisma.ContestTaskWhereInput[]
   contestId?: Prisma.StringFilter<"ContestTask"> | string
+  category?: Prisma.StringFilter<"ContestTask"> | string
   taskDraftId?: Prisma.StringFilter<"ContestTask"> | string
   position?: Prisma.IntFilter<"ContestTask"> | number
   difficulty?: Prisma.StringFilter<"ContestTask"> | string
@@ -305,11 +315,12 @@ export type ContestTaskWhereUniqueInput = Prisma.AtLeast<{
   createdAt?: Prisma.DateTimeFilter<"ContestTask"> | Date | string
   contest?: Prisma.XOR<Prisma.ContestScalarRelationFilter, Prisma.ContestWhereInput>
   taskDraft?: Prisma.XOR<Prisma.TaskDraftScalarRelationFilter, Prisma.TaskDraftWhereInput>
-}, "id" | "contestId_taskDraftId" | "contestId_position">
+}, "id" | "contestId_category_taskDraftId" | "contestId_category_position">
 
 export type ContestTaskOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
   contestId?: Prisma.SortOrder
+  category?: Prisma.SortOrder
   taskDraftId?: Prisma.SortOrder
   position?: Prisma.SortOrder
   difficulty?: Prisma.SortOrder
@@ -331,6 +342,7 @@ export type ContestTaskScalarWhereWithAggregatesInput = {
   NOT?: Prisma.ContestTaskScalarWhereWithAggregatesInput | Prisma.ContestTaskScalarWhereWithAggregatesInput[]
   id?: Prisma.StringWithAggregatesFilter<"ContestTask"> | string
   contestId?: Prisma.StringWithAggregatesFilter<"ContestTask"> | string
+  category?: Prisma.StringWithAggregatesFilter<"ContestTask"> | string
   taskDraftId?: Prisma.StringWithAggregatesFilter<"ContestTask"> | string
   position?: Prisma.IntWithAggregatesFilter<"ContestTask"> | number
   difficulty?: Prisma.StringWithAggregatesFilter<"ContestTask"> | string
@@ -343,6 +355,7 @@ export type ContestTaskScalarWhereWithAggregatesInput = {
 
 export type ContestTaskCreateInput = {
   id?: string
+  category?: string
   position: number
   difficulty: string
   minScore: number
@@ -357,6 +370,7 @@ export type ContestTaskCreateInput = {
 export type ContestTaskUncheckedCreateInput = {
   id?: string
   contestId: string
+  category?: string
   taskDraftId: string
   position: number
   difficulty: string
@@ -369,6 +383,7 @@ export type ContestTaskUncheckedCreateInput = {
 
 export type ContestTaskUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  category?: Prisma.StringFieldUpdateOperationsInput | string
   position?: Prisma.IntFieldUpdateOperationsInput | number
   difficulty?: Prisma.StringFieldUpdateOperationsInput | string
   minScore?: Prisma.IntFieldUpdateOperationsInput | number
@@ -383,6 +398,7 @@ export type ContestTaskUpdateInput = {
 export type ContestTaskUncheckedUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   contestId?: Prisma.StringFieldUpdateOperationsInput | string
+  category?: Prisma.StringFieldUpdateOperationsInput | string
   taskDraftId?: Prisma.StringFieldUpdateOperationsInput | string
   position?: Prisma.IntFieldUpdateOperationsInput | number
   difficulty?: Prisma.StringFieldUpdateOperationsInput | string
@@ -396,6 +412,7 @@ export type ContestTaskUncheckedUpdateInput = {
 export type ContestTaskCreateManyInput = {
   id?: string
   contestId: string
+  category?: string
   taskDraftId: string
   position: number
   difficulty: string
@@ -408,6 +425,7 @@ export type ContestTaskCreateManyInput = {
 
 export type ContestTaskUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  category?: Prisma.StringFieldUpdateOperationsInput | string
   position?: Prisma.IntFieldUpdateOperationsInput | number
   difficulty?: Prisma.StringFieldUpdateOperationsInput | string
   minScore?: Prisma.IntFieldUpdateOperationsInput | number
@@ -420,6 +438,7 @@ export type ContestTaskUpdateManyMutationInput = {
 export type ContestTaskUncheckedUpdateManyInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   contestId?: Prisma.StringFieldUpdateOperationsInput | string
+  category?: Prisma.StringFieldUpdateOperationsInput | string
   taskDraftId?: Prisma.StringFieldUpdateOperationsInput | string
   position?: Prisma.IntFieldUpdateOperationsInput | number
   difficulty?: Prisma.StringFieldUpdateOperationsInput | string
@@ -440,19 +459,22 @@ export type ContestTaskOrderByRelationAggregateInput = {
   _count?: Prisma.SortOrder
 }
 
-export type ContestTaskContestIdTaskDraftIdCompoundUniqueInput = {
+export type ContestTaskContestIdCategoryTaskDraftIdCompoundUniqueInput = {
   contestId: string
+  category: string
   taskDraftId: string
 }
 
-export type ContestTaskContestIdPositionCompoundUniqueInput = {
+export type ContestTaskContestIdCategoryPositionCompoundUniqueInput = {
   contestId: string
+  category: string
   position: number
 }
 
 export type ContestTaskCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   contestId?: Prisma.SortOrder
+  category?: Prisma.SortOrder
   taskDraftId?: Prisma.SortOrder
   position?: Prisma.SortOrder
   difficulty?: Prisma.SortOrder
@@ -473,6 +495,7 @@ export type ContestTaskAvgOrderByAggregateInput = {
 export type ContestTaskMaxOrderByAggregateInput = {
   id?: Prisma.SortOrder
   contestId?: Prisma.SortOrder
+  category?: Prisma.SortOrder
   taskDraftId?: Prisma.SortOrder
   position?: Prisma.SortOrder
   difficulty?: Prisma.SortOrder
@@ -486,6 +509,7 @@ export type ContestTaskMaxOrderByAggregateInput = {
 export type ContestTaskMinOrderByAggregateInput = {
   id?: Prisma.SortOrder
   contestId?: Prisma.SortOrder
+  category?: Prisma.SortOrder
   taskDraftId?: Prisma.SortOrder
   position?: Prisma.SortOrder
   difficulty?: Prisma.SortOrder
@@ -589,6 +613,7 @@ export type ContestTaskUncheckedUpdateManyWithoutContestNestedInput = {
 
 export type ContestTaskCreateWithoutTaskDraftInput = {
   id?: string
+  category?: string
   position: number
   difficulty: string
   minScore: number
@@ -602,6 +627,7 @@ export type ContestTaskCreateWithoutTaskDraftInput = {
 export type ContestTaskUncheckedCreateWithoutTaskDraftInput = {
   id?: string
   contestId: string
+  category?: string
   position: number
   difficulty: string
   minScore: number
@@ -642,6 +668,7 @@ export type ContestTaskScalarWhereInput = {
   NOT?: Prisma.ContestTaskScalarWhereInput | Prisma.ContestTaskScalarWhereInput[]
   id?: Prisma.StringFilter<"ContestTask"> | string
   contestId?: Prisma.StringFilter<"ContestTask"> | string
+  category?: Prisma.StringFilter<"ContestTask"> | string
   taskDraftId?: Prisma.StringFilter<"ContestTask"> | string
   position?: Prisma.IntFilter<"ContestTask"> | number
   difficulty?: Prisma.StringFilter<"ContestTask"> | string
@@ -654,6 +681,7 @@ export type ContestTaskScalarWhereInput = {
 
 export type ContestTaskCreateWithoutContestInput = {
   id?: string
+  category?: string
   position: number
   difficulty: string
   minScore: number
@@ -666,6 +694,7 @@ export type ContestTaskCreateWithoutContestInput = {
 
 export type ContestTaskUncheckedCreateWithoutContestInput = {
   id?: string
+  category?: string
   taskDraftId: string
   position: number
   difficulty: string
@@ -704,6 +733,7 @@ export type ContestTaskUpdateManyWithWhereWithoutContestInput = {
 export type ContestTaskCreateManyTaskDraftInput = {
   id?: string
   contestId: string
+  category?: string
   position: number
   difficulty: string
   minScore: number
@@ -715,6 +745,7 @@ export type ContestTaskCreateManyTaskDraftInput = {
 
 export type ContestTaskUpdateWithoutTaskDraftInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  category?: Prisma.StringFieldUpdateOperationsInput | string
   position?: Prisma.IntFieldUpdateOperationsInput | number
   difficulty?: Prisma.StringFieldUpdateOperationsInput | string
   minScore?: Prisma.IntFieldUpdateOperationsInput | number
@@ -728,6 +759,7 @@ export type ContestTaskUpdateWithoutTaskDraftInput = {
 export type ContestTaskUncheckedUpdateWithoutTaskDraftInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   contestId?: Prisma.StringFieldUpdateOperationsInput | string
+  category?: Prisma.StringFieldUpdateOperationsInput | string
   position?: Prisma.IntFieldUpdateOperationsInput | number
   difficulty?: Prisma.StringFieldUpdateOperationsInput | string
   minScore?: Prisma.IntFieldUpdateOperationsInput | number
@@ -740,6 +772,7 @@ export type ContestTaskUncheckedUpdateWithoutTaskDraftInput = {
 export type ContestTaskUncheckedUpdateManyWithoutTaskDraftInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   contestId?: Prisma.StringFieldUpdateOperationsInput | string
+  category?: Prisma.StringFieldUpdateOperationsInput | string
   position?: Prisma.IntFieldUpdateOperationsInput | number
   difficulty?: Prisma.StringFieldUpdateOperationsInput | string
   minScore?: Prisma.IntFieldUpdateOperationsInput | number
@@ -751,6 +784,7 @@ export type ContestTaskUncheckedUpdateManyWithoutTaskDraftInput = {
 
 export type ContestTaskCreateManyContestInput = {
   id?: string
+  category?: string
   taskDraftId: string
   position: number
   difficulty: string
@@ -763,6 +797,7 @@ export type ContestTaskCreateManyContestInput = {
 
 export type ContestTaskUpdateWithoutContestInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  category?: Prisma.StringFieldUpdateOperationsInput | string
   position?: Prisma.IntFieldUpdateOperationsInput | number
   difficulty?: Prisma.StringFieldUpdateOperationsInput | string
   minScore?: Prisma.IntFieldUpdateOperationsInput | number
@@ -775,6 +810,7 @@ export type ContestTaskUpdateWithoutContestInput = {
 
 export type ContestTaskUncheckedUpdateWithoutContestInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  category?: Prisma.StringFieldUpdateOperationsInput | string
   taskDraftId?: Prisma.StringFieldUpdateOperationsInput | string
   position?: Prisma.IntFieldUpdateOperationsInput | number
   difficulty?: Prisma.StringFieldUpdateOperationsInput | string
@@ -787,6 +823,7 @@ export type ContestTaskUncheckedUpdateWithoutContestInput = {
 
 export type ContestTaskUncheckedUpdateManyWithoutContestInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  category?: Prisma.StringFieldUpdateOperationsInput | string
   taskDraftId?: Prisma.StringFieldUpdateOperationsInput | string
   position?: Prisma.IntFieldUpdateOperationsInput | number
   difficulty?: Prisma.StringFieldUpdateOperationsInput | string
@@ -802,6 +839,7 @@ export type ContestTaskUncheckedUpdateManyWithoutContestInput = {
 export type ContestTaskSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   contestId?: boolean
+  category?: boolean
   taskDraftId?: boolean
   position?: boolean
   difficulty?: boolean
@@ -817,6 +855,7 @@ export type ContestTaskSelect<ExtArgs extends runtime.Types.Extensions.InternalA
 export type ContestTaskSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   contestId?: boolean
+  category?: boolean
   taskDraftId?: boolean
   position?: boolean
   difficulty?: boolean
@@ -832,6 +871,7 @@ export type ContestTaskSelectCreateManyAndReturn<ExtArgs extends runtime.Types.E
 export type ContestTaskSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   contestId?: boolean
+  category?: boolean
   taskDraftId?: boolean
   position?: boolean
   difficulty?: boolean
@@ -847,6 +887,7 @@ export type ContestTaskSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.E
 export type ContestTaskSelectScalar = {
   id?: boolean
   contestId?: boolean
+  category?: boolean
   taskDraftId?: boolean
   position?: boolean
   difficulty?: boolean
@@ -857,7 +898,7 @@ export type ContestTaskSelectScalar = {
   createdAt?: boolean
 }
 
-export type ContestTaskOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "contestId" | "taskDraftId" | "position" | "difficulty" | "minScore" | "noAnswerScore" | "maxScore" | "options" | "createdAt", ExtArgs["result"]["contestTask"]>
+export type ContestTaskOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "contestId" | "category" | "taskDraftId" | "position" | "difficulty" | "minScore" | "noAnswerScore" | "maxScore" | "options" | "createdAt", ExtArgs["result"]["contestTask"]>
 export type ContestTaskInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   contest?: boolean | Prisma.ContestDefaultArgs<ExtArgs>
   taskDraft?: boolean | Prisma.TaskDraftDefaultArgs<ExtArgs>
@@ -880,6 +921,7 @@ export type $ContestTaskPayload<ExtArgs extends runtime.Types.Extensions.Interna
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
     contestId: string
+    category: string
     taskDraftId: string
     position: number
     difficulty: string
@@ -1315,6 +1357,7 @@ export interface Prisma__ContestTaskClient<T, Null = never, ExtArgs extends runt
 export interface ContestTaskFieldRefs {
   readonly id: Prisma.FieldRef<"ContestTask", 'String'>
   readonly contestId: Prisma.FieldRef<"ContestTask", 'String'>
+  readonly category: Prisma.FieldRef<"ContestTask", 'String'>
   readonly taskDraftId: Prisma.FieldRef<"ContestTask", 'String'>
   readonly position: Prisma.FieldRef<"ContestTask", 'Int'>
   readonly difficulty: Prisma.FieldRef<"ContestTask", 'String'>

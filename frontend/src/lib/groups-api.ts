@@ -29,7 +29,8 @@ export type StoredGroup = {
   accessCode: string;
   contestId: string;
   contestTitle: string;
-  contestCategory: string;
+  category: string | null;
+  contestCategories: string[];
   contestAllowPairs: boolean;
   firstUsedAt: string | null;
   expiresAt: string | null;
@@ -40,13 +41,14 @@ export type StoredGroup = {
 
 export type GroupDraftInput = {
   contestId: string;
+  category?: string;
   name: string;
 };
 
 export type PublishedContest = {
   id: string;
   title: string;
-  category: string;
+  categories: string[];
   registrationStartsAt: string | null;
   registrationEndsAt: string | null;
   startsAt: string | null;

@@ -16,7 +16,7 @@ test("filters navigation sections by user role", () => {
   expect(canAccessSiteNav("staff")).toBe(false);
 });
 
-test("keeps the new contest form within a mobile viewport", async ({
+test("keeps the contest list and a new contest within a mobile viewport", async ({
   page,
 }) => {
   await loginAdminPage(page);
@@ -32,30 +32,6 @@ test("keeps the new contest form within a mobile viewport", async ({
     null,
     { timeout: 30000 },
   );
-
-  // Crear un desafío es un modal con dos campos: ni calendario ni tareas.
-  await page.getByRole("button", { name: "Nuevo desafío" }).click();
-  const createDialog = page.getByRole("dialog");
-  await expect(createDialog).toBeVisible();
-  await expect(
-    createDialog.getByRole("textbox", { name: /Nombre/ }),
-  ).toBeVisible();
-  await expect(
-    createDialog.getByRole("combobox", { name: /Categoría/ }),
-  ).toBeVisible();
-  await expect(createDialog.getByText("Ventana de inscripción")).toHaveCount(0);
-  await expect(
-    createDialog.getByText("Duración por equipo (minutos)"),
-  ).toHaveCount(0);
-  expect(
-    await page.evaluate(
-      () =>
-        document.documentElement.scrollWidth >
-        document.documentElement.clientWidth,
-    ),
-  ).toBe(false);
-  await page.keyboard.press("Escape");
-  await expect(createDialog).toBeHidden();
 
   const mainBeforeMenu = await page.locator("main").boundingBox();
   await page.getByRole("button", { name: "Abrir menú" }).click();
@@ -111,6 +87,19 @@ test("keeps the new contest form within a mobile viewport", async ({
     "view-transition-name",
     "app-header",
   );
+
+  // «Nuevo desafío» crea el borrador con las seis categorías y abre su editor.
+  await page.getByRole("button", { name: "Nuevo desafío" }).click();
+  await expect(page).toHaveURL(/\/desafios\/editar\?id=/, { timeout: 15000 });
+  await expect(page.getByRole("tab", { name: /Guacamayo/ })).toBeVisible();
+  await expect(page.getByRole("tab")).toHaveCount(6);
+  expect(
+    await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth >
+        document.documentElement.clientWidth,
+    ),
+  ).toBe(false);
 });
 
 test("keeps the contest calendar within a mobile viewport", async ({
@@ -137,7 +126,7 @@ test("keeps the contest calendar within a mobile viewport", async ({
   await expect(page.getByText("Inscripción", { exact: true })).toBeVisible();
   await expect(page.getByText("Rendición", { exact: true })).toBeVisible();
   await page
-    .getByRole("button", { name: "Ventana de rendición, inicio, día" })
+    .getByRole("button", { name: "Rendición, inicio, día" })
     .click();
   const calendarBounds = await page
     .locator('[data-slot="calendar"]')

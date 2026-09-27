@@ -136,6 +136,8 @@ export type StoredTask = {
   dragDropSolutions?: StoredTaskDragDropSolution[];
   explanationBlocks: ContentBlock[];
   updatedAt: string;
+  isPractice?: boolean;
+  forTeachers?: boolean;
 };
 
 export function createContentBlock(

@@ -23,7 +23,12 @@ export function TaskExplanation({
 
   return (
     <div className={cn("flex flex-col gap-4", className)}>
-      {solution.length > 0 && <TaskContentRenderer blocks={solution} />}
+      {solution.length > 0 && (
+        <TaskContentRenderer
+          blocks={solution}
+          className="[&_img]:max-h-[24rem] [&_img]:object-contain"
+        />
+      )}
       {informatics.length > 0 && (
         <Collapsible>
           <CollapsibleTrigger className="group/info flex items-center gap-2 py-1 text-left font-semibold outline-none hover:text-primary focus-visible:ring-[3px] focus-visible:ring-ring/50">

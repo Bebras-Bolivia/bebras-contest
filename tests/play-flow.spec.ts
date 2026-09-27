@@ -70,7 +70,7 @@ test("student starts, answers and submits without seeing the score", async ({
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: "Entregar" }).click();
 
-  await expect(page.getByText(/Desafío terminado/i)).toBeVisible({
+  await expect(page.getByText("¡Terminaste!", { exact: true })).toBeVisible({
     timeout: 15000,
   });
 
@@ -115,7 +115,7 @@ test("finishes the attempt and says so when the time runs out", async ({
     timeout: 15000,
   });
   await expect(page.getByText(/Entregamos tus respuestas/)).toBeVisible();
-  await expect(page.getByText(/Desafío terminado/i)).toBeHidden();
+  await expect(page.getByText("¡Terminaste!", { exact: true })).toBeHidden();
 });
 
 test("keeps site chrome hidden while an active attempt loads on mobile", async ({
@@ -298,7 +298,7 @@ test("blocks submission until failed answers can be saved", async ({
     .getByRole("button", { name: "Entregar" })
     .click();
 
-  await expect(page.getByText(/Desafío terminado/i)).toBeVisible({
+  await expect(page.getByText("¡Terminaste!", { exact: true })).toBeVisible({
     timeout: 15000,
   });
   expect(submitRequests).toBe(1);
@@ -344,7 +344,7 @@ test("closes the one by one flow with a finish button", async ({ page }) => {
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: "Entregar" }).click();
 
-  await expect(page.getByText(/Desafío terminado/i)).toBeVisible({
+  await expect(page.getByText("¡Terminaste!", { exact: true })).toBeVisible({
     timeout: 15000,
   });
 });
@@ -404,11 +404,17 @@ test("keeps a single open session per student", async () => {
     contest.picked.grade,
   );
 
+  // Volver a entrar con el código se queda con la sesión y cierra la anterior.
   const secondDevice = await api.post(`${API}/api/play/session`, {
     data: { personalCode: student.personalCode },
   });
-  expect(secondDevice.status()).toBe(409);
-  expect((await secondDevice.json()).message).toContain("sesión abierta");
+  expect(secondDevice.ok(), await secondDevice.text()).toBe(true);
+  const secondToken = (await secondDevice.json()).sessionToken as string;
+  const replaced = await api.get(`${API}/api/play/attempt`, {
+    headers: playHeaders(student.sessionToken),
+  });
+  expect(replaced.status()).toBe(401);
+  student.sessionToken = secondToken;
 
   const withCode = await api.post(`${API}/api/play/start`, {
     data: { personalCode: student.personalCode },

@@ -11,8 +11,8 @@ import { flushSync } from "react-dom";
 import {
   AlertCircleIcon,
   FilePenLineIcon,
+  ChevronDownIcon,
   FilePlus2Icon,
-  GraduationCapIcon,
   PlayCircleIcon,
   SearchIcon,
   Trash2Icon,
@@ -40,9 +40,20 @@ import {
   listTasks,
   mapTaskToHomeItem,
   removeTask,
-  setTaskPractice,
+  setTaskVisibility,
   type HomeTaskItem,
 } from "@/lib/tasks-api";
+import {
+  TASK_VISIBILITIES,
+  visibilityInfo,
+  type TaskVisibility,
+} from "@/lib/task-visibility";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   answerTypeLabels,
   answerTypes,
@@ -56,7 +67,7 @@ type Filters = {
   type: AnswerType | "all";
   age: string;
   difficulty: string;
-  practice: boolean;
+  visibility: TaskVisibility | "all";
   query: string;
 };
 
@@ -64,7 +75,7 @@ const NO_FILTERS: Filters = {
   type: "all",
   age: "all",
   difficulty: "all",
-  practice: false,
+  visibility: "all",
   query: "",
 };
 
@@ -84,7 +95,9 @@ function readFilters(): Filters {
       age !== "all" && DIFFICULTIES.some((value) => value === difficulty)
         ? (difficulty as string)
         : "all",
-    practice: params.get("practica") === "1",
+    visibility:
+      TASK_VISIBILITIES.find((item) => item.value === params.get("visible"))
+        ?.value ?? (params.get("practica") === "1" ? "practica" : "all"),
     query: params.get("q") ?? "",
   };
 }
@@ -95,7 +108,7 @@ function writeFilters(filters: Filters) {
     ["tipo", filters.type],
     ["edad", filters.age],
     ["dificultad", filters.difficulty],
-    ["practica", filters.practice ? "1" : "all"],
+    ["visible", filters.visibility],
     ["q", filters.query.trim() || "all"],
   ] as const) {
     if (value === "all") url.searchParams.delete(key);
@@ -130,7 +143,9 @@ function matches(
       if (level.difficulty !== filters.difficulty) return false;
     }
   }
-  if (filters.practice && !task.isPractice) return false;
+  if (filters.visibility !== "all" && task.visibility !== filters.visibility) {
+    return false;
+  }
   const query = fold(filters.query.trim());
   if (query) {
     const haystack = fold(
@@ -307,22 +322,20 @@ export function TasksHome() {
     };
   }, []);
 
-  const togglePractice = (task: HomeTaskItem) => {
-    const next = !task.isPractice;
-    void setTaskPractice(task.id, next)
-      .then(() => {
-        setTasks((current) =>
-          current.map((item) =>
-            item.id === task.id ? { ...item, isPractice: next } : item,
-          ),
-        );
-        toast.success(
-          next ? "Tarea añadida a práctica." : "Tarea quitada de práctica.",
-        );
-      })
-      .catch(() => {
-        toast.error("No se pudo actualizar la práctica.");
-      });
+  const changeVisibility = (task: HomeTaskItem, next: TaskVisibility) => {
+    if (task.visibility === next) return;
+    const previous = task.visibility;
+    const apply = (visibility: TaskVisibility) =>
+      setTasks((current) =>
+        current.map((item) =>
+          item.id === task.id ? { ...item, visibility } : item,
+        ),
+      );
+    apply(next);
+    void setTaskVisibility(task.id, next).catch(() => {
+      apply(previous);
+      toast.error("No se pudo cambiar quién la ve.");
+    });
   };
 
   const confirmDelete = async () => {
@@ -412,15 +425,30 @@ export function TasksHome() {
                 </button>
               )}
             </label>
-            <button
-              type="button"
-              aria-pressed={filters.practice}
-              onClick={() => chooseFilters({ practice: !filters.practice })}
-              className={chipClass}
+            <div
+              role="group"
+              aria-label="Filtrar por quién la ve"
+              className="flex shrink-0 gap-1"
             >
-              <GraduationCapIcon className="size-3.5" aria-hidden="true" />
-              Solo en práctica
-            </button>
+              {TASK_VISIBILITIES.map((item) => {
+                const active = filters.visibility === item.value;
+                return (
+                  <button
+                    key={item.value}
+                    type="button"
+                    aria-pressed={active}
+                    title={item.description}
+                    onClick={() =>
+                      chooseFilters({ visibility: active ? "all" : item.value })
+                    }
+                    className={chipClass}
+                  >
+                    <item.icon className="size-3.5" aria-hidden="true" />
+                    <span className="max-sm:sr-only">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="sticky top-0 z-10 -mx-4 flex flex-col bg-background px-4 shadow-[inset_0_-1px_0_var(--border)] sm:mx-0 sm:px-0">
@@ -562,12 +590,6 @@ export function TasksHome() {
                           {task.title}
                         </a>
                       </h2>
-                      {task.isPractice && (
-                        <Badge className="gap-1">
-                          <GraduationCapIcon className="size-3" />
-                          Práctica
-                        </Badge>
-                      )}
                     </div>
 
                     <TaskOrigin
@@ -610,19 +632,48 @@ export function TasksHome() {
                   </div>
 
                   <div className="grid w-full shrink-0 grid-cols-[1fr_1fr_1fr_auto] gap-1.5 lg:w-72 lg:grid-cols-2 lg:gap-2">
-                    <Button
-                      size="sm"
-                      type="button"
-                      variant={task.isPractice ? "default" : "outline"}
-                      className="w-full max-lg:px-2 lg:justify-start"
-                      onClick={() => togglePractice(task)}
-                    >
-                      <GraduationCapIcon data-icon="inline-start" />
-                      <span className="lg:hidden">Práctica</span>
-                      <span className="max-lg:hidden">
-                        {task.isPractice ? "En práctica" : "Práctica"}
-                      </span>
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          type="button"
+                          variant={
+                            task.visibility === "privada"
+                              ? "outline"
+                              : "default"
+                          }
+                          aria-label={`Quién ve ${task.title}: ${visibilityInfo(task.visibility).label}`}
+                          className="w-full max-lg:px-2 lg:justify-start"
+                        >
+                          {(() => {
+                            const Icon = visibilityInfo(task.visibility).icon;
+                            return <Icon data-icon="inline-start" />;
+                          })()}
+                          {visibilityInfo(task.visibility).label}
+                          <ChevronDownIcon className="ml-auto size-3.5 opacity-60 max-lg:hidden" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-72">
+                        {TASK_VISIBILITIES.map((item) => (
+                          <DropdownMenuItem
+                            key={item.value}
+                            onSelect={() => changeVisibility(task, item.value)}
+                            className="items-start"
+                          >
+                            <item.icon className="mt-0.5" />
+                            <span className="flex flex-col">
+                              <span className="font-medium">
+                                {item.label}
+                                {task.visibility === item.value && " ✓"}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {item.description}
+                              </span>
+                            </span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     <Button
                       asChild
                       size="sm"

@@ -57,7 +57,6 @@ CROPS = [
 # vecino: tarea, recurso, pagina dentro de la tarea (0 = la primera), regiones.
 # Con varias regiones, lo que queda entre ellas va en blanco (texto intercalado).
 FIGURES = [
-    (1, 'bebras-2024-01-caja-de-pulseras-solution.png', 0, [(569, 680, 968, 1025)]),
     (5, 'bebras-2024-05-pintando-solution.png', 0, [(586, 800, 981, 953)]),
     (7, 'preferencias-castores.png', 0, [(150, 239, 994, 447)]),
     (7, 'bebras-2024-07-fiesta-solution.png', 0, [(137, 816, 560, 975)]),
@@ -142,6 +141,53 @@ def figure(document, page_index, regions, zoom=4):
     return output.getvalue()
 
 
+# Figuras que el PDF recorta con una mascara: se redibujan desde sus vectores,
+# sin la mascara. Tarea 01: la franja de las opciones tapaba la pulsera roja.
+VECTORS = [
+    (1, 'bebras-2024-01-caja-de-pulseras-solution.png', 0, (560, 670, 1000, 1035)),
+]
+
+
+def draw_items(target, drawing, shift):
+    shape = target.new_shape()
+    for item in drawing['items']:
+        if item[0] == 'l':
+            shape.draw_line(item[1] - shift, item[2] - shift)
+        elif item[0] == 'c':
+            shape.draw_bezier(*(p - shift for p in item[1:5]))
+        elif item[0] == 're':
+            shape.draw_rect(fitz.Rect(item[1]) - (shift.x, shift.y, shift.x, shift.y))
+        elif item[0] == 'qu':
+            shape.draw_quad(fitz.Quad(*(p - shift for p in item[1])))
+    shape.finish(fill=drawing.get('fill'), color=drawing.get('color'), width=drawing.get('width') or 0,
+                 closePath=drawing.get('closePath', False), even_odd=drawing.get('even_odd', False),
+                 fill_opacity=drawing.get('fill_opacity') or 1,
+                 stroke_opacity=drawing.get('stroke_opacity') or 1)
+    shape.commit()
+
+
+def vector_figure(document, page_index, region, zoom=4, margin=40):
+    page = document[page_index]
+    scale = page.rect.width / 1100
+    bounds = fitz.Rect(region) * scale
+    shift = fitz.Point(bounds.x0, bounds.y0)
+    with fitz.open() as output:
+        target = output.new_page(width=bounds.width, height=bounds.height)
+        for drawing in page.get_drawings():
+            if bounds.contains(drawing['rect']):
+                draw_items(target, drawing, shift)
+        pixmap = target.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+    image = Image.open(io.BytesIO(pixmap.tobytes('png'))).convert('RGB')
+    ink = Image.eval(image.convert('L'), lambda v: 255 if v < 250 else 0).getbbox()
+    if ink:
+        x0, y0, x1, y1 = ink
+        image = image.crop((max(0, x0 - margin), max(0, y0 - margin),
+                            min(image.width, x1 + margin), min(image.height, y1 + margin)))
+    output = io.BytesIO()
+    image.save(output, 'PNG', optimize=True)
+    return output.getvalue()
+
+
 def ball(document, page_index, corner, size=26.1, pad=0.6, zoom=10):
     page = document[page_index]
     scale = page.rect.width / 1100
@@ -208,6 +254,8 @@ def main():
             ).decode('ascii')
         for number, name, offset, regions in FIGURES:
             replace(by_number[number], name, figure(document, pages[number] + offset, regions))
+        for number, name, offset, region in VECTORS:
+            replace(by_number[number], name, vector_figure(document, pages[number] + offset, region))
         for name, corner in BALLS:
             replace(by_number[12], name, ball(document, pages[12], corner))
         # El escenario conserva su proporcion y las coordenadas de los destinos.
@@ -221,7 +269,7 @@ def main():
             data = canvas.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False).tobytes('png')
         by_number[10]['dragDropBackground']['url'] = 'data:image/png;base64,' + base64.b64encode(data).decode('ascii')
     SEED.write_text(json.dumps(tasks, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-    print(f'{len(CROPS) + len(FIGURES) + len(BALLS) + 1} imagenes actualizadas.')
+    print(f'{len(CROPS) + len(FIGURES) + len(VECTORS) + len(BALLS) + 1} imagenes actualizadas.')
 
 
 if __name__ == '__main__':

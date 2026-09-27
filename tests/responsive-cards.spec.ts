@@ -32,58 +32,31 @@ test("keeps contest and task card actions responsive and compact", async ({
   await page.setViewportSize({ width: 320, height: 800 });
   await page.goto("/desafios");
 
-  const contestRow = page
-    .getByRole("heading", { name: listedContest.title, exact: true, level: 2 })
-    .locator("xpath=ancestor::li[1]");
-  // El listado ya no vive en una card: la comprobación de que no queda hueco
-  // entre el encabezado de la página y la primera fila se mantiene igual.
-  const contestListHeader = page
-    .getByRole("heading", { name: "Desafíos", level: 1 })
-    .locator("xpath=ancestor::div[2]");
-  const firstContestRow = page.locator("main li").first();
-  const [contestListHeaderBox, firstContestRowBox] = await Promise.all([
-    contestListHeader.boundingBox(),
-    firstContestRow.boundingBox(),
-  ]);
-  expect(contestListHeaderBox).not.toBeNull();
-  expect(firstContestRowBox).not.toBeNull();
-  // La separación real es la del contenedor (gap-8); el margen extra tolera
-  // la variación de alto del encabezado del sitio entre anchos de pantalla.
-  expect(
-    firstContestRowBox!.y -
-      (contestListHeaderBox!.y + contestListHeaderBox!.height),
-  ).toBeLessThanOrEqual(56);
-  const contestActions = [
-    contestRow.getByRole("link", { name: "Preguntas" }),
-    contestRow.getByRole("link", { name: "Ajustes" }),
-    contestRow.getByRole("button", { name: "Eliminar" }),
-  ];
-  const mobileContestActions = await Promise.all(
-    contestActions.map((action) => action.boundingBox()),
-  );
-  expect(mobileContestActions[0]!.width).toBe(mobileContestActions[1]!.width);
-  expect(mobileContestActions[1]!.width).toBe(mobileContestActions[2]!.width);
-  expect(mobileContestActions[1]!.y).toBeGreaterThan(
-    mobileContestActions[0]!.y,
-  );
-  expect(mobileContestActions[2]!.y).toBeGreaterThan(
-    mobileContestActions[1]!.y,
-  );
+  const contestLink = page.getByRole("link", {
+    name: listedContest.title,
+    exact: true,
+  });
+  const contestRow = contestLink.locator("xpath=ancestor::li[1]");
+  const menu = contestRow.getByRole("button", {
+    name: `Más acciones de ${listedContest.title}`,
+  });
 
-  await page.setViewportSize({ width: 1280, height: 800 });
-  const desktopContestActions = await Promise.all(
-    contestActions.map((action) => action.boundingBox()),
-  );
-  expect(desktopContestActions[0]!.width).toBeLessThan(160);
-  expect(desktopContestActions[0]!.width).toBe(desktopContestActions[1]!.width);
-  expect(desktopContestActions[1]!.width).toBe(desktopContestActions[2]!.width);
-  expect(desktopContestActions[1]!.y).toBe(desktopContestActions[0]!.y);
-  expect(desktopContestActions[1]!.x).toBeGreaterThan(
-    desktopContestActions[0]!.x,
-  );
-  expect(desktopContestActions[2]!.y).toBeGreaterThan(
-    desktopContestActions[0]!.y,
-  );
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    const [rowBox, linkBox, menuBox] = await Promise.all([
+      contestRow.boundingBox(),
+      contestLink.boundingBox(),
+      menu.boundingBox(),
+    ]);
+    expect(rowBox!.x + rowBox!.width).toBeLessThanOrEqual(width);
+    // El menú queda a la derecha del nombre, en la misma fila.
+    expect(menuBox!.x).toBeGreaterThan(linkBox!.x);
+    expect(menuBox!.y).toBeLessThan(linkBox!.y + linkBox!.height + 24);
+  }
+
+  await menu.click();
+  await expect(page.getByRole("menuitem", { name: "Eliminar" })).toBeVisible();
+  await page.keyboard.press("Escape");
 
   await page.setViewportSize({ width: 320, height: 800 });
   await page.goto("/tareas");
@@ -101,12 +74,12 @@ test("keeps contest and task card actions responsive and compact", async ({
   const mobileTaskActions = await Promise.all(
     taskActions.map((action) => action.boundingBox()),
   );
-  expect(mobileTaskActions[0]!.width).toBe(mobileTaskActions[1]!.width);
-  expect(mobileTaskActions[1]!.width).toBe(mobileTaskActions[2]!.width);
-  expect(mobileTaskActions[2]!.width).toBe(mobileTaskActions[3]!.width);
-  expect(mobileTaskActions[1]!.y).toBeGreaterThan(mobileTaskActions[0]!.y);
-  expect(mobileTaskActions[2]!.y).toBeGreaterThan(mobileTaskActions[1]!.y);
-  expect(mobileTaskActions[3]!.y).toBeGreaterThan(mobileTaskActions[2]!.y);
+  // En celular van en una sola fila y Eliminar queda solo con su ícono.
+  expect(mobileTaskActions[3]!.width).toBeLessThan(mobileTaskActions[2]!.width);
+  for (const action of mobileTaskActions) {
+    expect(action!.y).toBe(mobileTaskActions[0]!.y);
+    expect(action!.x + action!.width).toBeLessThanOrEqual(320);
+  }
 
   await page.setViewportSize({ width: 1280, height: 800 });
   const desktopTaskActions = await Promise.all(
@@ -200,9 +173,10 @@ test("confirms task deletion and keeps the task list compact", async ({
   await loginAdminPage(page);
   await page.goto("/tareas");
 
+  // Entre el encabezado y la lista están los filtros, que quedan pegados.
   const listHeader = page
-    .getByRole("heading", { name: "Tareas", level: 1 })
-    .locator("xpath=ancestor::div[2]");
+    .getByRole("group", { name: "Filtrar por tipo de respuesta" })
+    .locator("xpath=..");
   const removableRow = page
     .getByRole("link", { name: removableTask.title, exact: true })
     .locator("xpath=ancestor::li[1]");
@@ -291,7 +265,7 @@ test("keeps group and teacher cards responsive and compact", async ({
         {
           id: "responsive-contest",
           title: "Desafío responsive",
-          category: "Capibara",
+          categories: ["Capibara"],
           startsAt: now,
           endsAt: new Date(Date.now() + 3600000).toISOString(),
         },
@@ -307,7 +281,7 @@ test("keeps group and teacher cards responsive and compact", async ({
           accessCode: "ABC123",
           contestId: "responsive-contest",
           contestTitle: "Desafío responsive",
-          contestCategory: "Capibara",
+          contestCategories: ["Capibara"],
           contestAllowPairs: true,
           firstUsedAt: null,
           expiresAt: null,

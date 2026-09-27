@@ -77,6 +77,7 @@ export function removeContest(contestId: string) {
 
 export type ContestResultRow = {
   teamId: string;
+  category: string | null;
   groupName: string;
   participationMode: string;
   grade: string | null;
@@ -94,7 +95,8 @@ export type ContestResultRow = {
 
 export type ContestResults = {
   contestTitle: string;
-  taskCount: number;
+  categories: string[];
+  taskCounts: Record<string, number>;
   state: ContestState;
   rows: ContestResultRow[];
 };
@@ -120,19 +122,21 @@ export type ContestPreviewScore = {
 };
 
 /** El desafío tal como lo recibe el estudiante, sin crear ningún intento. */
-export function getContestPreview(contestId: string) {
-  return request<unknown>(`/api/contests/${contestId}/preview`);
+export function getContestPreview(contestId: string, category?: string | null) {
+  const query = category ? `?categoria=${encodeURIComponent(category)}` : "";
+  return request<unknown>(`/api/contests/${contestId}/preview${query}`);
 }
 
 export function scoreContestPreview(
   contestId: string,
   answers: Record<string, unknown>,
+  category?: string | null,
 ) {
   return request<ContestPreviewScore>(
     `/api/contests/${contestId}/preview/score`,
     {
       method: "POST",
-      body: JSON.stringify({ answers }),
+      body: JSON.stringify({ answers, category }),
     },
   );
 }

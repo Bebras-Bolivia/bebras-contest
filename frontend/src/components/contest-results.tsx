@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
+  CalculatorIcon,
   DownloadIcon,
   EyeIcon,
   EyeOffIcon,
@@ -10,6 +11,7 @@ import {
 import { toast } from "sonner";
 
 import {
+  consolidateContest,
   getContestResults,
   publishContestResults,
   type ContestResultRow,
@@ -17,7 +19,6 @@ import {
   unpublishContestResults,
 } from "@/lib/contests-api";
 import { CONTEST_STATE_LABELS, gradeLabel } from "@/lib/contest-schema";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,15 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Sin empezar",
@@ -44,7 +37,7 @@ const STATUS_LABEL: Record<string, string> = {
   finished: "Terminado",
 };
 
-type VisibilityAction = "publish" | "unpublish";
+type VisibilityAction = "publish" | "unpublish" | "consolidate";
 
 const VISIBILITY_COPY: Record<
   VisibilityAction,
@@ -56,6 +49,13 @@ const VISIBILITY_COPY: Record<
       "Los participantes podrán consultar la información habilitada. Revisa los puntajes y el ranking antes de continuar.",
     confirm: "Publicar resultados",
     success: "Resultados publicados. Los participantes ya pueden verlos.",
+  },
+  consolidate: {
+    title: "¿Calcular los resultados?",
+    description:
+      "Se cierran los intentos que quedaron abiertos y se arma el ranking de cada categoría.",
+    confirm: "Calcular resultados",
+    success: "Resultados calculados. Revísalos antes de publicarlos.",
   },
   unpublish: {
     title: "¿Ocultar los resultados?",
@@ -94,6 +94,7 @@ function csvCell(value: string | number | null) {
 
 function exportCsv(results: ContestResults) {
   const header = [
+    "Categoria",
     "Posicion",
     "Nombres",
     "Apellidos",
@@ -110,6 +111,7 @@ function exportCsv(results: ContestResults) {
   ];
   const lines = results.rows.map((row) =>
     [
+      row.category ?? "",
       row.rankPosition,
       row.memberOneFirstName,
       row.memberOneLastName,
@@ -145,19 +147,16 @@ export function ContestResults() {
   );
   const [results, setResults] = useState<ContestResults | null>(null);
   const [loading, setLoading] = useState(Boolean(contestId));
+  const [category, setCategory] = useState("");
   const [confirming, setConfirming] = useState<VisibilityAction | null>(null);
-  const [changingVisibility, setChangingVisibility] = useState(false);
+  const [changing, setChanging] = useState(false);
 
   useEffect(() => {
-    if (!contestId) {
-      return;
-    }
-    let active = true;
+    if (!contestId) return;
+    let alive = true;
     void getContestResults(contestId)
       .then((data) => {
-        if (active) {
-          setResults(data);
-        }
+        if (alive) setResults(data);
       })
       .catch((error) => {
         toast.error(
@@ -167,41 +166,39 @@ export function ContestResults() {
         );
       })
       .finally(() => {
-        if (active) {
-          setLoading(false);
-        }
+        if (alive) setLoading(false);
       });
     return () => {
-      active = false;
+      alive = false;
     };
   }, [contestId]);
 
-  const changeVisibility = async () => {
-    if (!contestId || !confirming) {
-      return;
-    }
-
+  const runAction = async () => {
+    if (!contestId || !confirming) return;
     const action = confirming;
     setConfirming(null);
-    setChangingVisibility(true);
+    setChanging(true);
 
     try {
-      const updated =
-        action === "publish"
-          ? await publishContestResults(contestId)
-          : await unpublishContestResults(contestId);
-      setResults((current) =>
-        current ? { ...current, state: updated.state } : current,
-      );
+      if (action === "consolidate") {
+        await consolidateContest(contestId);
+        setResults(await getContestResults(contestId));
+      } else {
+        const updated =
+          action === "publish"
+            ? await publishContestResults(contestId)
+            : await unpublishContestResults(contestId);
+        setResults((current) =>
+          current ? { ...current, state: updated.state } : current,
+        );
+      }
       toast.success(VISIBILITY_COPY[action].success);
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "No se pudo cambiar la visibilidad de los resultados.",
+        error instanceof Error ? error.message : "No se pudo completar.",
       );
     } finally {
-      setChangingVisibility(false);
+      setChanging(false);
     }
   };
 
@@ -215,142 +212,179 @@ export function ContestResults() {
 
   if (!results) {
     return (
-      <Alert>
-        <AlertTitle>Desafío no encontrado</AlertTitle>
-        <AlertDescription>
-          Abre los resultados desde un desafío.
-        </AlertDescription>
-      </Alert>
+      <p className="text-sm text-muted-foreground">
+        No se encontró el desafío.{" "}
+        <a href="/desafios" className="underline underline-offset-4">
+          Volver a Desafíos
+        </a>
+      </p>
     );
   }
 
+  const tabs = results.categories.filter((item) =>
+    results.rows.some((row) => row.category === item),
+  );
+  const activeCategory = tabs.includes(category) ? category : (tabs[0] ?? "");
+  const rows = results.rows.filter((row) => row.category === activeCategory);
+
   return (
-    <>
-      <Card>
-        <CardHeader className="border-b">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-col items-start gap-2">
-              <CardTitle>{results.contestTitle}</CardTitle>
-              <CardDescription>
-                {results.rows.length} participante(s) · {results.taskCount}{" "}
-                tarea(s)
-              </CardDescription>
-              <Badge variant="secondary">
-                {CONTEST_STATE_LABELS[results.state]}
-              </Badge>
-            </div>
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
-              {results.state === "consolidada" && (
-                <Button
-                  type="button"
-                  disabled={changingVisibility}
-                  className="w-full sm:w-auto"
-                  onClick={() => setConfirming("publish")}
-                >
-                  <EyeIcon data-icon="inline-start" />
-                  Publicar resultados
-                </Button>
-              )}
-              {results.state === "publicada" && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={changingVisibility}
-                  className="w-full sm:w-auto"
-                  onClick={() => setConfirming("unpublish")}
-                >
-                  <EyeOffIcon data-icon="inline-start" />
-                  Ocultar resultados
-                </Button>
-              )}
-              <Button
-                type="button"
-                variant="outline"
-                disabled={results.rows.length === 0}
-                className="w-full sm:w-auto"
-                onClick={() => exportCsv(results)}
-              >
-                <DownloadIcon data-icon="inline-start" />
-                Exportar CSV
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-6">
-          {results.rows.length === 0 ? (
-            <Alert>
-              <AlertTitle>Aún no hay participantes</AlertTitle>
-              <AlertDescription>
-                Cuando los estudiantes entren y rindan, aparecerán aquí.
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left">
-                    <th className="px-3 py-2 font-semibold">#</th>
-                    <th className="px-3 py-2 font-semibold">Participante</th>
-                    <th className="px-3 py-2 font-semibold">Curso</th>
-                    <th className="px-3 py-2 font-semibold">Grupo</th>
-                    <th className="px-3 py-2 font-semibold">Estado</th>
-                    <th className="px-3 py-2 text-right font-semibold">
-                      Tiempo
-                    </th>
-                    <th className="px-3 py-2 text-right font-semibold">
-                      Puntaje
-                    </th>
-                    <th className="px-3 py-2 text-right font-semibold">
-                      Correctas
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {results.rows.map((row) => (
-                    <tr key={row.teamId} className="border-b">
-                      <td className="px-3 py-2 font-medium">
-                        {row.rankPosition ?? "—"}
-                      </td>
-                      <td className="px-3 py-2">{teamName(row)}</td>
-                      <td className="px-3 py-2 text-muted-foreground">
-                        {gradeLabel(row.grade)}
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground">
-                        {row.groupName}
-                      </td>
-                      <td className="px-3 py-2">
-                        <Badge
-                          variant={
-                            row.status === "finished" ? "secondary" : "outline"
-                          }
-                        >
-                          {STATUS_LABEL[row.status] ?? row.status}
-                        </Badge>
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
-                        {formatElapsed(row.elapsedSeconds)}
-                      </td>
-                      <td className="px-3 py-2 text-right font-medium">
-                        {row.totalScore ?? "—"}
-                      </td>
-                      <td className="px-3 py-2 text-right text-muted-foreground">
-                        {row.correctCount ?? "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-5">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h1 className="font-heading text-2xl font-semibold break-words">
+            {results.contestTitle}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">
+              {CONTEST_STATE_LABELS[results.state]}
+            </span>
+            {" · "}
+            {results.rows.length}{" "}
+            {results.rows.length === 1 ? "participante" : "participantes"}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {results.state === "cerrada" && (
+            <Button
+              type="button"
+              disabled={changing}
+              onClick={() => setConfirming("consolidate")}
+            >
+              <CalculatorIcon data-icon="inline-start" />
+              Calcular resultados
+            </Button>
+          )}
+          {results.state === "consolidada" && (
+            <Button
+              type="button"
+              disabled={changing}
+              onClick={() => setConfirming("publish")}
+            >
+              <EyeIcon data-icon="inline-start" />
+              Publicar resultados
+            </Button>
+          )}
+          {results.state === "publicada" && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={changing}
+              onClick={() => setConfirming("unpublish")}
+            >
+              <EyeOffIcon data-icon="inline-start" />
+              Ocultar resultados
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            disabled={results.rows.length === 0}
+            onClick={() => exportCsv(results)}
+          >
+            <DownloadIcon data-icon="inline-start" />
+            CSV
+          </Button>
+        </div>
+      </div>
+
+      {results.rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          Todavía no hay participantes. Aparecen aquí cuando se inscriben.
+        </p>
+      ) : (
+        <>
+          {tabs.length > 1 && (
+            <div
+              role="tablist"
+              aria-label="Categoría"
+              className="-mx-4 flex gap-5 overflow-x-auto px-4 shadow-[inset_0_-1px_0_var(--border)] sm:mx-0 sm:px-0"
+            >
+              {tabs.map((item) => {
+                const selected = item === activeCategory;
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => setCategory(item)}
+                    className="relative flex shrink-0 items-baseline gap-1.5 py-2.5 text-sm whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground aria-selected:font-medium aria-selected:text-foreground"
+                  >
+                    {item}
+                    <span className="text-xs tabular-nums opacity-60">
+                      {
+                        results.rows.filter((row) => row.category === item)
+                          .length
+                      }
+                    </span>
+                    {selected && (
+                      <span
+                        aria-hidden="true"
+                        className="absolute inset-x-0 bottom-0 h-0.5 bg-primary"
+                      />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
-        </CardContent>
-      </Card>
+          <p className="text-sm text-muted-foreground">
+            {activeCategory}: {results.taskCounts[activeCategory] ?? 0}{" "}
+            preguntas
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-muted-foreground">
+                  <th className="px-3 py-2 font-medium">#</th>
+                  <th className="px-3 py-2 font-medium">Participante</th>
+                  <th className="px-3 py-2 font-medium">Curso</th>
+                  <th className="px-3 py-2 font-medium">Grupo</th>
+                  <th className="px-3 py-2 font-medium">Estado</th>
+                  <th className="px-3 py-2 text-right font-medium">Tiempo</th>
+                  <th className="px-3 py-2 text-right font-medium">Puntaje</th>
+                  <th className="px-3 py-2 text-right font-medium">
+                    Correctas
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.teamId} className="border-b">
+                    <td className="px-3 py-2 font-medium">
+                      {row.rankPosition ?? "—"}
+                    </td>
+                    <td className="px-3 py-2">{teamName(row)}</td>
+                    <td className="px-3 py-2 text-muted-foreground">
+                      {gradeLabel(row.grade)}
+                    </td>
+                    <td className="px-3 py-2 text-muted-foreground">
+                      {row.groupName}
+                    </td>
+                    <td className="px-3 py-2 text-muted-foreground">
+                      {STATUS_LABEL[row.status] ?? row.status}
+                    </td>
+                    <td className="px-3 py-2 text-right text-muted-foreground tabular-nums">
+                      {formatElapsed(row.elapsedSeconds)}
+                    </td>
+                    <td className="px-3 py-2 text-right font-medium tabular-nums">
+                      {row.totalScore ?? "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right text-muted-foreground tabular-nums">
+                      {row.correctCount ?? "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       <AlertDialog
         open={confirming !== null}
         onOpenChange={(open) => {
-          if (!open) {
-            setConfirming(null);
-          }
+          if (!open) setConfirming(null);
         }}
       >
         <AlertDialogContent>
@@ -364,12 +398,12 @@ export function ContestResults() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={changeVisibility}>
+            <AlertDialogAction onClick={runAction}>
               {confirming ? VISIBILITY_COPY[confirming].confirm : ""}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </div>
   );
 }

@@ -1,8 +1,5 @@
-import {
-  buildAgeSummary,
-  type CategoryItem,
-  type DifficultyKey,
-} from "@/lib/task-schema";
+import { difficultyStyles } from "@/lib/difficulty";
+import { type CategoryItem, type DifficultyKey } from "@/lib/task-schema";
 
 /**
  * Categorías oficiales de Bebras Bolivia con el rango de edad del que cada una
@@ -46,13 +43,17 @@ export const SCHOOL_GRADES = [
 
 export type SchoolGrade = (typeof SCHOOL_GRADES)[number];
 
-export function gradesForCategory(category: string) {
-  if (!category) {
-    return [...SCHOOL_GRADES];
-  }
-
-  return SCHOOL_GRADES.filter((grade) => grade.category === category);
+/** Cursos que admite un desafío; sin categorías, los doce. */
+export function gradesForCategories(categories: readonly string[]) {
+  const grades = SCHOOL_GRADES.filter((grade) =>
+    categories.includes(grade.category),
+  );
+  return grades.length > 0 ? grades : [...SCHOOL_GRADES];
 }
+
+export const CATEGORY_NAMES: string[] = BEBRAS_CATEGORIES.map(
+  (category) => category.name,
+);
 
 export function gradeLabel(value: string | null) {
   return SCHOOL_GRADES.find((grade) => grade.value === value)?.label ?? "—";
@@ -83,6 +84,7 @@ export type ContestTaskSummary = {
 
 export type StoredContestTask = {
   id: string;
+  category: string;
   position: number;
   taskId: string;
   difficulty: TaskDifficulty;
@@ -94,6 +96,7 @@ export type StoredContestTask = {
 
 export type ContestTaskConfigInput = {
   taskId: string;
+  category: string;
 };
 
 /** Puntajes estándar de Bebras: el punto de partida, editable por desafío. */
@@ -105,23 +108,12 @@ export const BEBRAS_SCORING = {
 
 export const DIFFICULTY_KEYS = ["easy", "medium", "hard"] as const;
 
-/**
- * Verde, amarillo y rojo: el código de color con el que Bebras marca la
- * dificultad. Se lee de un vistazo al armar la mezcla de un desafío.
- */
-export const DIFFICULTY_BADGE_CLASS = {
-  easy: "border-emerald-600/40 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-400/15 dark:text-emerald-300",
-  medium:
-    "border-amber-600/40 bg-amber-500/10 text-amber-700 dark:border-amber-400/40 dark:bg-amber-400/15 dark:text-amber-300",
-  hard: "border-red-600/40 bg-red-500/10 text-red-700 dark:border-red-400/40 dark:bg-red-400/15 dark:text-red-300",
-} as const satisfies Record<(typeof DIFFICULTY_KEYS)[number], string>;
-
 export function difficultyLabel(value: string) {
   return isTaskDifficulty(value) ? BEBRAS_SCORING[value].label : "";
 }
 
 export function difficultyBadgeClass(value: string) {
-  return isTaskDifficulty(value) ? DIFFICULTY_BADGE_CLASS[value] : "";
+  return difficultyStyles[value]?.className ?? "";
 }
 
 export type ContestScoring = Record<
@@ -192,14 +184,16 @@ export type QuestionDisplayMode = "one_by_one" | "all";
 export type StoredContest = {
   id: string;
   title: string;
-  category: string;
+  categories: string[];
   durationMinutes: number;
   registrationStartsAt: string | null;
   registrationEndsAt: string | null;
   /** El calendario se define cuando el organizador quiere; sin él no se publica. */
   startsAt: string | null;
   endsAt: string | null;
-  initialScore: number;
+  /** Cuándo se publican solos los resultados; sin fecha, al cerrar la rendición. */
+  resultsAt: string | null;
+  initialScores: Record<string, number>;
   scoring: ContestScoring;
   questionDisplayMode: QuestionDisplayMode;
   allowPairs: boolean;
@@ -207,6 +201,9 @@ export type StoredContest = {
   showFeedback: boolean;
   showSolutions: boolean;
   showTotalScore: boolean;
+  showScoreOnSubmit: boolean;
+  showFeedbackOnSubmit: boolean;
+  showSolutionsOnSubmit: boolean;
   publishedAt: string | null;
   suspendedAt: string | null;
   consolidatedAt: string | null;
@@ -221,12 +218,13 @@ export type StoredContest = {
 
 export type ContestDraftInput = {
   title: string;
-  category: string;
+  categories: string[];
   durationMinutes: number;
   registrationStartsAt: string;
   registrationEndsAt: string;
   startsAt: string;
   endsAt: string;
+  resultsAt: string;
   scoring: ContestScoring;
   questionDisplayMode: QuestionDisplayMode;
   allowPairs: boolean;
@@ -234,18 +232,21 @@ export type ContestDraftInput = {
   showFeedback: boolean;
   showSolutions: boolean;
   showTotalScore: boolean;
+  showScoreOnSubmit: boolean;
+  showFeedbackOnSubmit: boolean;
+  showSolutionsOnSubmit: boolean;
   tasks: ContestTaskConfigInput[];
 };
 
 export const CONTEST_STATE_LABELS: Record<ContestState, string> = {
   borrador: "Borrador",
-  programada: "Programado",
-  inscripcion: "Inscripción",
-  preparacion: "Preparación",
-  abierta: "Abierto",
-  suspendida: "Suspendido",
-  cerrada: "Cerrado",
-  consolidada: "Consolidado",
+  programada: "Publicado",
+  inscripcion: "Inscripción abierta",
+  preparacion: "Inscripción cerrada",
+  abierta: "En curso",
+  suspendida: "Pausado",
+  cerrada: "Terminado",
+  consolidada: "Resultados listos",
   publicada: "Resultados publicados",
 };
 
@@ -267,24 +268,6 @@ export function formatContestWindow(
     dateStyle: "short",
     timeStyle: "short",
   })}`;
-}
-
-export function formatContestPhaseWindow(
-  registrationStartsAt: string | null,
-  registrationEndsAt: string | null,
-  startsAt: string | null,
-  endsAt: string | null,
-) {
-  const registration =
-    registrationStartsAt && registrationEndsAt
-      ? `Inscripción: ${formatContestWindow(registrationStartsAt, registrationEndsAt)}`
-      : "Inscripción: calendario anterior";
-
-  return `${registration} · Rendición: ${formatContestWindow(startsAt, endsAt)}`;
-}
-
-export function formatContestTaskSummary(task: ContestTaskSummary) {
-  return `${buildAgeSummary(task.difficulties)} · ${task.categories.join(", ") || "Sin área"}`;
 }
 
 export function toDatetimeLocalValue(value: string) {
