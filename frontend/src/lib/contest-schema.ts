@@ -203,6 +203,7 @@ export type StoredContest = {
   scoring: ContestScoring;
   questionDisplayMode: QuestionDisplayMode;
   allowPairs: boolean;
+  shuffleOptions: boolean;
   showFeedback: boolean;
   showSolutions: boolean;
   showTotalScore: boolean;
@@ -229,6 +230,7 @@ export type ContestDraftInput = {
   scoring: ContestScoring;
   questionDisplayMode: QuestionDisplayMode;
   allowPairs: boolean;
+  shuffleOptions: boolean;
   showFeedback: boolean;
   showSolutions: boolean;
   showTotalScore: boolean;

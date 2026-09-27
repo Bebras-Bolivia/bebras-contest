@@ -1,24 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { NativeSelect } from "@/components/ui/native-select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ImageUploadButton } from "@/components/image-upload-button";
+import type { ReactNode } from "react";
+import { ImagePlusIcon, MinusIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
-  StateGridPlayer,
-  TextClozePlayer,
-} from "@/components/assignment-player";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { StateGridPlayer } from "@/components/assignment-player";
 import {
   collectTaskBlankIds,
+  type AssignmentImage,
   type AssignmentKey,
   type AssignmentOption,
   type GridConfig,
   type ClozeConfig,
 } from "@/lib/assignment-answers";
 import { createContentImages, type ContentBlock } from "@/lib/task-schema";
+import { cn } from "@/lib/utils";
 
 export function initialGrid(): GridConfig {
   return {
@@ -29,24 +29,14 @@ export function initialGrid(): GridConfig {
       id: crypto.randomUUID(),
       label: String(i + 1),
     })),
-    states: ["Estado 1", "Estado 2"].map((label) => ({
-      id: crypto.randomUUID(),
-      label,
-      image: null,
-      limit: null,
-    })),
+    states: [],
   };
 }
 export function initialCloze(): ClozeConfig {
   return {
     version: 1,
     blanks: [],
-    options: ["Opción 1", "Opción 2"].map((label) => ({
-      id: crypto.randomUUID(),
-      label,
-      image: null,
-      limit: 1,
-    })),
+    options: [],
   };
 }
 /** Keep inactive metadata in the draft so deleting a blank and undoing restores it. */
@@ -77,80 +67,36 @@ export function activeKey(key: AssignmentKey, ids: string[]): AssignmentKey {
   };
 }
 
-export function AssignmentEditor({
-  kind,
-  config,
+const nameFromFile = (name: string) =>
+  name
+    .replace(/\.[^.]+$/, "")
+    .replace(/[-_]+/g, " ")
+    .trim() || "Estado";
+
+export function StateGridEditor({
+  config: grid,
   answerKey,
-  blocks,
   onChange,
-  selectedBlank = "",
-  onSelectBlank,
 }: {
-  kind: "state_grid" | "text_cloze";
-  config: GridConfig | ClozeConfig;
+  config: GridConfig;
   answerKey: AssignmentKey;
-  blocks: ContentBlock[];
-  onChange: (config: GridConfig | ClozeConfig, key: AssignmentKey) => void;
-  selectedBlank?: string;
-  onSelectBlank?: (id: string) => void;
+  onChange: (config: GridConfig, key: AssignmentKey) => void;
 }) {
-  const [solutionIndex, setSolutionIndex] = useState(0);
-  const blankPanelRef = useRef<HTMLDetailsElement>(null);
-  useEffect(() => {
-    if (kind === "text_cloze" && selectedBlank && blankPanelRef.current) {
-      blankPanelRef.current.open = true;
-    }
-  }, [kind, selectedBlank]);
-  const grid = kind === "state_grid" ? (config as GridConfig) : null;
-  const cloze =
-    kind === "text_cloze" ? activeCloze(config as ClozeConfig, blocks) : null;
-  const options = grid?.states ?? cloze!.options;
-  const index = Math.min(
-    solutionIndex,
-    Math.max(0, answerKey.acceptedAssignments.length - 1),
-  );
-  const blank =
-    cloze?.blanks.find((entry) => entry.id === selectedBlank) ??
-    cloze?.blanks[0];
-  function setOptions(next: AssignmentOption[]) {
-    const previousIds = options.map((option) => option.id);
-    const nextIds = next.map((option) => option.id);
+  const states = grid.states;
+  const setStates = (next: AssignmentOption[]) =>
+    onChange({ ...grid, states: next }, answerKey);
+  const setCellLabel = (id: string, label: string) =>
     onChange(
-      grid
-        ? { ...grid, states: next }
-        : {
-            ...(config as ClozeConfig),
-            options: next,
-            blanks: (config as ClozeConfig).blanks.map((entry) => ({
-              ...entry,
-              allowedOptionIds: previousIds.every((id) =>
-                entry.allowedOptionIds.includes(id),
-              )
-                ? nextIds
-                : entry.allowedOptionIds.filter((id) => nextIds.includes(id)),
-            })),
-          },
+      {
+        ...grid,
+        cells: grid.cells.map((cell) =>
+          cell.id === id ? { ...cell, label } : cell,
+        ),
+      },
       answerKey,
     );
-  }
-  function updateOption(id: string, update: Partial<AssignmentOption>) {
-    setOptions(
-      options.map((option) =>
-        option.id === id ? { ...option, ...update } : option,
-      ),
-    );
-  }
   function resize(rows: number, columns: number) {
-    if (
-      !grid ||
-      !Number.isInteger(rows) ||
-      !Number.isInteger(columns) ||
-      rows < 1 ||
-      columns < 1 ||
-      rows > 12 ||
-      columns > 12
-    )
-      return;
+    if (rows < 1 || columns < 1 || rows > 12 || columns > 12) return;
     onChange(
       {
         ...grid,
@@ -168,300 +114,235 @@ export function AssignmentEditor({
   function setAnswer(value: Record<string, string>) {
     const solutions = [...answerKey.acceptedAssignments];
     // Merge inactive answers back for undo; only current positions are serialized.
-    const ids =
-      grid?.cells.map((cell) => cell.id) ??
-      cloze!.blanks.map((entry) => entry.id);
+    const ids = grid.cells.map((cell) => cell.id);
     const inactive = Object.fromEntries(
-      Object.entries(solutions[index] ?? {}).filter(
-        ([id]) => !ids.includes(id),
-      ),
+      Object.entries(solutions[0] ?? {}).filter(([id]) => !ids.includes(id)),
     );
-    solutions[index] = { ...inactive, ...value };
-    const nextConfig = cloze
-      ? {
-          ...cloze,
-          blanks: [
-            ...(config as ClozeConfig).blanks.filter(
-              (entry) => !ids.includes(entry.id),
-            ),
-            ...cloze.blanks,
-          ],
-        }
-      : config;
-    onChange(nextConfig, { version: 1, acceptedAssignments: solutions });
+    solutions[0] = { ...inactive, ...value };
+    onChange(grid, { version: 1, acceptedAssignments: solutions });
   }
   const value =
     activeKey(
       answerKey,
-      grid?.cells.map((cell) => cell.id) ??
-        cloze!.blanks.map((entry) => entry.id),
-    ).acceptedAssignments[index] ?? {};
+      grid.cells.map((cell) => cell.id),
+    ).acceptedAssignments[0] ?? {};
+
   return (
-    <div className="flex flex-col gap-5">
-      {grid && (
-        <FieldGroup className="grid grid-cols-2 gap-3">
-          <Field>
-            <FieldLabel htmlFor="grid-rows">Filas</FieldLabel>
-            <Input
-              id="grid-rows"
-              type="number"
-              min={1}
-              max={12}
-              value={grid.rows}
-              onChange={(event) =>
-                resize(Number(event.target.value), grid.columns)
-              }
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="grid-columns">Columnas</FieldLabel>
-            <Input
-              id="grid-columns"
-              type="number"
-              min={1}
-              max={12}
-              value={grid.columns}
-              onChange={(event) =>
-                resize(grid.rows, Number(event.target.value))
-              }
-            />
-          </Field>
-        </FieldGroup>
-      )}
-      {cloze && (
-        <p className="text-sm text-muted-foreground">
-          Inserta los huecos desde la barra del texto. Aquí escribe las opciones
-          y completa una respuesta correcta.
-        </p>
-      )}
-      <FieldGroup className="gap-3">
-        {options.map((option, optionIndex) => (
-          <Field key={option.id} className="gap-2">
-            <FieldLabel htmlFor={`option-${option.id}`}>
-              {grid ? "Estado" : "Opción"} {optionIndex + 1}
-            </FieldLabel>
-            <div className="flex flex-wrap items-center gap-2">
-              {option.image && (
-                <img
-                  src={option.image.url}
-                  alt={option.label}
-                  className="size-10 object-contain"
-                />
-              )}
-              <Input
-                id={`option-${option.id}`}
-                className="min-w-40 flex-1"
-                value={option.label}
-                onChange={(event) =>
-                  updateOption(option.id, { label: event.target.value })
-                }
-              />
-              <Input
-                type="number"
-                min={0}
-                max={144}
-                className="w-28"
-                aria-label={`Cantidad de ${option.label}`}
-                placeholder="Ilimitada"
-                value={option.limit ?? ""}
-                onChange={(event) =>
-                  updateOption(option.id, {
-                    limit:
-                      event.target.value === ""
-                        ? null
-                        : Number(event.target.value),
-                  })
-                }
-              />
-              <ImageUploadButton
-                onChange={async (event) => {
-                  const images = await createContentImages(event.target.files);
-                  if (images[0]) updateOption(option.id, { image: images[0] });
-                }}
-              />
-              {option.image && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => updateOption(option.id, { image: null })}
-                >
-                  Quitar imagen
-                </Button>
-              )}
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                aria-label={`Eliminar ${option.label}`}
-                disabled={options.length === 1}
-                onClick={() =>
-                  setOptions(options.filter((entry) => entry.id !== option.id))
-                }
-              >
-                Eliminar
-              </Button>
-            </div>
-          </Field>
-        ))}
-      </FieldGroup>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="self-start"
-        disabled={options.length >= 64}
-        onClick={() =>
-          setOptions([
-            ...options,
-            {
-              id: crypto.randomUUID(),
-              label: `${grid ? "Estado" : "Opción"} ${options.length + 1}`,
-              image: null,
-              limit: grid ? null : 1,
-            },
-          ])
-        }
-      >
-        Añadir {grid ? "estado" : "opción"}
-      </Button>
-      <details ref={blankPanelRef} className="text-sm">
-        <summary className="cursor-pointer">
-          {grid ? "Etiquetas de las casillas" : "Opciones permitidas por hueco"}
-        </summary>
-        {grid ? (
-          <FieldGroup className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {grid.cells.map((cell, i) => (
-              <Field key={cell.id}>
-                <FieldLabel htmlFor={`cell-${cell.id}`}>
-                  Casilla {i + 1}
-                </FieldLabel>
-                <Input
-                  id={`cell-${cell.id}`}
-                  value={cell.label}
-                  onChange={(event) =>
-                    onChange(
-                      {
-                        ...grid,
-                        cells: grid.cells.map((entry) =>
-                          entry.id === cell.id
-                            ? { ...entry, label: event.target.value }
-                            : entry,
-                        ),
-                      },
-                      answerKey,
-                    )
-                  }
-                />
-              </Field>
-            ))}
-          </FieldGroup>
-        ) : (
-          blank && (
-            <div className="mt-3 flex flex-col gap-2">
-              <NativeSelect
-                aria-label="Configurar hueco"
-                value={blank.id}
-                onChange={(event) => onSelectBlank?.(event.target.value)}
-              >
-                {cloze!.blanks.map((entry, i) => (
-                  <option key={entry.id} value={entry.id}>
-                    Hueco {i + 1}
-                  </option>
-                ))}
-              </NativeSelect>
-              {options.map((option) => (
-                <Field key={option.id} orientation="horizontal">
-                  <Checkbox
-                    id={`allow-${option.id}`}
-                    checked={blank.allowedOptionIds.includes(option.id)}
-                    onCheckedChange={(checked) => {
-                      const updated = {
-                        ...blank,
-                        allowedOptionIds: checked
-                          ? [...blank.allowedOptionIds, option.id]
-                          : blank.allowedOptionIds.filter(
-                              (id) => id !== option.id,
-                            ),
-                      };
-                      onChange(
-                        {
-                          ...(config as ClozeConfig),
-                          blanks: [
-                            ...(config as ClozeConfig).blanks.filter(
-                              (entry) => entry.id !== blank.id,
-                            ),
-                            updated,
-                          ],
-                        },
-                        answerKey,
-                      );
-                    }}
-                  />
-                  <FieldLabel htmlFor={`allow-${option.id}`}>
-                    {option.label}
-                  </FieldLabel>
-                </Field>
-              ))}
-            </div>
-          )
-        )}
-      </details>
-      <div className="flex flex-wrap items-center gap-2">
-        <NativeSelect
-          aria-label="Solución correcta"
-          value={index}
-          onChange={(event) => setSolutionIndex(Number(event.target.value))}
-        >
-          {answerKey.acceptedAssignments.map((_, i) => (
-            <option key={i} value={i}>
-              {i === 0 ? "Respuesta correcta" : `Alternativa ${i}`}
-            </option>
-          ))}
-        </NativeSelect>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setSolutionIndex(answerKey.acceptedAssignments.length);
-            onChange(config, {
-              version: 1,
-              acceptedAssignments: [...answerKey.acceptedAssignments, {}],
-            });
-          }}
-        >
-          Añadir solución
-        </Button>
-        {answerKey.acceptedAssignments.length > 1 && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              onChange(config, {
-                version: 1,
-                acceptedAssignments: answerKey.acceptedAssignments.filter(
-                  (_, i) => i !== index,
-                ),
-              });
-              setSolutionIndex(0);
-            }}
-          >
-            Eliminar solución
-          </Button>
-        )}
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+        <Stepper
+          label="filas"
+          value={grid.rows}
+          onChange={(rows) => resize(rows, grid.columns)}
+        />
+        <Stepper
+          label="columnas"
+          value={grid.columns}
+          onChange={(columns) => resize(grid.rows, columns)}
+        />
       </div>
-      {grid ? (
-        <StateGridPlayer config={grid} value={value} onChange={setAnswer} />
-      ) : (
-        <TextClozePlayer
-          config={cloze!}
-          blocks={blocks}
+
+      <section className="flex flex-col gap-2">
+        <h3 className="text-sm font-semibold">Estados</h3>
+        <p className="text-xs text-muted-foreground">
+          Cada imagen es un estado que puede tener una casilla.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {states.map((state) => (
+            <StateButton
+              key={state.id}
+              state={state}
+              canRemove={states.length > 1}
+              onReplace={(image) =>
+                setStates(
+                  states.map((entry) =>
+                    entry.id === state.id ? { ...entry, image } : entry,
+                  ),
+                )
+              }
+              onRemove={() =>
+                setStates(states.filter((entry) => entry.id !== state.id))
+              }
+            />
+          ))}
+          {states.length < 64 && (
+            <PickImage
+              label="Agregar un estado"
+              className="flex size-16 flex-col items-center justify-center gap-1 bg-muted/60 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+              onPick={(image) =>
+                setStates([
+                  ...states,
+                  {
+                    id: crypto.randomUUID(),
+                    label: nameFromFile(image.name),
+                    image,
+                    limit: null,
+                  },
+                ])
+              }
+            >
+              <PlusIcon className="size-4" />
+              Estado
+            </PickImage>
+          )}
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h3 className="text-sm font-semibold">Casillas</h3>
+        <p className="text-xs text-muted-foreground">
+          Toca cada casilla y elige su estado. Encima puedes escribir un rótulo
+          que vea el estudiante (opcional).
+        </p>
+        <StateGridPlayer
+          config={grid}
           value={value}
           onChange={setAnswer}
+          renderLabel={(cell, index) => (
+            <input
+              aria-label={`Rótulo de la casilla ${index + 1}`}
+              value={cell.label === String(index + 1) ? "" : cell.label}
+              placeholder={String(index + 1)}
+              onChange={(event) =>
+                setCellLabel(cell.id, event.target.value || String(index + 1))
+              }
+              className="h-7 w-full min-w-0 border-b-2 border-border/30 bg-transparent px-1 text-center text-xs outline-none transition-colors placeholder:text-muted-foreground/50 focus-visible:border-primary"
+            />
+          )}
         />
-      )}
+      </section>
     </div>
+  );
+}
+
+function Stepper({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  const step =
+    "grid size-8 place-items-center text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/60 disabled:opacity-30";
+  return (
+    <div role="group" aria-label={label} className="flex items-center gap-1">
+      <button
+        type="button"
+        aria-label={`Menos ${label}`}
+        disabled={value <= 1}
+        onClick={() => onChange(value - 1)}
+        className={step}
+      >
+        <MinusIcon className="size-4" />
+      </button>
+      <span className="min-w-6 text-center font-semibold tabular-nums">
+        {value}
+      </span>
+      <button
+        type="button"
+        aria-label={`Más ${label}`}
+        disabled={value >= 12}
+        onClick={() => onChange(value + 1)}
+        className={step}
+      >
+        <PlusIcon className="size-4" />
+      </button>
+      <span className="text-muted-foreground">{label}</span>
+    </div>
+  );
+}
+
+function StateButton({
+  state,
+  canRemove,
+  onReplace,
+  onRemove,
+}: {
+  state: AssignmentOption;
+  canRemove: boolean;
+  onReplace: (image: AssignmentImage) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Editar ${state.label}`}
+          className="flex size-16 items-center justify-center bg-muted/60 p-1.5 outline-none transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:ring-2 data-[state=open]:ring-primary"
+        >
+          {state.image ? (
+            <img
+              src={state.image.url}
+              alt=""
+              className="max-h-full max-w-full object-contain mix-blend-multiply"
+            />
+          ) : (
+            <span className="line-clamp-2 text-xs">{state.label}</span>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="flex w-auto items-center gap-2">
+        <PickImage
+          label={`Nueva imagen para ${state.label}`}
+          className={buttonVariants({ variant: "outline", size: "sm" })}
+          onPick={onReplace}
+        >
+          <ImagePlusIcon data-icon="inline-start" />
+          Cambiar imagen
+        </PickImage>
+        {canRemove && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="text-destructive"
+            onClick={onRemove}
+          >
+            <Trash2Icon data-icon="inline-start" />
+            Quitar
+          </Button>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function PickImage({
+  onPick,
+  label,
+  title,
+  className,
+  children,
+}: {
+  onPick: (image: AssignmentImage) => void;
+  label: string;
+  title?: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <label
+      title={title}
+      className={cn(
+        "cursor-pointer transition-colors has-focus-visible:ring-2 has-focus-visible:ring-primary/60",
+        className,
+      )}
+    >
+      <input
+        type="file"
+        accept="image/*"
+        aria-label={label}
+        className="sr-only"
+        onChange={async (event) => {
+          const picked = await createContentImages(event.target.files);
+          event.target.value = "";
+          if (picked[0]) onPick(picked[0]);
+        }}
+      />
+      {children}
+    </label>
   );
 }

@@ -1,12 +1,13 @@
 "use client";
 import {
-  AssignmentEditor,
+  StateGridEditor,
   initialGrid,
   initialCloze,
   activeCloze,
   activeKey,
 } from "@/components/assignment-editor";
 import {
+  collectTaskBlankIds,
   parseAssignmentConfig,
   parseAssignmentKey,
   type GridConfig,
@@ -21,39 +22,22 @@ import {
   type HotspotKey,
 } from "@/lib/image-hotspot";
 
+import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import {
-  useEffect,
-  useId,
-  useMemo,
-  useState,
-  type FormEvent,
-  type ReactNode,
-} from "react";
-import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
+  BracketsIcon,
+  CheckIcon,
+  LightbulbIcon,
+  Grid3x3Icon,
+  ListChecksIcon,
+  MousePointerClickIcon,
+  MoveIcon,
   PlayIcon,
-  PlusIcon,
-  ShieldAlertIcon,
-  Trash2Icon,
+  TextCursorInputIcon,
   UploadIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ImageUploadButton } from "@/components/image-upload-button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   Field,
   FieldContent,
@@ -61,22 +45,26 @@ import {
   FieldError,
   FieldGroup,
   FieldLabel,
-  FieldLegend,
   FieldSet,
 } from "@/components/ui/field";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { countries } from "@/lib/countries";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { cn } from "@/lib/utils";
+import {
+  emptyInformaticsBlock,
+  splitExplanationForEditing,
+} from "@/lib/explanation";
+import { difficultyStyles } from "@/lib/difficulty";
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { DragDropEditor } from "@/components/drag-drop-editor";
+import { MultipleChoiceEditor } from "@/components/multiple-choice-editor";
+import { ClozeEditor, withClozeOptions } from "@/components/cloze-editor";
 import { blankRemovalImpact, nextTargetPosition } from "@/lib/authoring";
 import { TaskContentBuilder } from "@/components/task-content-builder";
 import { FormSection } from "@/components/form-section";
@@ -84,16 +72,17 @@ import {
   dragDropPrimaryPlacements,
   dragDropSignature,
 } from "@/lib/drag-drop-grading";
-import { createTask, updateTask } from "@/lib/tasks-api";
+import { createTask, listTasks, updateTask } from "@/lib/tasks-api";
 import {
   clearTaskDraftForTest,
   readTaskDraftForTest,
   storeTaskDraftForTest,
 } from "@/lib/task-draft-test";
-import { ImageWidthResizer } from "@/components/image-width-resizer";
 import { categoryForAgeRange } from "@/lib/contest-schema";
 import {
   ageRanges,
+  answerTypeLabels,
+  answerTypes,
   buildAgeSummary,
   categories,
   createContentBlock,
@@ -127,15 +116,37 @@ const difficultyOptions = [
   { value: "hard", label: "Difícil" },
 ] as const;
 const minimumAnswerCount = 2;
-const sourceTaskCodePattern = /^\d{4}-[A-Z]{2}(?:-[A-Za-z0-9]+)+$/;
-
+const answerTypeIcons = {
+  multiple_choice: ListChecksIcon,
+  short_text: TextCursorInputIcon,
+  drag_drop: MoveIcon,
+  image_hotspot: MousePointerClickIcon,
+  state_grid: Grid3x3Icon,
+  text_cloze: BracketsIcon,
+} satisfies Record<AnswerType, unknown>;
 type BlocksSection = "bodyBlocks" | "challengeBlocks" | "explanationBlocks";
 
-function sourceTaskCodeIsInvalid(value: string) {
-  const code = value.trim();
-  return (
-    Boolean(code) && (code.length > 64 || !sourceTaskCodePattern.test(code))
-  );
+/**
+ * Año, país y un número correlativo (2024-BR-04). Si la tarea ya tiene un
+ * código de ese año y país se conserva, así las del cuadernillo mantienen el
+ * suyo.
+ */
+async function automaticSourceCode(state: FormState, taskId?: string) {
+  const country = countries
+    .find((entry) => entry.name === state.country)
+    ?.code.toUpperCase();
+  const year = state.year.trim();
+  if (!country || !/^\d{4}$/.test(year)) return "";
+  const prefix = `${year}-${country}-`;
+  if (state.sourceTaskCode.startsWith(prefix)) return state.sourceTaskCode;
+  const tasks = await listTasks().catch(() => []);
+  const numbers = tasks
+    .filter((task) => task.id !== taskId)
+    .map((task) => task.sourceTaskCode ?? "")
+    .filter((code) => code.startsWith(prefix))
+    .map((code) => parseInt(code.slice(prefix.length), 10))
+    .filter(Number.isFinite);
+  return `${prefix}${String(Math.max(0, ...numbers) + 1).padStart(2, "0")}`;
 }
 
 type FormState = {
@@ -174,6 +185,7 @@ type FormState = {
   dragDropTargets: StoredTaskDragDropTarget[];
   dragDropSolutions: StoredTaskDragDropSolution[];
   explanationBlocks: ContentBlock[];
+  informaticsBlock: ContentBlock;
 };
 
 type TaskUploadFormProps = {
@@ -245,10 +257,12 @@ const createInitialState = (
     explanationBlocks: [
       { ...createContentBlock("text"), id: `${idPrefix}-explanation` },
     ],
+    informaticsBlock: emptyInformaticsBlock(idPrefix),
   };
 };
 
 function createStateFromTask(task: StoredTask): FormState {
+  const explanation = splitExplanationForEditing(task.explanationBlocks ?? []);
   const nextOptions = createInitialOptions();
   const hasDragDropConfiguration =
     task.dragDropItems.length > 0 && task.dragDropTargets.length > 0;
@@ -343,9 +357,8 @@ function createStateFromTask(task: StoredTask): FormState {
     dragDropSolutions: hasDragDropConfiguration
       ? (task.dragDropSolutions ?? [])
       : [],
-    explanationBlocks: task.explanationBlocks?.length
-      ? task.explanationBlocks
-      : [createContentBlock("text")],
+    explanationBlocks: explanation.solution,
+    informaticsBlock: explanation.informaticsBlock,
   };
 }
 
@@ -359,11 +372,11 @@ function validateForm(state: FormState) {
   const nonEmptyChallengeBlocks = getNonEmptyBlocks(state.challengeBlocks);
 
   if (!state.title.trim()) {
-    errors.push("El título es obligatorio.");
+    errors.push("Falta el título.");
   }
 
   if (state.categories.length === 0) {
-    errors.push("Debes seleccionar al menos un área de contenido.");
+    errors.push("Falta el área de contenido.");
   }
 
   const selectedRanges = ageRanges.filter(
@@ -371,7 +384,7 @@ function validateForm(state: FormState) {
   );
 
   if (selectedRanges.length === 0) {
-    errors.push("Debes activar al menos un rango de edad.");
+    errors.push("Falta la dificultad en alguna categoría.");
   }
 
   if (selectedRanges.some((range) => !state.difficulties[range])) {
@@ -379,16 +392,16 @@ function validateForm(state: FormState) {
   }
 
   if (nonEmptyBodyBlocks.length === 0) {
-    errors.push("Debes agregar contenido en el cuerpo.");
+    errors.push("Falta el enunciado.");
   }
 
   if (nonEmptyChallengeBlocks.length === 0) {
-    errors.push("Debes agregar contenido en la pregunta o desafío.");
+    errors.push("Falta la pregunta.");
   }
 
   if (state.answerType === "multiple_choice") {
     if (completedOptions.length < minimumAnswerCount) {
-      errors.push("Debes completar al menos dos respuestas.");
+      errors.push("Faltan al menos dos opciones.");
     }
 
     const activeCorrectOptions = state.correctOptions.filter((option) =>
@@ -400,10 +413,10 @@ function validateForm(state: FormState) {
 
     if (state.multipleChoiceCorrectnessMode === "single") {
       if (activeCorrectOptions.length !== 1) {
-        errors.push("Debes marcar exactamente una respuesta correcta.");
+        errors.push("Marca la respuesta correcta.");
       }
     } else if (activeCorrectOptions.length < 2) {
-      errors.push("Debes marcar al menos dos respuestas correctas.");
+      errors.push("Marca al menos dos respuestas correctas.");
     }
 
     if (activeCorrectOptions.length > completedCorrectOptions.length) {
@@ -421,7 +434,7 @@ function validateForm(state: FormState) {
   }
 
   if (state.answerType === "short_text" && !state.shortAnswer.trim()) {
-    errors.push("Debes definir la respuesta corta esperada.");
+    errors.push("Falta la respuesta correcta.");
   }
 
   if (state.answerType === "image_hotspot") {
@@ -462,25 +475,17 @@ function validateForm(state: FormState) {
     errors.push("El año del desafío debe tener cuatro cifras.");
   }
 
-  const sourceTaskCode = state.sourceTaskCode.trim();
-
-  if (sourceTaskCodeIsInvalid(sourceTaskCode)) {
-    errors.push(
-      "El código original debe tener un formato como 2024-DE-04a y no superar 64 caracteres.",
-    );
-  }
-
   if (state.answerType === "drag_drop") {
     if (!state.dragDropBackground) {
-      errors.push("Debes agregar la imagen de fondo para arrastrar y soltar.");
+      errors.push("Falta la imagen de fondo.");
     }
 
     if (state.dragDropItems.length === 0) {
-      errors.push("Debes agregar al menos un objeto arrastrable.");
+      errors.push("Falta al menos una pieza.");
     }
 
     if (state.dragDropTargets.length === 0) {
-      errors.push("Debes agregar al menos un destino de encaje.");
+      errors.push("Arrastra cada pieza a su lugar.");
     }
 
     for (const item of state.dragDropItems) {
@@ -604,7 +609,7 @@ function validateForm(state: FormState) {
   }
 
   if (!getNonEmptyBlocks(state.explanationBlocks).length) {
-    errors.push("La explicación de la respuesta es obligatoria.");
+    errors.push("Falta la explicación.");
   }
 
   return errors;
@@ -710,7 +715,9 @@ function buildStoredTask(
       state.answerType === "drag_drop" ? state.dragDropTargets : [],
     dragDropSolutions:
       state.answerType === "drag_drop" ? state.dragDropSolutions : [],
-    explanationBlocks: state.explanationBlocks,
+    explanationBlocks: getNonEmptyBlocks([state.informaticsBlock]).length
+      ? [...state.explanationBlocks, state.informaticsBlock]
+      : state.explanationBlocks,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -738,9 +745,13 @@ export function TaskUploadForm({
     const row = document.getElementById(id);
     if (!row) return;
     row.scrollIntoView({ block: "center", behavior: "smooth" });
+    const settle = window.setTimeout(
+      () => row.scrollIntoView({ block: "center", behavior: "smooth" }),
+      700,
+    );
     const control =
-      row.querySelector<HTMLElement>("button[role=combobox]:not([disabled])") ??
-      row.querySelector<HTMLElement>("button[role=checkbox]");
+      row.querySelector<HTMLElement>("button[aria-checked=true]") ??
+      row.querySelector<HTMLElement>("button[role=radio]");
     control?.focus({ preventScroll: true });
     row.animate?.(
       [
@@ -752,24 +763,53 @@ export function TaskUploadForm({
       ],
       { duration: 1600, easing: "ease-out" },
     );
+    return () => window.clearTimeout(settle);
   }, []);
-  const [clearDialogOpen, setClearDialogOpen] = useState(false);
-  const [selectedBlank, setSelectedBlank] = useState("");
+  const blankNumbers = useMemo(
+    () =>
+      Object.fromEntries(
+        collectTaskBlankIds([...form.bodyBlocks, ...form.challengeBlocks]).map(
+          (id, index) => [id, index + 1],
+        ),
+      ),
+    [form.bodyBlocks, form.challengeBlocks],
+  );
+  const createBlankFromText = (blankId: string, text: string) =>
+    setForm((current) => {
+      const config = current.clozeConfig;
+      const solutions = current.clozeKey.acceptedAssignments;
+      const used = new Set(solutions.flatMap((map) => Object.values(map)));
+      const kept = config.options.filter(
+        (option) => used.has(option.id) || !/^Opción \d+$/.test(option.label),
+      );
+      const existing = kept.find(
+        (option) => option.label.trim().toLowerCase() === text.toLowerCase(),
+      );
+      const option = existing ?? {
+        id: crypto.randomUUID(),
+        label: text,
+        image: null,
+        limit: 1,
+      };
+      const options = existing ? kept : [...kept, option];
+      return {
+        ...current,
+        clozeConfig: withClozeOptions(config, options),
+        clozeKey: {
+          ...current.clozeKey,
+          acceptedAssignments: [
+            { ...(solutions[0] ?? {}), [blankId]: option.id },
+            ...solutions.slice(1),
+          ],
+        },
+      };
+    });
   const blankRemovalDescription = (ids: string[]) => {
     const impact = blankRemovalImpact(ids, form.clozeKey.acceptedAssignments);
     return impact.length
       ? `Se quitarán ${ids.length} huecos del texto y sus respuestas de las soluciones ${impact.join(", ")}.`
       : null;
   };
-  const activeOptionLabels = form.answerOrder.slice(0, form.answerCount);
-
-  const completedOptionsCount = useMemo(
-    () =>
-      activeOptionLabels.filter(
-        (label) => getNonEmptyBlocks(form.options[label]).length > 0,
-      ).length,
-    [activeOptionLabels, form.options],
-  );
 
   // Volver del probador no debe costar los cambios: si el probador marca que
   // trae un borrador de esta misma tarea, se recupera tal cual quedó.
@@ -795,11 +835,11 @@ export function TaskUploadForm({
     setErrors(nextErrors);
 
     if (nextErrors.length > 0) {
-      toast.error("La tarea todavía no está lista para guardarse.");
       return;
     }
 
-    const draft = buildStoredTask(form, loadedTask?.id);
+    const sourceTaskCode = await automaticSourceCode(form, loadedTask?.id);
+    const draft = buildStoredTask({ ...form, sourceTaskCode }, loadedTask?.id);
     const task = loadedTask ? await updateTask(draft) : await createTask(draft);
     clearTaskDraftForTest();
 
@@ -838,13 +878,6 @@ export function TaskUploadForm({
     );
   };
 
-  const handleClearForm = () => {
-    clearTaskDraftForTest();
-    setForm(createInitialState());
-    setErrors([]);
-    setClearDialogOpen(false);
-  };
-
   const updateSectionBlocks = (
     section: BlocksSection,
     blockId: string,
@@ -855,22 +888,6 @@ export function TaskUploadForm({
       [section]: current[section].map((block) =>
         block.id === blockId ? updater(block) : block,
       ),
-    }));
-  };
-
-  const updateOptionBlocks = (
-    optionKey: OptionKey,
-    blockId: string,
-    updater: (block: ContentBlock) => ContentBlock,
-  ) => {
-    setForm((current) => ({
-      ...current,
-      options: {
-        ...current.options,
-        [optionKey]: current.options[optionKey].map((block) =>
-          block.id === blockId ? updater(block) : block,
-        ),
-      },
     }));
   };
 
@@ -1018,31 +1035,6 @@ export function TaskUploadForm({
     }));
   };
 
-  const updateOptionBlockImage = async (
-    optionKey: OptionKey,
-    blockId: string,
-    files: FileList | null,
-  ) => {
-    const nextImage = (await createContentImages(files))[0] ?? null;
-
-    updateOptionBlocks(optionKey, blockId, (block) => ({
-      ...block,
-      image: nextImage,
-      widthPercent: block.widthPercent || 100,
-    }));
-  };
-
-  const updateOptionBlockWidth = (
-    optionKey: OptionKey,
-    blockId: string,
-    widthPercent: number,
-  ) => {
-    updateOptionBlocks(optionKey, blockId, (block) => ({
-      ...block,
-      widthPercent,
-    }));
-  };
-
   const updateSectionBlockWidth = (
     section: BlocksSection,
     blockId: string,
@@ -1052,92 +1044,6 @@ export function TaskUploadForm({
       ...block,
       widthPercent,
     }));
-  };
-
-  const moveAnswer = (optionKey: OptionKey, direction: "up" | "down") => {
-    setForm((current) => {
-      const activeOrder = current.answerOrder.slice(0, current.answerCount);
-      const inactiveOrder = current.answerOrder.slice(current.answerCount);
-      const currentIndex = activeOrder.indexOf(optionKey);
-
-      if (currentIndex === -1) {
-        return current;
-      }
-
-      const targetIndex =
-        direction === "up" ? currentIndex - 1 : currentIndex + 1;
-
-      if (targetIndex < 0 || targetIndex >= activeOrder.length) {
-        return current;
-      }
-
-      const nextActiveOrder = [...activeOrder];
-      [nextActiveOrder[currentIndex], nextActiveOrder[targetIndex]] = [
-        nextActiveOrder[targetIndex],
-        nextActiveOrder[currentIndex],
-      ];
-
-      return {
-        ...current,
-        answerOrder: [...nextActiveOrder, ...inactiveOrder],
-      };
-    });
-  };
-
-  const removeAnswer = (optionKey: OptionKey) => {
-    setForm((current) => {
-      if (current.answerCount <= minimumAnswerCount) {
-        return current;
-      }
-
-      const activeOrder = current.answerOrder.slice(0, current.answerCount);
-      const inactiveOrder = current.answerOrder.slice(current.answerCount);
-
-      return {
-        ...current,
-        answerCount: current.answerCount - 1,
-        answerOrder: [
-          ...activeOrder.filter((label) => label !== optionKey),
-          optionKey,
-          ...inactiveOrder,
-        ],
-        correctOptions: current.correctOptions.filter(
-          (label) => label !== optionKey,
-        ),
-        options: {
-          ...current.options,
-          [optionKey]: [createContentBlock(current.multipleChoiceContentType)],
-        },
-      };
-    });
-  };
-
-  const renderCorrectOptionsGroup = (children: ReactNode) => {
-    const className = "grid gap-4 lg:grid-cols-2";
-
-    if (form.multipleChoiceCorrectnessMode === "single") {
-      return (
-        <RadioGroup
-          aria-label="Respuesta correcta"
-          className={className}
-          value={form.correctOptions[0] ?? ""}
-          onValueChange={(value) =>
-            setForm((current) => ({
-              ...current,
-              correctOptions: [value as OptionKey],
-            }))
-          }
-        >
-          {children}
-        </RadioGroup>
-      );
-    }
-
-    return (
-      <div aria-label="Respuestas correctas" className={className} role="group">
-        {children}
-      </div>
-    );
   };
 
   const updateDragDropBackground = async (files: FileList | null) => {
@@ -1196,249 +1102,74 @@ export function TaskUploadForm({
   };
 
   return (
-    <form className="flex flex-col gap-5 sm:gap-6" onSubmit={handleSubmit}>
-      {errors.length > 0 && (
-        <Alert variant="destructive">
-          <ShieldAlertIcon />
-          <AlertTitle>No se pudo guardar la tarea</AlertTitle>
-          <AlertDescription>
-            <ul className="ml-4 flex list-disc flex-col gap-1">
-              {errors.map((error) => (
-                <li key={error}>{error}</li>
-              ))}
-            </ul>
-          </AlertDescription>
-        </Alert>
-      )}
+    <form className="flex flex-col gap-10" onSubmit={handleSubmit}>
+      <div className="flex flex-col gap-1">
+        <input
+          id="title"
+          aria-label="Título de la tarea"
+          aria-invalid={!form.title.trim() && errors.length > 0}
+          placeholder="Título de la tarea"
+          value={form.title}
+          onChange={(event) =>
+            setForm((current) => ({
+              ...current,
+              title: event.target.value,
+            }))
+          }
+          className="w-full border-b-2 border-border/20 bg-transparent py-2 font-heading text-2xl font-semibold outline-none transition-colors placeholder:text-muted-foreground/60 focus-visible:border-primary aria-invalid:border-destructive/60"
+        />
+      </div>
 
-      <FormSection title="Información general">
-        <FieldGroup>
-          <Field data-invalid={!form.title.trim() && errors.length > 0}>
-            <FieldLabel htmlFor="title">Título</FieldLabel>
-            <FieldContent>
-              <Input
-                id="title"
-                aria-invalid={!form.title.trim() && errors.length > 0}
-                placeholder="Ej. Secuencia incorrecta de transformaciones"
-                value={form.title}
-                onChange={(event) =>
+      <section className="flex flex-col gap-3">
+        <h2 className="font-heading text-base font-semibold">
+          ¿Cómo responde el estudiante?
+        </h2>
+        <div
+          role="radiogroup"
+          aria-label="Tipo de respuesta"
+          className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap"
+        >
+          {answerTypes.map((type) => {
+            const Icon = answerTypeIcons[type];
+            const selected = form.answerType === type;
+            return (
+              <button
+                key={type}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() =>
                   setForm((current) => ({
                     ...current,
-                    title: event.target.value,
+                    answerType: type,
+                    answerCount:
+                      type === "multiple_choice"
+                        ? Math.max(current.answerCount, minimumAnswerCount)
+                        : current.answerCount,
                   }))
                 }
-              />
-            </FieldContent>
-          </Field>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <Field>
-              <FieldLabel htmlFor="country">País de origen</FieldLabel>
-              <FieldContent>
-                <Select
-                  value={form.country || "ninguno"}
-                  onValueChange={(value) =>
-                    setForm((current) => ({
-                      ...current,
-                      country: value === "ninguno" ? "" : value,
-                    }))
-                  }
-                >
-                  <SelectTrigger className="w-full" id="country">
-                    <SelectValue placeholder="Sin país" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ninguno">Sin país</SelectItem>
-                    {countries.map((country) => (
-                      <SelectItem key={country.name} value={country.name}>
-                        <span className="inline-flex items-center gap-2">
-                          <img
-                            alt=""
-                            className="h-4 w-auto rounded-xs border border-border"
-                            src={country.flag}
-                          />
-                          {country.name}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FieldContent>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="year">Año del desafío</FieldLabel>
-              <FieldContent>
-                <Input
-                  id="year"
-                  inputMode="numeric"
-                  max={2100}
-                  min={1900}
-                  placeholder="Ej. 2024"
-                  type="number"
-                  value={form.year}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      year: event.target.value,
-                    }))
-                  }
-                />
-              </FieldContent>
-            </Field>
-            <Field
-              data-invalid={
-                errors.length > 0 &&
-                sourceTaskCodeIsInvalid(form.sourceTaskCode)
-              }
-            >
-              <FieldLabel htmlFor="source-task-code">
-                Código original
-              </FieldLabel>
-              <FieldContent>
-                <Input
-                  id="source-task-code"
-                  maxLength={64}
-                  placeholder="Ej. 2024-DE-04a"
-                  value={form.sourceTaskCode}
-                  aria-invalid={
-                    errors.length > 0 &&
-                    sourceTaskCodeIsInvalid(form.sourceTaskCode)
-                  }
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      sourceTaskCode: event.target.value,
-                    }))
-                  }
-                />
-              </FieldContent>
-            </Field>
-          </div>
-
-          <FieldSet>
-            <FieldLegend variant="label">Área de contenido</FieldLegend>
-            <FieldDescription>Selecciona una o varias áreas.</FieldDescription>
-            <div className="grid gap-3 md:grid-cols-2">
-              {categories.map((category) => {
-                const checked = form.categories.includes(category);
-
-                return (
-                  <Field key={category} orientation="horizontal">
-                    <Checkbox
-                      checked={checked}
-                      id={`category-${category}`}
-                      onCheckedChange={(nextChecked) =>
-                        setForm((current) => ({
-                          ...current,
-                          categories: nextChecked
-                            ? [...current.categories, category]
-                            : current.categories.filter(
-                                (currentCategory) =>
-                                  currentCategory !== category,
-                              ),
-                        }))
-                      }
-                    />
-                    <FieldLabel htmlFor={`category-${category}`}>
-                      {category}
-                    </FieldLabel>
-                  </Field>
-                );
-              })}
-            </div>
-            {errors.length > 0 && form.categories.length === 0 && (
-              <FieldError>
-                Debes seleccionar al menos un área de contenido.
-              </FieldError>
-            )}
-          </FieldSet>
-        </FieldGroup>
-      </FormSection>
-
-      <FormSection title="Dificultad por rango de edad">
-        <FieldGroup className="gap-3 md:grid md:grid-cols-2 md:gap-x-6">
-          {ageRanges.map((range) => (
-            <Field
-              key={range}
-              id={`dificultad-${range.replace("–", "-")}`}
-              className="scroll-mt-24 items-center rounded-md"
-              orientation="horizontal"
-            >
-              <div className="flex shrink-0 items-center gap-3">
-                <Checkbox
-                  className="-translate-y-0.5"
-                  checked={form.selectedAgeRanges[range]}
-                  id={`age-range-${range}`}
-                  onCheckedChange={(checked) =>
-                    setForm((current) => ({
-                      ...current,
-                      selectedAgeRanges: {
-                        ...current.selectedAgeRanges,
-                        [range]: checked === true,
-                      },
-                      difficulties: {
-                        ...current.difficulties,
-                        [range]:
-                          checked === true ? current.difficulties[range] : "",
-                      },
-                    }))
-                  }
-                />
-                <FieldLabel
-                  className="whitespace-nowrap"
-                  htmlFor={`age-range-${range}`}
-                >
-                  {range}
-                  <span className="hidden font-normal text-muted-foreground sm:inline">
-                    {" · "}
-                    {categoryForAgeRange(range)}
-                  </span>
-                </FieldLabel>
-              </div>
-              <Select
-                disabled={!form.selectedAgeRanges[range]}
-                value={form.difficulties[range] || undefined}
-                onValueChange={(value) =>
-                  setForm((current) => ({
-                    ...current,
-                    difficulties: {
-                      ...current.difficulties,
-                      [range]: value,
-                    },
-                  }))
-                }
+                className={cn(
+                  "flex min-h-9 items-center gap-2 border-2 px-3 py-1.5 text-left text-sm leading-tight transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
+                  selected
+                    ? "border-primary bg-primary/5 font-semibold text-foreground"
+                    : "border-border/30 text-muted-foreground hover:border-primary/60 hover:text-foreground",
+                )}
               >
-                <SelectTrigger
-                  className="ml-auto w-40 shrink-0 min-[360px]:w-48"
-                  aria-label={`Dificultad para ${range}`}
-                >
-                  <SelectValue placeholder="Selecciona dificultad" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {difficultyOptions.map((option) => (
-                      <SelectItem key={option.label} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </Field>
-          ))}
-          {errors.length > 0 &&
-            !Object.values(form.selectedAgeRanges).some(Boolean) && (
-              <FieldError>Debes activar al menos un rango de edad.</FieldError>
-            )}
-        </FieldGroup>
-      </FormSection>
+                <Icon className="size-4 shrink-0" />
+                {answerTypeLabels[type]}
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
-      <FormSection title="Cuerpo">
+      <FormSection title="Enunciado">
         <TaskContentBuilder
           allowedBlockTypes={["text", "image"]}
           blocks={form.bodyBlocks}
           allowBlanks={form.answerType === "text_cloze"}
-          onSelectBlank={setSelectedBlank}
+          onBlankFromText={createBlankFromText}
+          blankNumbers={blankNumbers}
           blankRemovalDescription={blankRemovalDescription}
           allowCrossSectionDrag
           sectionId="bodyBlocks"
@@ -1470,583 +1201,115 @@ export function TaskUploadForm({
             updateSectionBlockWidth("bodyBlocks", blockId, widthPercent)
           }
           showChallengeErrors={false}
-          textPlaceholder="Escribe el contenido del cuerpo."
+          textPlaceholder="Cuenta la situación de la tarea."
         />
+        <div className="flex flex-col gap-2">
+          <h3 className="text-sm font-semibold text-muted-foreground">
+            Pregunta
+          </h3>
+          <TaskContentBuilder
+            allowedBlockTypes={["text", "image"]}
+            blocks={form.challengeBlocks}
+            allowBlanks={form.answerType === "text_cloze"}
+            onBlankFromText={createBlankFromText}
+            blankNumbers={blankNumbers}
+            blankRemovalDescription={blankRemovalDescription}
+            allowCrossSectionDrag
+            sectionId="challengeBlocks"
+            onMoveBlockToSection={(blockId, toSectionId, toBlockId, position) =>
+              moveBlockToSection(
+                "challengeBlocks",
+                blockId,
+                toSectionId as BlocksSection,
+                toBlockId,
+                position,
+              )
+            }
+            onAddBlock={(type) =>
+              addSectionBlock("challengeBlocks", type ?? "text")
+            }
+            onRemoveBlock={(blockId) =>
+              removeSectionBlock("challengeBlocks", blockId)
+            }
+            onMoveBlock={(fromBlockId, toBlockId, position) =>
+              moveSectionBlock(
+                "challengeBlocks",
+                fromBlockId,
+                toBlockId,
+                position,
+              )
+            }
+            onUpdateBlockContent={(blockId, content, richText) =>
+              updateSectionBlocks("challengeBlocks", blockId, (current) => ({
+                ...current,
+                content,
+                richText,
+              }))
+            }
+            onUpdateBlockImage={(blockId, files) => {
+              void updateSectionBlockImage("challengeBlocks", blockId, files);
+            }}
+            onUpdateBlockWidth={(blockId, widthPercent) =>
+              updateSectionBlockWidth("challengeBlocks", blockId, widthPercent)
+            }
+            showChallengeErrors={false}
+            textPlaceholder={
+              form.answerType === "text_cloze"
+                ? "Escribe la frase completa. Luego selecciona las palabras que serán el hueco y toca «Hueco»."
+                : "Escribe la pregunta."
+            }
+          />
+        </div>
       </FormSection>
 
-      <FormSection title="Pregunta o desafío">
-        <TaskContentBuilder
-          allowedBlockTypes={["text", "image"]}
-          blocks={form.challengeBlocks}
-          allowBlanks={form.answerType === "text_cloze"}
-          onSelectBlank={setSelectedBlank}
-          blankRemovalDescription={blankRemovalDescription}
-          allowCrossSectionDrag
-          sectionId="challengeBlocks"
-          onMoveBlockToSection={(blockId, toSectionId, toBlockId, position) =>
-            moveBlockToSection(
-              "challengeBlocks",
-              blockId,
-              toSectionId as BlocksSection,
-              toBlockId,
-              position,
-            )
-          }
-          onAddBlock={(type) =>
-            addSectionBlock("challengeBlocks", type ?? "text")
-          }
-          onRemoveBlock={(blockId) =>
-            removeSectionBlock("challengeBlocks", blockId)
-          }
-          onMoveBlock={(fromBlockId, toBlockId, position) =>
-            moveSectionBlock(
-              "challengeBlocks",
-              fromBlockId,
-              toBlockId,
-              position,
-            )
-          }
-          onUpdateBlockContent={(blockId, content, richText) =>
-            updateSectionBlocks("challengeBlocks", blockId, (current) => ({
-              ...current,
-              content,
-              richText,
-            }))
-          }
-          onUpdateBlockImage={(blockId, files) => {
-            void updateSectionBlockImage("challengeBlocks", blockId, files);
-          }}
-          onUpdateBlockWidth={(blockId, widthPercent) =>
-            updateSectionBlockWidth("challengeBlocks", blockId, widthPercent)
-          }
-          showChallengeErrors={false}
-          textPlaceholder="Escribe el contenido de la consigna."
-        />
-      </FormSection>
-
-      <FormSection title="Respuestas">
+      <FormSection title="Respuesta">
         <FieldGroup className="gap-4">
-          <FieldSet className="gap-4">
-            <FieldLegend className="mb-0" variant="label">
-              Tipo de respuesta
-            </FieldLegend>
-            <RadioGroup
-              className="mt-1 md:grid-cols-2"
-              value={form.answerType}
-              onValueChange={(value) =>
+          {form.answerType === "state_grid" && (
+            <StateGridEditor
+              config={form.gridConfig}
+              answerKey={form.gridKey}
+              onChange={(config, key) =>
                 setForm((current) => ({
                   ...current,
-                  answerType: value as AnswerType,
-                  answerCount:
-                    value === "multiple_choice"
-                      ? Math.max(current.answerCount, minimumAnswerCount)
-                      : current.answerCount,
+                  gridConfig: config,
+                  gridKey: key,
                 }))
               }
-            >
-              <Field orientation="horizontal">
-                <RadioGroupItem
-                  id="answer-type-multiple-choice"
-                  value="multiple_choice"
-                />
-                <FieldLabel htmlFor="answer-type-multiple-choice">
-                  Opción múltiple
-                </FieldLabel>
-              </Field>
-              <Field orientation="horizontal">
-                <RadioGroupItem
-                  id="answer-type-short-text"
-                  value="short_text"
-                />
-                <FieldLabel htmlFor="answer-type-short-text">
-                  Respuesta corta
-                </FieldLabel>
-              </Field>
-              <Field orientation="horizontal">
-                <RadioGroupItem id="answer-type-drag-drop" value="drag_drop" />
-                <FieldLabel htmlFor="answer-type-drag-drop">
-                  Arrastrar y soltar
-                </FieldLabel>
-              </Field>
-              <Field orientation="horizontal">
-                <RadioGroupItem
-                  id="answer-type-image-hotspot"
-                  value="image_hotspot"
-                />
-                <FieldLabel htmlFor="answer-type-image-hotspot">
-                  Zonas sobre la imagen
-                </FieldLabel>
-              </Field>
-              <Field orientation="horizontal">
-                <RadioGroupItem
-                  id="answer-type-state-grid"
-                  value="state_grid"
-                />
-                <FieldLabel htmlFor="answer-type-state-grid">
-                  Estados por casilla
-                </FieldLabel>
-              </Field>
-              <Field orientation="horizontal">
-                <RadioGroupItem
-                  id="answer-type-text-cloze"
-                  value="text_cloze"
-                />
-                <FieldLabel htmlFor="answer-type-text-cloze">
-                  Huecos en el texto
-                </FieldLabel>
-              </Field>
-            </RadioGroup>
-          </FieldSet>
-
-          {(form.answerType === "state_grid" ||
-            form.answerType === "text_cloze") && (
-            <AssignmentEditor
-              selectedBlank={selectedBlank}
-              onSelectBlank={setSelectedBlank}
-              key={form.answerType}
-              kind={form.answerType}
-              config={
-                form.answerType === "state_grid"
-                  ? form.gridConfig
-                  : form.clozeConfig
-              }
-              answerKey={
-                form.answerType === "state_grid" ? form.gridKey : form.clozeKey
-              }
+            />
+          )}
+          {form.answerType === "text_cloze" && (
+            <ClozeEditor
+              config={form.clozeConfig}
+              answerKey={form.clozeKey}
               blocks={[...form.bodyBlocks, ...form.challengeBlocks]}
               onChange={(config, key) =>
-                setForm((current) =>
-                  current.answerType === "state_grid"
-                    ? {
-                        ...current,
-                        gridConfig: config as GridConfig,
-                        gridKey: key,
-                      }
-                    : {
-                        ...current,
-                        clozeConfig: config as ClozeConfig,
-                        clozeKey: key,
-                      },
-                )
+                setForm((current) => ({
+                  ...current,
+                  clozeConfig: config,
+                  clozeKey: key,
+                }))
               }
             />
           )}
           {form.answerType === "multiple_choice" && (
-            <FieldSet className="gap-4!">
-              <FieldLegend className="mb-0" variant="label">
-                Configuración de opción múltiple
-              </FieldLegend>
-              <FieldGroup className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,11.25rem),1fr))] gap-px overflow-hidden rounded-xl bg-border">
-                <div className="bg-card p-4">
-                  <FieldSet className="gap-4">
-                    <FieldLegend className="mb-0" variant="label">
-                      Contenido
-                    </FieldLegend>
-                    <RadioGroup
-                      value={form.multipleChoiceContentType}
-                      onValueChange={(value) =>
-                        setForm((current) => ({
-                          ...current,
-                          multipleChoiceContentType: value as "text" | "image",
-                          options: optionLabels.reduce<
-                            Record<OptionKey, ContentBlock[]>
-                          >(
-                            (acc, optionLabel) => {
-                              acc[optionLabel] = current.answerOrder
-                                .slice(0, current.answerCount)
-                                .includes(optionLabel)
-                                ? [
-                                    createContentBlock(
-                                      value === "image" ? "image" : "text",
-                                    ),
-                                  ]
-                                : current.options[optionLabel];
-                              return acc;
-                            },
-                            {
-                              A: current.options.A,
-                              B: current.options.B,
-                              C: current.options.C,
-                              D: current.options.D,
-                              E: current.options.E,
-                              F: current.options.F,
-                            },
-                          ),
-                        }))
-                      }
-                    >
-                      <Field orientation="horizontal">
-                        <RadioGroupItem
-                          id="multiple-choice-content-text"
-                          value="text"
-                        />
-                        <FieldLabel htmlFor="multiple-choice-content-text">
-                          Texto
-                        </FieldLabel>
-                      </Field>
-                      <Field orientation="horizontal">
-                        <RadioGroupItem
-                          id="multiple-choice-content-image"
-                          value="image"
-                        />
-                        <FieldLabel htmlFor="multiple-choice-content-image">
-                          Imagen
-                        </FieldLabel>
-                      </Field>
-                    </RadioGroup>
-                  </FieldSet>
-                </div>
-                <div className="bg-card p-4">
-                  <FieldSet className="gap-4">
-                    <FieldLegend className="mb-0" variant="label">
-                      Presentación
-                    </FieldLegend>
-                    <RadioGroup
-                      value={form.multipleChoiceOrderMode}
-                      onValueChange={(value) =>
-                        setForm((current) => ({
-                          ...current,
-                          multipleChoiceOrderMode:
-                            value as MultipleChoiceOrderMode,
-                        }))
-                      }
-                    >
-                      <Field orientation="horizontal">
-                        <RadioGroupItem
-                          id="multiple-choice-order-fixed"
-                          value="fixed"
-                        />
-                        <FieldLabel htmlFor="multiple-choice-order-fixed">
-                          Mantener el orden definido
-                        </FieldLabel>
-                      </Field>
-                      <Field orientation="horizontal">
-                        <RadioGroupItem
-                          id="multiple-choice-order-random"
-                          value="random"
-                        />
-                        <FieldLabel htmlFor="multiple-choice-order-random">
-                          Mostrar en orden aleatorio
-                        </FieldLabel>
-                      </Field>
-                    </RadioGroup>
-                  </FieldSet>
-                </div>
-                <div className="bg-card p-4">
-                  <FieldSet className="gap-4">
-                    <FieldLegend className="mb-0" variant="label">
-                      Disposición
-                    </FieldLegend>
-                    <RadioGroup
-                      value={form.multipleChoiceLayout}
-                      onValueChange={(value) =>
-                        setForm((current) => ({
-                          ...current,
-                          multipleChoiceLayout: value as MultipleChoiceLayout,
-                        }))
-                      }
-                    >
-                      <Field orientation="horizontal">
-                        <RadioGroupItem
-                          id="multiple-choice-layout-vertical"
-                          value="vertical"
-                        />
-                        <FieldLabel htmlFor="multiple-choice-layout-vertical">
-                          Una debajo de otra
-                        </FieldLabel>
-                      </Field>
-                      <Field orientation="horizontal">
-                        <RadioGroupItem
-                          id="multiple-choice-layout-horizontal"
-                          value="horizontal"
-                        />
-                        <FieldLabel htmlFor="multiple-choice-layout-horizontal">
-                          Una al lado de otra
-                        </FieldLabel>
-                      </Field>
-                    </RadioGroup>
-                  </FieldSet>
-                </div>
-                <div className="bg-card p-4">
-                  <FieldSet className="gap-4">
-                    <FieldLegend className="mb-0" variant="label">
-                      Criterio de corrección
-                    </FieldLegend>
-                    <RadioGroup
-                      value={form.multipleChoiceCorrectnessMode}
-                      onValueChange={(value) =>
-                        setForm((current) => ({
-                          ...current,
-                          multipleChoiceCorrectnessMode:
-                            value as MultipleChoiceCorrectnessMode,
-                          correctOptions:
-                            value === "single"
-                              ? current.correctOptions.slice(0, 1)
-                              : current.correctOptions,
-                        }))
-                      }
-                    >
-                      <Field orientation="horizontal">
-                        <RadioGroupItem
-                          id="multiple-choice-correctness-single"
-                          value="single"
-                        />
-                        <FieldLabel htmlFor="multiple-choice-correctness-single">
-                          Una sola respuesta correcta
-                        </FieldLabel>
-                      </Field>
-                      <Field orientation="horizontal">
-                        <RadioGroupItem
-                          id="multiple-choice-correctness-any"
-                          value="any"
-                        />
-                        <FieldLabel htmlFor="multiple-choice-correctness-any">
-                          Varias correctas (basta marcar una)
-                        </FieldLabel>
-                      </Field>
-                      <Field orientation="horizontal">
-                        <RadioGroupItem
-                          id="multiple-choice-correctness-all"
-                          value="all"
-                        />
-                        <FieldLabel htmlFor="multiple-choice-correctness-all">
-                          Varias correctas (debe marcar todas)
-                        </FieldLabel>
-                      </Field>
-                    </RadioGroup>
-                  </FieldSet>
-                </div>
-              </FieldGroup>
-              <FieldContent>
-                <p className="text-sm font-medium leading-snug">
-                  Opciones de respuesta
-                </p>
-                <FieldDescription>
-                  Completa al menos dos opciones y marca cuáles deben aceptarse
-                  como correctas.
-                </FieldDescription>
-              </FieldContent>
-              {renderCorrectOptionsGroup(
-                activeOptionLabels.map((label, index) => {
-                  const optionBlock =
-                    form.options[label][0] ??
-                    createContentBlock(form.multipleChoiceContentType);
-                  const optionHasContent =
-                    getNonEmptyBlocks(form.options[label]).length > 0;
-                  const markedAsCorrect = form.correctOptions.includes(label);
-                  const invalid =
-                    errors.length > 0 &&
-                    (completedOptionsCount < minimumAnswerCount ||
-                      (markedAsCorrect && !optionHasContent));
-
-                  return (
-                    <Field
-                      key={label}
-                      className="h-full"
-                      data-invalid={invalid}
-                    >
-                      <Card className="h-full rounded-xl border bg-card shadow-sm">
-                        <CardHeader className="border-b">
-                          <div className="flex items-center justify-between gap-2 sm:gap-4">
-                            <Field orientation="horizontal">
-                              {form.multipleChoiceCorrectnessMode ===
-                              "single" ? (
-                                <RadioGroupItem
-                                  aria-label={`Marcar respuesta ${index + 1} como correcta`}
-                                  id={`correct-${label}`}
-                                  value={label}
-                                />
-                              ) : (
-                                <Checkbox
-                                  aria-label={`Marcar respuesta ${index + 1} como correcta`}
-                                  checked={markedAsCorrect}
-                                  id={`correct-${label}`}
-                                  onCheckedChange={(checked) =>
-                                    setForm((current) => ({
-                                      ...current,
-                                      correctOptions:
-                                        checked === true
-                                          ? [
-                                              ...new Set([
-                                                ...current.correctOptions,
-                                                label,
-                                              ]),
-                                            ]
-                                          : current.correctOptions.filter(
-                                              (option) => option !== label,
-                                            ),
-                                    }))
-                                  }
-                                />
-                              )}
-                              <FieldContent className="gap-0">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <FieldLabel htmlFor={`correct-${label}`}>
-                                    Respuesta {index + 1}
-                                  </FieldLabel>
-                                  {markedAsCorrect && (
-                                    <Badge variant="secondary">
-                                      Respuesta correcta
-                                    </Badge>
-                                  )}
-                                </div>
-                              </FieldContent>
-                            </Field>
-                            {(form.multipleChoiceOrderMode === "fixed" ||
-                              form.answerCount > minimumAnswerCount) && (
-                              <div className="flex items-center gap-2">
-                                {form.multipleChoiceOrderMode === "fixed" && (
-                                  <>
-                                    <Button
-                                      aria-label={`Mover respuesta ${index + 1} antes`}
-                                      size="icon-sm"
-                                      type="button"
-                                      variant="outline"
-                                      disabled={index === 0}
-                                      onClick={() => moveAnswer(label, "up")}
-                                    >
-                                      <ChevronLeftIcon />
-                                    </Button>
-                                    <Button
-                                      aria-label={`Mover respuesta ${index + 1} después`}
-                                      size="icon-sm"
-                                      type="button"
-                                      variant="outline"
-                                      disabled={
-                                        index === activeOptionLabels.length - 1
-                                      }
-                                      onClick={() => moveAnswer(label, "down")}
-                                    >
-                                      <ChevronRightIcon />
-                                    </Button>
-                                  </>
-                                )}
-                                {form.answerCount > minimumAnswerCount && (
-                                  <Button
-                                    aria-label={`Eliminar respuesta ${index + 1}`}
-                                    size="icon-sm"
-                                    type="button"
-                                    variant="destructive"
-                                    onClick={() => removeAnswer(label)}
-                                  >
-                                    <Trash2Icon />
-                                  </Button>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </CardHeader>
-                        <CardContent>
-                          {form.multipleChoiceContentType === "text" ? (
-                            <Input
-                              aria-invalid={invalid}
-                              placeholder="Escribe la respuesta."
-                              value={optionBlock.content}
-                              onChange={(event) =>
-                                updateOptionBlocks(
-                                  label,
-                                  optionBlock.id,
-                                  (current) => ({
-                                    ...current,
-                                    content: event.target.value,
-                                  }),
-                                )
-                              }
-                            />
-                          ) : (
-                            <div className="flex flex-col gap-4">
-                              {!optionBlock.image && (
-                                <ImageUploadButton
-                                  onChange={(event) => {
-                                    void updateOptionBlockImage(
-                                      label,
-                                      optionBlock.id,
-                                      event.target.files,
-                                    );
-                                    event.target.value = "";
-                                  }}
-                                />
-                              )}
-                              {optionBlock.image && (
-                                <div className="flex flex-col gap-4">
-                                  <ImageWidthResizer
-                                    alt={optionBlock.image.name}
-                                    src={optionBlock.image.url}
-                                    widthPercent={optionBlock.widthPercent}
-                                    minPercent={10}
-                                    onChange={(widthPercent) =>
-                                      updateOptionBlockWidth(
-                                        label,
-                                        optionBlock.id,
-                                        widthPercent,
-                                      )
-                                    }
-                                  />
-                                  <div className="flex justify-start">
-                                    <label>
-                                      <input
-                                        accept="image/*"
-                                        className="sr-only"
-                                        type="file"
-                                        onChange={(event) => {
-                                          void updateOptionBlockImage(
-                                            label,
-                                            optionBlock.id,
-                                            event.target.files,
-                                          );
-                                          event.target.value = "";
-                                        }}
-                                      />
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        asChild
-                                      >
-                                        <span>Reemplazar imagen</span>
-                                      </Button>
-                                    </label>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </Field>
-                  );
-                }),
-              )}
-              {form.answerCount < optionLabels.length && (
-                <Button
-                  className="w-fit"
-                  type="button"
-                  onClick={() =>
-                    setForm((current) => ({
-                      ...current,
-                      answerCount: Math.min(
-                        current.answerCount + 1,
-                        optionLabels.length,
-                      ),
-                    }))
-                  }
-                >
-                  <PlusIcon data-icon="inline-start" />
-                  Agregar respuesta
-                </Button>
-              )}
-            </FieldSet>
+            <MultipleChoiceEditor
+              state={form}
+              showErrors={errors.length > 0}
+              update={(updater) =>
+                setForm((current) => ({ ...current, ...updater(current) }))
+              }
+            />
           )}
 
           {form.answerType === "short_text" && (
             <Field data-invalid={!form.shortAnswer.trim() && errors.length > 0}>
-              <FieldLabel htmlFor="short-answer">
-                Respuesta corta esperada
-              </FieldLabel>
+              <FieldLabel htmlFor="short-answer">Respuesta correcta</FieldLabel>
               <FieldContent>
                 <Input
                   id="short-answer"
                   aria-invalid={!form.shortAnswer.trim() && errors.length > 0}
                   placeholder="Ej. 42"
+                  className="max-w-xs"
                   value={form.shortAnswer}
                   onChange={(event) =>
                     setForm((current) => ({
@@ -2056,8 +1319,7 @@ export function TaskUploadForm({
                   }
                 />
                 <FieldDescription>
-                  El probador validará este texto ignorando mayúsculas y
-                  espacios al inicio y al final.
+                  No importan las mayúsculas ni los espacios de más.
                 </FieldDescription>
               </FieldContent>
             </Field>
@@ -2228,8 +1490,8 @@ export function TaskUploadForm({
       </FormSection>
 
       <FormSection
-        title="Explicación de la respuesta"
-        hint="Esta explicación es para revisión interna; no se muestra al estudiante."
+        title="Explicación"
+        hint="Se muestra al estudiante cuando comprueba su respuesta."
       >
         <TaskContentBuilder
           allowedBlockTypes={["text", "image"]}
@@ -2260,51 +1522,242 @@ export function TaskUploadForm({
             updateSectionBlockWidth("explanationBlocks", blockId, widthPercent)
           }
           showChallengeErrors={false}
-          textPlaceholder="Explica por qué la respuesta es correcta."
+          textPlaceholder="Explica por qué esa es la respuesta."
         />
+        <div className="flex flex-col gap-2">
+          <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+            <LightbulbIcon className="size-4" />
+            ¿Qué tiene que ver con informática?
+            <span className="font-normal text-muted-foreground">
+              (opcional)
+            </span>
+          </h3>
+          <TaskContentBuilder
+            allowedBlockTypes={["text"]}
+            blocks={[form.informaticsBlock]}
+            allowAddingBlocks={false}
+            allowRemovingBlocks={false}
+            allowReorderingBlocks={false}
+            onAddBlock={() => null}
+            onRemoveBlock={() => {}}
+            onMoveBlock={() => {}}
+            onUpdateBlockContent={(_, content, richText) =>
+              setForm((current) => ({
+                ...current,
+                informaticsBlock: {
+                  ...current.informaticsBlock,
+                  content,
+                  richText,
+                },
+              }))
+            }
+            onUpdateBlockImage={() => {}}
+            onUpdateBlockWidth={() => {}}
+            showChallengeErrors={false}
+            textPlaceholder="El concepto de informática que hay detrás. El estudiante lo ve plegado, debajo de la explicación."
+          />
+        </div>
       </FormSection>
 
-      <div className="flex flex-col gap-4 border-t pt-5 sm:flex-row sm:items-center sm:justify-end">
-        <div className="flex flex-wrap items-center gap-3">
+      <FormSection title="Datos de la tarea">
+        <div className="flex flex-col gap-2">
+          <h3 className="text-sm font-semibold">Dificultad</h3>
+          <p className="text-sm text-muted-foreground">
+            Elige la dificultad en cada categoría donde va la tarea. Tócala otra
+            vez para quitarla.
+          </p>
+          <div className="grid gap-x-10 gap-y-1 md:grid-cols-2">
+            {ageRanges.map((range) => {
+              const category = categoryForAgeRange(range);
+              const chosen = form.selectedAgeRanges[range]
+                ? form.difficulties[range]
+                : "";
+              return (
+                <div
+                  key={range}
+                  id={`dificultad-${range.replace("–", "-")}`}
+                  className="flex scroll-mt-24 items-center justify-between gap-3 py-1"
+                >
+                  <span
+                    className={cn(
+                      "text-sm",
+                      chosen ? "font-semibold" : "text-muted-foreground",
+                    )}
+                  >
+                    {category}
+                  </span>
+                  <div
+                    role="radiogroup"
+                    aria-label={`Dificultad en ${category}`}
+                    className="flex gap-1"
+                  >
+                    {difficultyOptions.map((option) => {
+                      const selected = chosen === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() =>
+                            setForm((current) => ({
+                              ...current,
+                              selectedAgeRanges: {
+                                ...current.selectedAgeRanges,
+                                [range]: !selected,
+                              },
+                              difficulties: {
+                                ...current.difficulties,
+                                [range]: selected ? "" : option.value,
+                              },
+                            }))
+                          }
+                          className={cn(
+                            "h-8 w-16 border-2 text-xs transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
+                            selected
+                              ? cn(
+                                  difficultyStyles[option.value].className,
+                                  "border-foreground/50 font-semibold",
+                                )
+                              : "border-border/20 text-muted-foreground hover:border-foreground/40 hover:text-foreground",
+                          )}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {errors.length > 0 &&
+            !Object.values(form.selectedAgeRanges).some(Boolean) && (
+              <FieldError>Falta la dificultad en alguna categoría.</FieldError>
+            )}
+        </div>
+        <div className="flex flex-col gap-2">
+          <h3 className="text-sm font-semibold">Área de contenido</h3>
+          <div className="flex flex-wrap gap-1.5">
+            {categories.map((category) => {
+              const checked = form.categories.includes(category);
+              return (
+                <button
+                  key={category}
+                  type="button"
+                  aria-pressed={checked}
+                  onClick={() =>
+                    setForm((current) => ({
+                      ...current,
+                      categories: checked
+                        ? current.categories.filter(
+                            (currentCategory) => currentCategory !== category,
+                          )
+                        : [...current.categories, category],
+                    }))
+                  }
+                  className="flex h-8 items-center gap-1.5 border-2 border-border/20 px-3 text-sm text-muted-foreground transition-colors outline-none hover:border-primary/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/60 aria-pressed:border-primary aria-pressed:bg-primary/5 aria-pressed:font-medium aria-pressed:text-foreground"
+                >
+                  {checked && <CheckIcon className="size-3.5 text-primary" />}
+                  {category}
+                </button>
+              );
+            })}
+          </div>
+          {errors.length > 0 && form.categories.length === 0 && (
+            <FieldError>Falta el área de contenido.</FieldError>
+          )}
+        </div>
+        <div className="flex flex-col gap-2">
+          <h3 className="text-sm font-semibold">
+            Origen{" "}
+            <span className="font-normal text-muted-foreground">
+              (opcional)
+            </span>
+          </h3>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="country">País de origen</FieldLabel>
+              <FieldContent>
+                <Select
+                  value={form.country || "ninguno"}
+                  onValueChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      country: value === "ninguno" ? "" : value,
+                    }))
+                  }
+                >
+                  <SelectTrigger className="w-full" id="country">
+                    <SelectValue placeholder="Sin país" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ninguno">Sin país</SelectItem>
+                    {countries.map((country) => (
+                      <SelectItem key={country.name} value={country.name}>
+                        <span className="inline-flex items-center gap-2">
+                          <img
+                            alt=""
+                            className="h-4 w-auto rounded-xs border border-border"
+                            src={country.flag}
+                          />
+                          {country.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FieldContent>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="year">Año del desafío</FieldLabel>
+              <FieldContent>
+                <Input
+                  id="year"
+                  inputMode="numeric"
+                  max={2100}
+                  min={1900}
+                  placeholder="Ej. 2024"
+                  type="number"
+                  value={form.year}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      year: event.target.value,
+                    }))
+                  }
+                />
+              </FieldContent>
+            </Field>
+          </div>
+        </div>
+      </FormSection>
+
+      <div className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-2 border-t bg-background px-4 py-3 sm:mx-0 sm:px-0">
+        <div className="flex items-center justify-end gap-3">
+          {errors.length > 0 && (
+            <p
+              role="alert"
+              className="mr-auto min-w-0 truncate text-sm font-medium text-destructive motion-safe:animate-in motion-safe:fade-in-0"
+            >
+              {errors[0]}
+              {errors.length > 1 && (
+                <span className="font-normal text-destructive/70">
+                  {" "}
+                  y {errors.length - 1} más
+                </span>
+              )}
+            </p>
+          )}
           {/* Probar lleva lo que hay en pantalla, guardado o no: el probador
               recibe el borrador entero y lo corrige sin tocar la base. */}
           <Button type="button" variant="outline" onClick={handleTestDraft}>
             <PlayIcon data-icon="inline-start" />
             Probar
           </Button>
-          {!loadedTask && (
-            <Dialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
-              <DialogTrigger asChild>
-                <Button type="button" variant="outline">
-                  Limpiar
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Limpiar todo el formulario</DialogTitle>
-                  <DialogDescription>
-                    Se eliminará todo el contenido cargado en esta tarea. Esta
-                    acción no se puede deshacer.
-                  </DialogDescription>
-                </DialogHeader>
-                <DialogFooter>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setClearDialogOpen(false)}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button type="button" onClick={handleClearForm}>
-                    Sí, limpiar todo
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          )}
           <Button type="submit">
             <UploadIcon data-icon="inline-start" />
-            {loadedTask ? "Guardar cambios" : "Guardar borrador"}
+            Guardar
           </Button>
         </div>
       </div>

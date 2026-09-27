@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type KeyboardEvent } from "react";
+import { useState, type KeyboardEvent, type ReactNode } from "react";
 import { CheckIcon, PlusIcon } from "lucide-react";
 import {
   Popover,
@@ -84,9 +84,8 @@ const floatingCard =
   "border-2 shadow-[0_6px_16px_-6px_rgba(0,0,0,0.2)] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
 /**
- * Lista que se abre pegada a una casilla o a un hueco: una tarjeta por opción,
- * con su letra, y «Quitar respuesta» si ya hay una elegida. Es la misma en los
- * dos tipos para que el estudiante resuelva todo con el mismo gesto.
+ * Lista que se abre pegada a una casilla: una tarjeta por opción, con su letra,
+ * y «Quitar respuesta» si ya hay una elegida.
  */
 function ChoiceMenu({
   label,
@@ -134,14 +133,15 @@ function ChoiceMenu({
                 >
                   {String.fromCharCode(65 + index)}
                 </span>
-                {option.image && (
+                {option.image ? (
                   <img
                     src={option.image.url}
-                    alt=""
-                    className="size-9 shrink-0 object-contain"
+                    alt={option.label}
+                    className="size-10 shrink-0 object-contain mix-blend-multiply"
                   />
+                ) : (
+                  <span className="min-w-0 flex-1">{option.label}</span>
                 )}
-                <span className="min-w-0 flex-1">{option.label}</span>
                 {selected && (
                   <CheckIcon className="size-4 shrink-0 text-primary" />
                 )}
@@ -187,18 +187,20 @@ function positionalLabels(cells: GridConfig["cells"]) {
 
 /**
  * Cada casilla se resuelve tocándola y eligiendo su estado en la lista que se
- * abre al lado, igual que un hueco del texto.
+ * abre al lado.
  */
 export function StateGridPlayer({
   config,
   value,
   onChange,
   disabled = false,
+  renderLabel,
 }: {
   config: GridConfig;
   value: Record<string, string>;
   onChange: (value: Record<string, string>) => void;
   disabled?: boolean;
+  renderLabel?: (cell: GridConfig["cells"][number], index: number) => ReactNode;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -222,7 +224,7 @@ export function StateGridPlayer({
           gridTemplateColumns: `repeat(${config.columns}, minmax(2.25rem, 4.5rem))`,
         }}
       >
-        {config.cells.map((cell) => {
+        {config.cells.map((cell, index) => {
           const state = config.states.find(
             (entry) => entry.id === value[cell.id],
           );
@@ -232,11 +234,13 @@ export function StateGridPlayer({
               key={cell.id}
               className="flex min-w-0 flex-col items-center gap-1.5"
             >
-              {showLabels && (
-                <span className="max-w-full truncate text-xs text-muted-foreground">
-                  {cell.label}
-                </span>
-              )}
+              {renderLabel
+                ? renderLabel(cell, index)
+                : showLabels && (
+                    <span className="max-w-full truncate text-xs text-muted-foreground">
+                      {cell.label}
+                    </span>
+                  )}
               <Popover
                 open={expanded}
                 onOpenChange={(open) => setOpenId(open ? cell.id : null)}
@@ -306,98 +310,10 @@ export function StateGridPlayer({
 }
 
 /**
- * El hueco vive dentro de la oración: al tocarlo se abre, pegado a él, la lista
- * de sus opciones, y lo elegido queda escrito en el texto. Es un `span` y no un
- * `button` para que una frase larga se parta en renglones como el párrafo.
+ * Las opciones quedan debajo del texto: tocar una la pone en el hueco marcado y
+ * pasa al siguiente vacío. Tocar un hueco lleno lo vacía. El hueco es un `span`
+ * y no un `button` para que una frase larga se parta en renglones.
  */
-function ClozeBlank({
-  blank,
-  label,
-  options,
-  chosenId,
-  open,
-  onOpenChange,
-  onAssign,
-  disabled,
-}: {
-  blank: ClozeConfig["blanks"][number];
-  label: string;
-  options: AssignmentOption[];
-  chosenId: string | undefined;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onAssign: (optionId: string) => void;
-  disabled: boolean;
-}) {
-  const allowed = options.filter(
-    (option) =>
-      option.limit !== 0 && blank.allowedOptionIds.includes(option.id),
-  );
-  const chosen = options.find((option) => option.id === chosenId);
-  const expanded = open && !disabled;
-
-  return (
-    <Popover open={expanded} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>
-        <span
-          role="button"
-          tabIndex={disabled ? -1 : 0}
-          aria-disabled={disabled || undefined}
-          aria-haspopup="dialog"
-          aria-expanded={expanded}
-          data-assignment-slot={blank.id}
-          aria-label={`${label}: ${chosen?.label ?? "vacío"}`}
-          onKeyDown={(event) => {
-            if (disabled) return;
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              onOpenChange(true);
-            }
-            slotKeyDown(event, allowed, chosen?.id, onAssign);
-          }}
-          className={cn(
-            "mx-0.5 rounded-md px-1.5 py-0.5 [box-decoration-break:clone] outline-none transition-colors duration-150 focus-visible:ring-[3px] focus-visible:ring-ring/50",
-            disabled ? "cursor-default" : "cursor-pointer",
-            chosen
-              ? "bg-primary/10 font-medium text-foreground shadow-[inset_0_-2px_0_var(--primary)]"
-              : "inline-block min-w-24 border-2 border-dashed border-primary/50 text-center text-primary",
-            !disabled && !chosen && "hover:bg-primary/5",
-            !disabled && chosen && "hover:bg-primary/15",
-            expanded && "bg-primary/15",
-          )}
-        >
-          {chosen ? (
-            <span
-              key={chosen.id}
-              className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
-            >
-              {chosen.image && (
-                <img
-                  src={chosen.image.url}
-                  alt=""
-                  className="mr-1 inline size-5 object-contain align-text-bottom mix-blend-multiply"
-                />
-              )}
-              {chosen.label}
-            </span>
-          ) : (
-            "Elegir"
-          )}
-        </span>
-      </PopoverTrigger>
-      <ChoiceMenu
-        label={label.toLowerCase()}
-        options={allowed}
-        chosenId={chosen?.id}
-        onPick={(id) => {
-          onAssign(id);
-          onOpenChange(false);
-        }}
-      />
-    </Popover>
-  );
-}
-
 export function TextClozePlayer({
   config,
   blocks,
@@ -411,39 +327,149 @@ export function TextClozePlayer({
   onChange: (value: Record<string, string>) => void;
   disabled?: boolean;
 }) {
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
+  const known = picked && config.blanks.some((blank) => blank.id === picked);
+  const activeId =
+    (known && !value[picked] ? picked : null) ??
+    config.blanks.find((blank) => !value[blank.id])?.id ??
+    (known ? picked : null);
+  const active = config.blanks.find((blank) => blank.id === activeId);
+  const used = (optionId: string) =>
+    Object.values(value).filter((id) => id === optionId).length;
 
-  function assign(blankId: string, optionId: string, label: string) {
-    if (disabled) return;
-    onChange(withAssignment(config.options, value, blankId, optionId));
+  function place(optionId: string) {
+    if (disabled || !activeId) return;
+    const next = withAssignment(config.options, value, activeId, optionId);
+    onChange(next);
+    const index = config.blanks.findIndex((blank) => blank.id === activeId);
     const option = config.options.find((entry) => entry.id === optionId);
-    setAnnouncement(`${label}: ${option?.label ?? "vacío"}`);
+    setAnnouncement(`Hueco ${index + 1}: ${option?.label ?? ""}`);
+    const following = [
+      ...config.blanks.slice(index + 1),
+      ...config.blanks.slice(0, index),
+    ].find((blank) => !next[blank.id]);
+    setPicked(following?.id ?? activeId);
+  }
+
+  function clear(blankId: string) {
+    if (disabled) return;
+    onChange(withAssignment(config.options, value, blankId, ""));
+    const index = config.blanks.findIndex((blank) => blank.id === blankId);
+    setAnnouncement(`Hueco ${index + 1}: vacío`);
+    setPicked(blankId);
   }
 
   return (
-    <div className="min-w-0" data-assignment-surface>
+    <div className="flex min-w-0 flex-col gap-6" data-assignment-surface>
       <TaskContentRenderer
         blocks={blocks}
         renderBlank={(id) => {
           const index = config.blanks.findIndex((blank) => blank.id === id);
           if (index === -1) return <span>[hueco]</span>;
-          const label = `Hueco ${index + 1}`;
+          const chosen = config.options.find(
+            (option) => option.id === value[id],
+          );
+          const isActive = !disabled && id === activeId;
+          const tap = () => (chosen ? clear(id) : setPicked(id));
           return (
-            <ClozeBlank
+            <span
               key={id}
-              blank={config.blanks[index]}
-              label={label}
-              options={config.options}
-              chosenId={value[id]}
-              open={openId === id}
-              onOpenChange={(open) => setOpenId(open ? id : null)}
-              onAssign={(optionId) => assign(id, optionId, label)}
-              disabled={disabled}
-            />
+              role="button"
+              tabIndex={disabled ? -1 : 0}
+              aria-disabled={disabled || undefined}
+              aria-pressed={isActive}
+              data-assignment-slot={id}
+              aria-label={`Hueco ${index + 1}: ${chosen?.label ?? "vacío"}${chosen && !disabled ? ". Tocar para quitar" : ""}`}
+              onClick={disabled ? undefined : tap}
+              onKeyDown={(event) => {
+                if (disabled) return;
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  tap();
+                }
+                if (event.key === "Delete" || event.key === "Backspace") {
+                  event.preventDefault();
+                  clear(id);
+                }
+              }}
+              className={cn(
+                "mx-0.5 px-1.5 py-0.5 [box-decoration-break:clone] outline-none transition-colors duration-150 focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                disabled ? "cursor-default" : "cursor-pointer",
+                chosen
+                  ? cn(
+                      "bg-primary/10 font-medium text-foreground shadow-[inset_0_-2px_0_var(--primary)]",
+                      !disabled && "hover:bg-primary/15",
+                    )
+                  : cn(
+                      "inline-block min-h-[1.75em] min-w-20 border-2 border-dashed align-middle",
+                      isActive
+                        ? "border-primary bg-primary/10"
+                        : "border-primary/40",
+                      !disabled && !isActive && "hover:bg-primary/5",
+                    ),
+              )}
+            >
+              {chosen && (
+                <span
+                  key={chosen.id}
+                  className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:duration-200"
+                >
+                  {chosen.image ? (
+                    <img
+                      src={chosen.image.url}
+                      alt={chosen.label}
+                      className="inline h-10 max-w-24 object-contain align-middle mix-blend-multiply"
+                    />
+                  ) : (
+                    chosen.label
+                  )}
+                </span>
+              )}
+            </span>
           );
         }}
       />
+      {!disabled && (
+        <div
+          role="group"
+          aria-label="Opciones para los huecos"
+          className="flex flex-wrap justify-center gap-2"
+        >
+          {config.options
+            .filter((option) => option.limit !== 0)
+            .map((option) => {
+              const spent =
+                option.limit !== null && used(option.id) >= option.limit;
+              const allowed =
+                !active || active.allowedOptionIds.includes(option.id);
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  disabled={spent || !allowed || !activeId}
+                  onClick={() => place(option.id)}
+                  className={cn(
+                    "flex min-h-10 touch-manipulation items-center gap-2 border-2 px-3 py-1.5 text-left text-sm transition-[opacity,background-color,border-color,transform] duration-200 outline-none select-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                    spent
+                      ? "border-dashed border-border/30 bg-muted/40 [&>*]:invisible"
+                      : "border-border/40 bg-background shadow-[0_2px_0_rgba(0,0,0,0.12)] enabled:hover:border-primary enabled:hover:bg-primary/5 enabled:active:translate-y-px enabled:active:shadow-none disabled:opacity-40",
+                  )}
+                >
+                  {option.image ? (
+                    <img
+                      src={option.image.url}
+                      alt={option.label}
+                      className="h-12 max-w-28 object-contain mix-blend-multiply"
+                    />
+                  ) : (
+                    <span>{option.label}</span>
+                  )}
+                </button>
+              );
+            })}
+        </div>
+      )}
       <span className="sr-only" role="status">
         {announcement}
       </span>

@@ -175,6 +175,7 @@ export const ContestScalarFieldEnum = {
   scoring: 'scoring',
   questionDisplayMode: 'questionDisplayMode',
   allowPairs: 'allowPairs',
+  shuffleOptions: 'shuffleOptions',
   showFeedback: 'showFeedback',
   showSolutions: 'showSolutions',
   showTotalScore: 'showTotalScore',

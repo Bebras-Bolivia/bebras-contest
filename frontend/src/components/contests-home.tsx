@@ -77,6 +77,7 @@ function emptyContestDraft(): ContestDraftInput {
     scoring: defaultContestScoring(),
     questionDisplayMode: "one_by_one",
     allowPairs: false,
+    shuffleOptions: false,
     showFeedback: false,
     showSolutions: false,
     showTotalScore: false,

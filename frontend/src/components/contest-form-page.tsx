@@ -91,6 +91,7 @@ function createInitialState(): FormState {
     scoring: defaultContestScoring(),
     questionDisplayMode: "one_by_one",
     allowPairs: false,
+    shuffleOptions: false,
     showFeedback: false,
     showSolutions: false,
     showTotalScore: false,
@@ -116,6 +117,7 @@ function createStateFromContest(
     scoring: contest.scoring ?? defaultContestScoring(),
     questionDisplayMode: contest.questionDisplayMode,
     allowPairs: contest.allowPairs,
+    shuffleOptions: contest.shuffleOptions,
     showFeedback: contest.showFeedback,
     showSolutions: contest.showSolutions,
     showTotalScore: contest.showTotalScore,
@@ -1021,6 +1023,25 @@ export function ContestFormPage({ contestId = null }: ContestFormPageProps) {
                   hint="Dos estudiantes pueden rendir juntos en un mismo equipo, con un solo intento y un solo puntaje."
                 >
                   Permitir parejas
+                </LabelWithHint>
+              </Field>
+              <Field orientation="horizontal">
+                <Checkbox
+                  id="contest-shuffleOptions"
+                  checked={form.shuffleOptions}
+                  disabled={locked}
+                  onCheckedChange={(checked) =>
+                    setForm((current) => ({
+                      ...current,
+                      shuffleOptions: checked === true,
+                    }))
+                  }
+                />
+                <LabelWithHint
+                  htmlFor="contest-shuffleOptions"
+                  hint="En las preguntas de opción múltiple, cada equipo ve las opciones en otro orden. Cada opción conserva su letra, así la solución sigue diciendo la misma."
+                >
+                  Mezclar el orden de las opciones
                 </LabelWithHint>
               </Field>
             </FieldGroup>

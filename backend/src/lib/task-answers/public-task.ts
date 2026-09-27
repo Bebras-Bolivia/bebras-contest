@@ -181,16 +181,25 @@ function shuffleWithSeed<T>(input: T[], seed: number) {
   return result;
 }
 
+/**
+ * Con `shuffleSeed` (el intento, cuando el desafío mezcla las opciones) cada
+ * equipo ve su propio orden, siempre el mismo al volver. Las opciones
+ * conservan su letra, así la explicación («la respuesta es C») sigue valiendo.
+ */
 export function renderSafeTask(
   contestTask: { position: number },
   task: PlayTask,
+  shuffleSeed?: string,
 ) {
   let answers = task.answers.map((answer) => ({
     id: answer.id,
     blocks: publicBlocks(answer.blocks),
   }));
-  if (task.multipleChoiceOrderMode === "random") {
-    answers = shuffleWithSeed(answers, seedFromText(task.id));
+  if (shuffleSeed) {
+    answers = shuffleWithSeed(
+      answers,
+      seedFromText(`${shuffleSeed}:${task.id}`),
+    );
   }
 
   return {

@@ -105,6 +105,7 @@ model Contest {
   scoring              String?
   questionDisplayMode  String         @default("one_by_one")
   allowPairs           Boolean        @default(false)
+  shuffleOptions       Boolean        @default(false)
   showFeedback         Boolean        @default(false)
   showSolutions        Boolean        @default(false)
   showTotalScore       Boolean        @default(false)

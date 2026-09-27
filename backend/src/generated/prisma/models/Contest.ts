@@ -51,6 +51,7 @@ export type ContestMinAggregateOutputType = {
   scoring: string | null
   questionDisplayMode: string | null
   allowPairs: boolean | null
+  shuffleOptions: boolean | null
   showFeedback: boolean | null
   showSolutions: boolean | null
   showTotalScore: boolean | null
@@ -77,6 +78,7 @@ export type ContestMaxAggregateOutputType = {
   scoring: string | null
   questionDisplayMode: string | null
   allowPairs: boolean | null
+  shuffleOptions: boolean | null
   showFeedback: boolean | null
   showSolutions: boolean | null
   showTotalScore: boolean | null
@@ -103,6 +105,7 @@ export type ContestCountAggregateOutputType = {
   scoring: number
   questionDisplayMode: number
   allowPairs: number
+  shuffleOptions: number
   showFeedback: number
   showSolutions: number
   showTotalScore: number
@@ -143,6 +146,7 @@ export type ContestMinAggregateInputType = {
   scoring?: true
   questionDisplayMode?: true
   allowPairs?: true
+  shuffleOptions?: true
   showFeedback?: true
   showSolutions?: true
   showTotalScore?: true
@@ -169,6 +173,7 @@ export type ContestMaxAggregateInputType = {
   scoring?: true
   questionDisplayMode?: true
   allowPairs?: true
+  shuffleOptions?: true
   showFeedback?: true
   showSolutions?: true
   showTotalScore?: true
@@ -195,6 +200,7 @@ export type ContestCountAggregateInputType = {
   scoring?: true
   questionDisplayMode?: true
   allowPairs?: true
+  shuffleOptions?: true
   showFeedback?: true
   showSolutions?: true
   showTotalScore?: true
@@ -308,6 +314,7 @@ export type ContestGroupByOutputType = {
   scoring: string | null
   questionDisplayMode: string
   allowPairs: boolean
+  shuffleOptions: boolean
   showFeedback: boolean
   showSolutions: boolean
   showTotalScore: boolean
@@ -357,6 +364,7 @@ export type ContestWhereInput = {
   scoring?: Prisma.StringNullableFilter<"Contest"> | string | null
   questionDisplayMode?: Prisma.StringFilter<"Contest"> | string
   allowPairs?: Prisma.BoolFilter<"Contest"> | boolean
+  shuffleOptions?: Prisma.BoolFilter<"Contest"> | boolean
   showFeedback?: Prisma.BoolFilter<"Contest"> | boolean
   showSolutions?: Prisma.BoolFilter<"Contest"> | boolean
   showTotalScore?: Prisma.BoolFilter<"Contest"> | boolean
@@ -386,6 +394,7 @@ export type ContestOrderByWithRelationInput = {
   scoring?: Prisma.SortOrderInput | Prisma.SortOrder
   questionDisplayMode?: Prisma.SortOrder
   allowPairs?: Prisma.SortOrder
+  shuffleOptions?: Prisma.SortOrder
   showFeedback?: Prisma.SortOrder
   showSolutions?: Prisma.SortOrder
   showTotalScore?: Prisma.SortOrder
@@ -418,6 +427,7 @@ export type ContestWhereUniqueInput = Prisma.AtLeast<{
   scoring?: Prisma.StringNullableFilter<"Contest"> | string | null
   questionDisplayMode?: Prisma.StringFilter<"Contest"> | string
   allowPairs?: Prisma.BoolFilter<"Contest"> | boolean
+  shuffleOptions?: Prisma.BoolFilter<"Contest"> | boolean
   showFeedback?: Prisma.BoolFilter<"Contest"> | boolean
   showSolutions?: Prisma.BoolFilter<"Contest"> | boolean
   showTotalScore?: Prisma.BoolFilter<"Contest"> | boolean
@@ -447,6 +457,7 @@ export type ContestOrderByWithAggregationInput = {
   scoring?: Prisma.SortOrderInput | Prisma.SortOrder
   questionDisplayMode?: Prisma.SortOrder
   allowPairs?: Prisma.SortOrder
+  shuffleOptions?: Prisma.SortOrder
   showFeedback?: Prisma.SortOrder
   showSolutions?: Prisma.SortOrder
   showTotalScore?: Prisma.SortOrder
@@ -481,6 +492,7 @@ export type ContestScalarWhereWithAggregatesInput = {
   scoring?: Prisma.StringNullableWithAggregatesFilter<"Contest"> | string | null
   questionDisplayMode?: Prisma.StringWithAggregatesFilter<"Contest"> | string
   allowPairs?: Prisma.BoolWithAggregatesFilter<"Contest"> | boolean
+  shuffleOptions?: Prisma.BoolWithAggregatesFilter<"Contest"> | boolean
   showFeedback?: Prisma.BoolWithAggregatesFilter<"Contest"> | boolean
   showSolutions?: Prisma.BoolWithAggregatesFilter<"Contest"> | boolean
   showTotalScore?: Prisma.BoolWithAggregatesFilter<"Contest"> | boolean
@@ -507,6 +519,7 @@ export type ContestCreateInput = {
   scoring?: string | null
   questionDisplayMode?: string
   allowPairs?: boolean
+  shuffleOptions?: boolean
   showFeedback?: boolean
   showSolutions?: boolean
   showTotalScore?: boolean
@@ -535,6 +548,7 @@ export type ContestUncheckedCreateInput = {
   scoring?: string | null
   questionDisplayMode?: string
   allowPairs?: boolean
+  shuffleOptions?: boolean
   showFeedback?: boolean
   showSolutions?: boolean
   showTotalScore?: boolean
@@ -563,6 +577,7 @@ export type ContestUpdateInput = {
   scoring?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   questionDisplayMode?: Prisma.StringFieldUpdateOperationsInput | string
   allowPairs?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  shuffleOptions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showFeedback?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showSolutions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showTotalScore?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -591,6 +606,7 @@ export type ContestUncheckedUpdateInput = {
   scoring?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   questionDisplayMode?: Prisma.StringFieldUpdateOperationsInput | string
   allowPairs?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  shuffleOptions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showFeedback?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showSolutions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showTotalScore?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -619,6 +635,7 @@ export type ContestCreateManyInput = {
   scoring?: string | null
   questionDisplayMode?: string
   allowPairs?: boolean
+  shuffleOptions?: boolean
   showFeedback?: boolean
   showSolutions?: boolean
   showTotalScore?: boolean
@@ -645,6 +662,7 @@ export type ContestUpdateManyMutationInput = {
   scoring?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   questionDisplayMode?: Prisma.StringFieldUpdateOperationsInput | string
   allowPairs?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  shuffleOptions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showFeedback?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showSolutions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showTotalScore?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -670,6 +688,7 @@ export type ContestUncheckedUpdateManyInput = {
   scoring?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   questionDisplayMode?: Prisma.StringFieldUpdateOperationsInput | string
   allowPairs?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  shuffleOptions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showFeedback?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showSolutions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showTotalScore?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -706,6 +725,7 @@ export type ContestCountOrderByAggregateInput = {
   scoring?: Prisma.SortOrder
   questionDisplayMode?: Prisma.SortOrder
   allowPairs?: Prisma.SortOrder
+  shuffleOptions?: Prisma.SortOrder
   showFeedback?: Prisma.SortOrder
   showSolutions?: Prisma.SortOrder
   showTotalScore?: Prisma.SortOrder
@@ -738,6 +758,7 @@ export type ContestMaxOrderByAggregateInput = {
   scoring?: Prisma.SortOrder
   questionDisplayMode?: Prisma.SortOrder
   allowPairs?: Prisma.SortOrder
+  shuffleOptions?: Prisma.SortOrder
   showFeedback?: Prisma.SortOrder
   showSolutions?: Prisma.SortOrder
   showTotalScore?: Prisma.SortOrder
@@ -764,6 +785,7 @@ export type ContestMinOrderByAggregateInput = {
   scoring?: Prisma.SortOrder
   questionDisplayMode?: Prisma.SortOrder
   allowPairs?: Prisma.SortOrder
+  shuffleOptions?: Prisma.SortOrder
   showFeedback?: Prisma.SortOrder
   showSolutions?: Prisma.SortOrder
   showTotalScore?: Prisma.SortOrder
@@ -875,6 +897,7 @@ export type ContestCreateWithoutCreatedByInput = {
   scoring?: string | null
   questionDisplayMode?: string
   allowPairs?: boolean
+  shuffleOptions?: boolean
   showFeedback?: boolean
   showSolutions?: boolean
   showTotalScore?: boolean
@@ -902,6 +925,7 @@ export type ContestUncheckedCreateWithoutCreatedByInput = {
   scoring?: string | null
   questionDisplayMode?: string
   allowPairs?: boolean
+  shuffleOptions?: boolean
   showFeedback?: boolean
   showSolutions?: boolean
   showTotalScore?: boolean
@@ -957,6 +981,7 @@ export type ContestScalarWhereInput = {
   scoring?: Prisma.StringNullableFilter<"Contest"> | string | null
   questionDisplayMode?: Prisma.StringFilter<"Contest"> | string
   allowPairs?: Prisma.BoolFilter<"Contest"> | boolean
+  shuffleOptions?: Prisma.BoolFilter<"Contest"> | boolean
   showFeedback?: Prisma.BoolFilter<"Contest"> | boolean
   showSolutions?: Prisma.BoolFilter<"Contest"> | boolean
   showTotalScore?: Prisma.BoolFilter<"Contest"> | boolean
@@ -983,6 +1008,7 @@ export type ContestCreateWithoutTasksInput = {
   scoring?: string | null
   questionDisplayMode?: string
   allowPairs?: boolean
+  shuffleOptions?: boolean
   showFeedback?: boolean
   showSolutions?: boolean
   showTotalScore?: boolean
@@ -1010,6 +1036,7 @@ export type ContestUncheckedCreateWithoutTasksInput = {
   scoring?: string | null
   questionDisplayMode?: string
   allowPairs?: boolean
+  shuffleOptions?: boolean
   showFeedback?: boolean
   showSolutions?: boolean
   showTotalScore?: boolean
@@ -1053,6 +1080,7 @@ export type ContestUpdateWithoutTasksInput = {
   scoring?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   questionDisplayMode?: Prisma.StringFieldUpdateOperationsInput | string
   allowPairs?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  shuffleOptions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showFeedback?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showSolutions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showTotalScore?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1080,6 +1108,7 @@ export type ContestUncheckedUpdateWithoutTasksInput = {
   scoring?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   questionDisplayMode?: Prisma.StringFieldUpdateOperationsInput | string
   allowPairs?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  shuffleOptions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showFeedback?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showSolutions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showTotalScore?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1107,6 +1136,7 @@ export type ContestCreateWithoutGroupsInput = {
   scoring?: string | null
   questionDisplayMode?: string
   allowPairs?: boolean
+  shuffleOptions?: boolean
   showFeedback?: boolean
   showSolutions?: boolean
   showTotalScore?: boolean
@@ -1134,6 +1164,7 @@ export type ContestUncheckedCreateWithoutGroupsInput = {
   scoring?: string | null
   questionDisplayMode?: string
   allowPairs?: boolean
+  shuffleOptions?: boolean
   showFeedback?: boolean
   showSolutions?: boolean
   showTotalScore?: boolean
@@ -1177,6 +1208,7 @@ export type ContestUpdateWithoutGroupsInput = {
   scoring?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   questionDisplayMode?: Prisma.StringFieldUpdateOperationsInput | string
   allowPairs?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  shuffleOptions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showFeedback?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showSolutions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showTotalScore?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1204,6 +1236,7 @@ export type ContestUncheckedUpdateWithoutGroupsInput = {
   scoring?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   questionDisplayMode?: Prisma.StringFieldUpdateOperationsInput | string
   allowPairs?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  shuffleOptions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showFeedback?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showSolutions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showTotalScore?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1231,6 +1264,7 @@ export type ContestCreateManyCreatedByInput = {
   scoring?: string | null
   questionDisplayMode?: string
   allowPairs?: boolean
+  shuffleOptions?: boolean
   showFeedback?: boolean
   showSolutions?: boolean
   showTotalScore?: boolean
@@ -1256,6 +1290,7 @@ export type ContestUpdateWithoutCreatedByInput = {
   scoring?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   questionDisplayMode?: Prisma.StringFieldUpdateOperationsInput | string
   allowPairs?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  shuffleOptions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showFeedback?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showSolutions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showTotalScore?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1283,6 +1318,7 @@ export type ContestUncheckedUpdateWithoutCreatedByInput = {
   scoring?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   questionDisplayMode?: Prisma.StringFieldUpdateOperationsInput | string
   allowPairs?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  shuffleOptions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showFeedback?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showSolutions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showTotalScore?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1310,6 +1346,7 @@ export type ContestUncheckedUpdateManyWithoutCreatedByInput = {
   scoring?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   questionDisplayMode?: Prisma.StringFieldUpdateOperationsInput | string
   allowPairs?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  shuffleOptions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showFeedback?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showSolutions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   showTotalScore?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1375,6 +1412,7 @@ export type ContestSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   scoring?: boolean
   questionDisplayMode?: boolean
   allowPairs?: boolean
+  shuffleOptions?: boolean
   showFeedback?: boolean
   showSolutions?: boolean
   showTotalScore?: boolean
@@ -1405,6 +1443,7 @@ export type ContestSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   scoring?: boolean
   questionDisplayMode?: boolean
   allowPairs?: boolean
+  shuffleOptions?: boolean
   showFeedback?: boolean
   showSolutions?: boolean
   showTotalScore?: boolean
@@ -1432,6 +1471,7 @@ export type ContestSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   scoring?: boolean
   questionDisplayMode?: boolean
   allowPairs?: boolean
+  shuffleOptions?: boolean
   showFeedback?: boolean
   showSolutions?: boolean
   showTotalScore?: boolean
@@ -1459,6 +1499,7 @@ export type ContestSelectScalar = {
   scoring?: boolean
   questionDisplayMode?: boolean
   allowPairs?: boolean
+  shuffleOptions?: boolean
   showFeedback?: boolean
   showSolutions?: boolean
   showTotalScore?: boolean
@@ -1472,7 +1513,7 @@ export type ContestSelectScalar = {
   updatedAt?: boolean
 }
 
-export type ContestOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "title" | "category" | "durationMinutes" | "registrationStartsAt" | "registrationEndsAt" | "startsAt" | "endsAt" | "initialScore" | "scoring" | "questionDisplayMode" | "allowPairs" | "showFeedback" | "showSolutions" | "showTotalScore" | "publishedAt" | "suspendedAt" | "consolidatedAt" | "resultsPublishedAt" | "isPractice" | "createdById" | "createdAt" | "updatedAt", ExtArgs["result"]["contest"]>
+export type ContestOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "title" | "category" | "durationMinutes" | "registrationStartsAt" | "registrationEndsAt" | "startsAt" | "endsAt" | "initialScore" | "scoring" | "questionDisplayMode" | "allowPairs" | "shuffleOptions" | "showFeedback" | "showSolutions" | "showTotalScore" | "publishedAt" | "suspendedAt" | "consolidatedAt" | "resultsPublishedAt" | "isPractice" | "createdById" | "createdAt" | "updatedAt", ExtArgs["result"]["contest"]>
 export type ContestInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   createdBy?: boolean | Prisma.Contest$createdByArgs<ExtArgs>
   tasks?: boolean | Prisma.Contest$tasksArgs<ExtArgs>
@@ -1506,6 +1547,7 @@ export type $ContestPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     scoring: string | null
     questionDisplayMode: string
     allowPairs: boolean
+    shuffleOptions: boolean
     showFeedback: boolean
     showSolutions: boolean
     showTotalScore: boolean
@@ -1955,6 +1997,7 @@ export interface ContestFieldRefs {
   readonly scoring: Prisma.FieldRef<"Contest", 'String'>
   readonly questionDisplayMode: Prisma.FieldRef<"Contest", 'String'>
   readonly allowPairs: Prisma.FieldRef<"Contest", 'Boolean'>
+  readonly shuffleOptions: Prisma.FieldRef<"Contest", 'Boolean'>
   readonly showFeedback: Prisma.FieldRef<"Contest", 'Boolean'>
   readonly showSolutions: Prisma.FieldRef<"Contest", 'Boolean'>
   readonly showTotalScore: Prisma.FieldRef<"Contest", 'Boolean'>

@@ -1,4 +1,4 @@
-import { Extension, Node as TiptapNode, type Editor } from "@tiptap/core";
+import { Extension, Node as TiptapNode } from "@tiptap/core";
 import { Fragment, Slice, type Node } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
@@ -41,10 +41,9 @@ export const TaskBlank = TiptapNode.create({
         ...HTMLAttributes,
         contenteditable: "false",
         class:
-          "inline-block rounded border border-dashed border-primary px-2 align-baseline text-primary",
+          "task-blank mx-0.5 inline-block border-b-2 border-primary bg-primary/10 px-2 align-baseline text-sm font-medium text-primary",
         "aria-label": "Hueco",
       },
-      "[ … ]",
     ];
   },
   renderText() {
@@ -148,18 +147,3 @@ export const TaskParagraphIndent = Extension.create({
     ];
   },
 });
-
-export function changeTaskIndent(editor: Editor, delta: -1 | 1) {
-  const { from, to } = editor.state.selection;
-  const transaction = editor.state.tr;
-  editor.state.doc.nodesBetween(from, to, (node, position) => {
-    if (node.type.name === "paragraph") {
-      transaction.setNodeMarkup(position, undefined, {
-        ...node.attrs,
-        indent: clampTaskIndent(clampTaskIndent(node.attrs.indent) + delta),
-      });
-    }
-  });
-  editor.view.dispatch(transaction);
-  editor.view.focus();
-}

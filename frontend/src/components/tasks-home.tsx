@@ -362,7 +362,7 @@ export function TasksHome() {
         <Button asChild className="shrink-0">
           <a href="/tareas/nueva">
             <FilePlus2Icon data-icon="inline-start" />
-            Registrar tarea
+            Nueva tarea
           </a>
         </Button>
       </div>
@@ -609,22 +609,25 @@ export function TasksHome() {
                     </div>
                   </div>
 
-                  <div className="grid w-full shrink-0 gap-2 lg:w-72 lg:grid-cols-2">
+                  <div className="grid w-full shrink-0 grid-cols-[1fr_1fr_1fr_auto] gap-1.5 lg:w-72 lg:grid-cols-2 lg:gap-2">
                     <Button
                       size="sm"
                       type="button"
                       variant={task.isPractice ? "default" : "outline"}
-                      className="w-full justify-start"
+                      className="w-full max-lg:px-2 lg:justify-start"
                       onClick={() => togglePractice(task)}
                     >
                       <GraduationCapIcon data-icon="inline-start" />
-                      {task.isPractice ? "En práctica" : "Práctica"}
+                      <span className="lg:hidden">Práctica</span>
+                      <span className="max-lg:hidden">
+                        {task.isPractice ? "En práctica" : "Práctica"}
+                      </span>
                     </Button>
                     <Button
                       asChild
                       size="sm"
                       variant="outline"
-                      className="w-full justify-start"
+                      className="w-full max-lg:px-2 lg:justify-start"
                     >
                       <a href={`/tareas/editar?id=${task.id}`}>
                         <FilePenLineIcon data-icon="inline-start" />
@@ -635,7 +638,7 @@ export function TasksHome() {
                       asChild
                       size="sm"
                       variant="outline"
-                      className="w-full justify-start"
+                      className="w-full max-lg:px-2 lg:justify-start"
                     >
                       <a href={`/tareas/probador?id=${task.id}`}>
                         <PlayCircleIcon data-icon="inline-start" />
@@ -646,11 +649,11 @@ export function TasksHome() {
                       size="sm"
                       type="button"
                       variant="outline"
-                      className="w-full justify-start"
+                      className="w-full max-lg:px-2 lg:justify-start"
                       onClick={() => setTaskToDelete(task)}
                     >
                       <Trash2Icon data-icon="inline-start" />
-                      Eliminar
+                      <span className="max-lg:sr-only">Eliminar</span>
                     </Button>
                   </div>
                 </li>
@@ -743,9 +746,12 @@ function TasksSkeleton() {
                 <Skeleton className="h-5 w-44 rounded-sm" />
               </div>
             </div>
-            <div className="grid w-full shrink-0 gap-2 lg:w-72 lg:grid-cols-2">
+            <div className="grid w-full shrink-0 grid-cols-[1fr_1fr_1fr_auto] gap-1.5 lg:w-72 lg:grid-cols-2 lg:gap-2">
               {[0, 1, 2, 3].map((button) => (
-                <Skeleton key={button} className="h-9 rounded-sm" />
+                <Skeleton
+                  key={button}
+                  className="h-8 rounded-sm last:w-9 lg:h-9 lg:last:w-auto"
+                />
               ))}
             </div>
           </li>

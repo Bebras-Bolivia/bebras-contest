@@ -62,12 +62,12 @@ export function ImageHotspotPlayer({
           width={config.imageWidth}
           height={config.imageHeight}
         />
-        {config.regions.map((region) => (
+        {config.regions.map((region, index) => (
           <g
             key={region.id}
             role="button"
             tabIndex={disabled ? -1 : 0}
-            aria-label={region.label}
+            aria-label={`Zona ${index + 1}`}
             aria-pressed={region.id === regionId}
             aria-disabled={disabled}
             className={
@@ -111,7 +111,7 @@ export function ImageHotspotPlayer({
           aria-live="polite"
         >
           {selected
-            ? `Seleccionado: ${selected.label}`
+            ? "Toca otra zona si quieres cambiarla."
             : "Toca una zona de la imagen. También puedes usar Tab y Enter."}
         </p>
         <Button

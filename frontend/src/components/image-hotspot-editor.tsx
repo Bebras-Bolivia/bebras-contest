@@ -1,19 +1,20 @@
 "use client";
 
 import { useRef, useState, type PointerEvent, type KeyboardEvent } from "react";
+import {
+  CheckIcon,
+  CircleDotIcon,
+  ImagePlusIcon,
+  PenLineIcon,
+  PlusIcon,
+  Trash2Icon,
+  Undo2Icon,
+} from "lucide-react";
 import { toast } from "sonner";
 import { HotspotShapeView } from "@/components/image-hotspot-player";
-import { ImageUploadButton } from "@/components/image-upload-button";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldLabel } from "@/components/ui/field";
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { createContentImages } from "@/lib/task-schema";
+import { cn } from "@/lib/utils";
 import {
   parseHotspotConfig,
   parseHotspotKey,
@@ -187,92 +188,124 @@ export function ImageHotspotEditor({
     }
   };
 
+  const fileInput = useRef<HTMLInputElement>(null);
+  const pickImage = () => fileInput.current?.click();
+  const accepted = (id: string) => answerKey.acceptedRegionIds.includes(id);
+
   return (
     <div className="flex flex-col gap-3" aria-label="Editor de zonas activas">
-      <div className="flex flex-wrap items-center gap-2">
-        <ImageUploadButton
-          onChange={(event) => {
-            void upload(event.target.files);
-            event.target.value = "";
-          }}
-        />
-        {config && (
-          <>
-            <Button
-              size="sm"
-              variant="outline"
-              type="button"
-              onClick={() => {
-                setDrawing("circle");
-                setAppend(false);
-                setPoints([]);
-              }}
-            >
-              Añadir punto
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              type="button"
-              onClick={() => {
-                setDrawing("polygon");
-                setAppend(false);
-                setPoints([]);
-              }}
-            >
-              Dibujar camino
-            </Button>
-            {drawing && (
-              <>
-                {drawing === "polygon" && (
-                  <Button
-                    size="sm"
-                    type="button"
-                    disabled={points.length < 3}
-                    onClick={finishPolygon}
-                  >
-                    Cerrar camino
-                  </Button>
-                )}
-                {points.length > 0 && (
+      <input
+        ref={fileInput}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(event) => {
+          void upload(event.target.files);
+          event.target.value = "";
+        }}
+      />
+      {!config && (
+        <button
+          type="button"
+          onClick={pickImage}
+          className="flex h-40 flex-col items-center justify-center gap-2 border-2 border-dashed border-border/30 text-sm text-muted-foreground transition-colors outline-none hover:border-primary hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/60"
+        >
+          <ImagePlusIcon className="size-6" />
+          Subir la imagen donde se marca la respuesta
+        </button>
+      )}
+      {config && (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1">
+              {drawing ? (
+                <>
+                  {drawing === "polygon" && (
+                    <Button
+                      size="sm"
+                      type="button"
+                      disabled={points.length < 3}
+                      onClick={finishPolygon}
+                    >
+                      <CheckIcon data-icon="inline-start" />
+                      Cerrar zona
+                    </Button>
+                  )}
+                  {points.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      type="button"
+                      onClick={() => setPoints(points.slice(0, -1))}
+                    >
+                      <Undo2Icon data-icon="inline-start" />
+                      Deshacer
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="ghost"
                     type="button"
-                    onClick={() => setPoints(points.slice(0, -1))}
+                    onClick={() => {
+                      setDrawing(null);
+                      setPoints([]);
+                    }}
                   >
-                    Deshacer punto
+                    Cancelar
                   </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  type="button"
-                  onClick={() => {
-                    setDrawing(null);
-                    setPoints([]);
-                  }}
-                >
-                  Cancelar
-                </Button>
-              </>
+                </>
+              ) : (
+                <>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    type="button"
+                    onClick={() => {
+                      setDrawing("circle");
+                      setAppend(false);
+                      setPoints([]);
+                    }}
+                  >
+                    <CircleDotIcon data-icon="inline-start" />
+                    Marcar punto
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    type="button"
+                    onClick={() => {
+                      setDrawing("polygon");
+                      setAppend(false);
+                      setPoints([]);
+                    }}
+                  >
+                    <PenLineIcon data-icon="inline-start" />
+                    Dibujar zona
+                  </Button>
+                </>
+              )}
+            </div>
+            {!drawing && (
+              <Button
+                size="sm"
+                variant="ghost"
+                type="button"
+                className="text-muted-foreground"
+                onClick={pickImage}
+              >
+                <ImagePlusIcon data-icon="inline-start" />
+                Cambiar imagen
+              </Button>
             )}
-          </>
-        )}
-      </div>
-      {!config && (
-        <p className="text-sm text-muted-foreground">
-          Sube la figura para marcar sus puntos o caminos.
-        </p>
-      )}
-      {config && (
-        <>
+          </div>
           <p className="text-sm text-muted-foreground" role="status">
             {drawing === "circle"
-              ? "Toca la imagen para colocar el punto."
+              ? "Toca la imagen donde va el punto."
               : drawing === "polygon"
-                ? "Marca el contorno con clics y ciérralo tocando el primer punto o «Cerrar camino»."
-                : "Selecciona una zona y arrastra sus puntos para ajustarla. Las flechas del teclado también funcionan."}
+                ? "Toca alrededor de la zona y ciérrala tocando el primer punto."
+                : config.regions.length
+                  ? "Toca una zona para elegirla y arrastra sus puntos para ajustarla. La verde es la correcta."
+                  : "Marca un punto o dibuja una zona sobre la imagen."}
           </p>
           <svg
             ref={svg}
@@ -280,7 +313,7 @@ export function ImageHotspotEditor({
             width={config.imageWidth}
             height={config.imageHeight}
             style={{ height: "auto", maxHeight: "min(52vh, 480px)" }}
-            className="w-full touch-none text-primary"
+            className="w-full touch-none"
             preserveAspectRatio="xMidYMid meet"
             role="group"
             aria-label="Dibujar zonas sobre la imagen"
@@ -334,15 +367,18 @@ export function ImageHotspotEditor({
               width={config.imageWidth}
               height={config.imageHeight}
             />
-            {config.regions.map((r) =>
+            {config.regions.map((r, index) =>
               r.shapes.map((shape, i) => (
                 <g
                   key={`${r.id}:${i}`}
                   role="button"
                   tabIndex={drawing ? -1 : 0}
-                  aria-label={`${r.label}, trazado ${i + 1}`}
+                  aria-label={`Zona ${index + 1}, parte ${i + 1}`}
                   aria-pressed={r.id === selection.id && i === selection.shape}
-                  className="cursor-move outline-none"
+                  className={cn(
+                    "cursor-move outline-none",
+                    accepted(r.id) ? "text-difficulty-easy" : "text-primary",
+                  )}
                   onFocus={() => setSelection({ id: r.id, shape: i })}
                   onPointerDown={(e) => startDrag(e, r.id, i, shape)}
                   onKeyDown={(e) => keyMove(e, shape)}
@@ -449,6 +485,7 @@ export function ImageHotspotEditor({
                   strokeWidth={2}
                   vectorEffect="non-scaling-stroke"
                   pointerEvents="none"
+                  className="text-primary"
                 />
                 {points.map((p, i) => (
                   <circle
@@ -456,7 +493,7 @@ export function ImageHotspotEditor({
                     cx={(p.x * config.imageWidth) / 100}
                     cy={(p.y * config.imageHeight) / 100}
                     r={Math.min(config.imageWidth, config.imageHeight) * 0.018}
-                    fill="currentColor"
+                    className="fill-primary"
                     onClick={(e) => {
                       e.stopPropagation();
                       if (i === 0) finishPolygon();
@@ -467,71 +504,51 @@ export function ImageHotspotEditor({
             )}
           </svg>
           {!drawing && config.regions.length > 0 && (
-            <div className="flex flex-wrap items-center gap-3">
-              <NativeSelect
-                aria-label="Zona seleccionada"
-                value={region?.id ?? ""}
-                onChange={(e) => setSelection({ id: e.target.value, shape: 0 })}
+            <div className="flex flex-col gap-2">
+              <div
+                role="group"
+                aria-label="Zonas"
+                className="flex flex-wrap items-center gap-1"
               >
-                {!region && (
-                  <NativeSelectOption value="">
-                    Elige una zona
-                  </NativeSelectOption>
-                )}
-                {config.regions.map((r) => (
-                  <NativeSelectOption key={r.id} value={r.id}>
-                    {r.label}
-                  </NativeSelectOption>
+                {config.regions.map((r, index) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    aria-pressed={r.id === region?.id}
+                    onClick={() => setSelection({ id: r.id, shape: 0 })}
+                    className="flex h-7 items-center gap-1.5 px-2.5 text-xs text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/60 aria-pressed:bg-primary/10 aria-pressed:font-semibold aria-pressed:text-foreground"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "size-2.5",
+                        accepted(r.id) ? "bg-difficulty-easy" : "bg-primary/60",
+                      )}
+                    />
+                    Zona {index + 1}
+                  </button>
                 ))}
-              </NativeSelect>
+              </div>
               {region && (
-                <>
-                  <Field className="w-40">
-                    <FieldLabel className="sr-only" htmlFor="hotspot-name">
-                      Nombre de la zona
-                    </FieldLabel>
-                    <Input
-                      id="hotspot-name"
-                      value={region.label}
-                      onChange={(e) =>
-                        onChange(
-                          {
-                            ...config,
-                            regions: config.regions.map((r) =>
-                              r.id === region.id
-                                ? { ...r, label: e.target.value }
-                                : r,
-                            ),
-                          },
-                          answerKey,
-                        )
-                      }
-                    />
-                  </Field>
-                  <Field orientation="horizontal" className="w-auto">
-                    <Checkbox
-                      id="hotspot-correct"
-                      checked={answerKey.acceptedRegionIds.includes(region.id)}
-                      onCheckedChange={(checked) =>
-                        onChange(config, {
-                          version: 1,
-                          acceptedRegionIds: checked
-                            ? [
-                                ...answerKey.acceptedRegionIds.filter(
-                                  (id) => id !== region.id,
-                                ),
-                                region.id,
-                              ]
-                            : answerKey.acceptedRegionIds.filter(
-                                (id) => id !== region.id,
-                              ),
-                        })
-                      }
-                    />
-                    <FieldLabel htmlFor="hotspot-correct">
-                      Respuesta válida
-                    </FieldLabel>
-                  </Field>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    aria-pressed={accepted(region.id)}
+                    onClick={() =>
+                      onChange(config, {
+                        version: 1,
+                        acceptedRegionIds: accepted(region.id)
+                          ? answerKey.acceptedRegionIds.filter(
+                              (id) => id !== region.id,
+                            )
+                          : [...answerKey.acceptedRegionIds, region.id],
+                      })
+                    }
+                    className="flex h-9 items-center gap-1.5 border-2 border-border/30 px-3 text-sm transition-colors outline-none hover:border-difficulty-easy focus-visible:ring-2 focus-visible:ring-primary/60 aria-pressed:border-difficulty-easy aria-pressed:bg-difficulty-easy aria-pressed:font-semibold aria-pressed:text-difficulty-easy-foreground"
+                  >
+                    <CheckIcon className="size-4" />
+                    Es correcta
+                  </button>
                   <Button
                     type="button"
                     size="sm"
@@ -542,7 +559,8 @@ export function ImageHotspotEditor({
                       setPoints([]);
                     }}
                   >
-                    Otro tramo
+                    <PlusIcon data-icon="inline-start" />
+                    Otra parte
                   </Button>
                   {region.shapes.length > 1 && (
                     <Button
@@ -569,13 +587,13 @@ export function ImageHotspotEditor({
                         setSelection({ id: region.id, shape: 0 });
                       }}
                     >
-                      Quitar tramo
+                      Quitar esta parte
                     </Button>
                   )}
-                  <Button
+                  <button
                     type="button"
-                    size="sm"
-                    variant="ghost"
+                    aria-label="Quitar zona"
+                    title="Quitar zona"
                     onClick={() => {
                       onChange(
                         {
@@ -593,17 +611,21 @@ export function ImageHotspotEditor({
                       );
                       setSelection({ id: "", shape: 0 });
                     }}
+                    className="grid size-8 place-items-center text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/60"
                   >
-                    Eliminar zona
-                  </Button>
-                </>
+                    <Trash2Icon className="size-4" />
+                  </button>
+                </div>
               )}
             </div>
           )}
           {error && !drawing && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
+            <p
+              role="alert"
+              className="text-sm font-medium text-destructive motion-safe:animate-in motion-safe:fade-in-0"
+            >
+              {error}
+            </p>
           )}
         </>
       )}

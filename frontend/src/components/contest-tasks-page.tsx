@@ -73,6 +73,7 @@ function toPayload(
     scoring: contest.scoring,
     questionDisplayMode: contest.questionDisplayMode,
     allowPairs: contest.allowPairs,
+    shuffleOptions: contest.shuffleOptions,
     showFeedback: contest.showFeedback,
     showSolutions: contest.showSolutions,
     showTotalScore: contest.showTotalScore,

@@ -1134,6 +1134,7 @@ function deserializeContest(contest: {
   scoring?: string | null;
   questionDisplayMode: string;
   allowPairs: boolean;
+  shuffleOptions: boolean;
   showFeedback: boolean;
   showSolutions: boolean;
   showTotalScore: boolean;
@@ -1178,6 +1179,7 @@ function deserializeContest(contest: {
     ),
     questionDisplayMode: contest.questionDisplayMode,
     allowPairs: contest.allowPairs,
+    shuffleOptions: contest.shuffleOptions,
     showFeedback: contest.showFeedback,
     showSolutions: contest.showSolutions,
     showTotalScore: contest.showTotalScore,
@@ -1242,6 +1244,7 @@ function parseContestPayload(body: Record<string, unknown>) {
     scoring: parseContestScoring(body.scoring),
     questionDisplayMode,
     allowPairs: body.allowPairs === true,
+    shuffleOptions: body.shuffleOptions === true,
     showFeedback: body.showFeedback === true,
     showSolutions: body.showSolutions === true,
     showTotalScore: body.showTotalScore === true,
@@ -2383,6 +2386,7 @@ app.post("/api/practices", async (req, res) => {
       scoring: JSON.stringify(scoring),
       questionDisplayMode: "one_by_one",
       allowPairs: false,
+      shuffleOptions: false,
       showFeedback: true,
       showSolutions: true,
       showTotalScore: true,
@@ -2709,6 +2713,7 @@ app.post("/api/contests", async (req, res) => {
       scoring: JSON.stringify(payload.scoring),
       questionDisplayMode: payload.questionDisplayMode,
       allowPairs: payload.allowPairs,
+      shuffleOptions: payload.shuffleOptions,
       showFeedback: payload.showFeedback,
       showSolutions: payload.showSolutions,
       showTotalScore: payload.showTotalScore,
@@ -2818,14 +2823,14 @@ app.put("/api/contests/:id", async (req, res) => {
       "title" = ?, "category" = ?, "durationMinutes" = ?,
       "registrationStartsAt" = ?, "registrationEndsAt" = ?, "startsAt" = ?, "endsAt" = ?,
       "initialScore" = ?, "scoring" = ?, "questionDisplayMode" = ?,
-      "allowPairs" = ?, "showFeedback" = ?, "showSolutions" = ?, "showTotalScore" = ?,
+      "allowPairs" = ?, "shuffleOptions" = ?, "showFeedback" = ?, "showSolutions" = ?, "showTotalScore" = ?,
       "updatedAt" = ? WHERE "id" = ?`).bind(
       payload.title, payload.category, payload.durationMinutes,
       payload.registrationStartsAt?.toISOString() ?? null,
       payload.registrationEndsAt?.toISOString() ?? null,
       payload.startsAt?.toISOString() ?? null, payload.endsAt?.toISOString() ?? null,
       computeInitialScore(taskWrites), JSON.stringify(payload.scoring), payload.questionDisplayMode,
-      Number(payload.allowPairs), Number(payload.showFeedback), Number(payload.showSolutions),
+      Number(payload.allowPairs), Number(payload.shuffleOptions), Number(payload.showFeedback), Number(payload.showSolutions),
       Number(payload.showTotalScore), now, contestId,
     ),
     ...taskWrites.map((task) => env.DB.prepare(`INSERT INTO "ContestTask"
@@ -5491,7 +5496,11 @@ const playAttemptHandler: express.RequestHandler = async (req, res) => {
     const safe: ReturnType<typeof renderSafeTask> & {
       correct?: boolean | null;
       explanationBlocks?: unknown;
-    } = renderSafeTask(contestTask, task);
+    } = renderSafeTask(
+      contestTask,
+      task,
+      contest.shuffleOptions ? attempt.id : undefined,
+    );
     if (showResults) {
       safe.correct = correctnessByTask[task.id] ?? null;
     }

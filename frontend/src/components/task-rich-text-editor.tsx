@@ -12,7 +12,8 @@ import {
 } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
 import { markInputRule } from "@tiptap/core";
-import { NodeSelection } from "@tiptap/pm/state";
+import { NodeSelection, Plugin, PluginKey } from "@tiptap/pm/state";
+import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 import Bold from "@tiptap/extension-bold";
 import Italic from "@tiptap/extension-italic";
@@ -25,10 +26,7 @@ import {
   StrikethroughIcon,
   ListIcon,
   ListOrderedIcon,
-  IndentIncreaseIcon,
-  IndentDecreaseIcon,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Tooltip,
@@ -38,11 +36,7 @@ import {
 } from "@/components/ui/tooltip";
 import { legacyTextToDocument } from "@/lib/rich-text-document";
 import { hasTaskBlanks } from "@/lib/task-blank";
-import {
-  TaskBlank,
-  TaskParagraphIndent,
-  changeTaskIndent,
-} from "@/lib/task-blank-extension";
+import { TaskBlank, TaskParagraphIndent } from "@/lib/task-blank-extension";
 
 const extensions = [
   TaskBlank,
@@ -105,6 +99,8 @@ const extensions = [
   }),
 ];
 
+const blankNumberKey = new PluginKey("taskBlankNumber");
+
 const formats = [
   { name: "bold", label: "Negrita", shortcut: "Ctrl+B", icon: BoldIcon },
   { name: "italic", label: "Cursiva", shortcut: "Ctrl+I", icon: ItalicIcon },
@@ -146,6 +142,7 @@ export function TaskRichTextEditor({
   onRemoveEmpty,
   allowBlanks = false,
   onSelectBlank,
+  blankNumbers,
   blankRemovalDescription,
 }: {
   id: string;
@@ -159,6 +156,7 @@ export function TaskRichTextEditor({
   onRemoveEmpty?: () => boolean;
   allowBlanks?: boolean;
   onSelectBlank?: (blankId: string) => void;
+  blankNumbers?: Record<string, number>;
   blankRemovalDescription?: (ids: string[]) => string | null;
 }) {
   const previousValue = useRef({ content, richText });
@@ -272,6 +270,43 @@ export function TaskRichTextEditor({
     };
   }, [editor, allowBlanks]);
 
+  const numbersRef = useRef(blankNumbers);
+  useEffect(() => {
+    if (!editor) return;
+    editor.registerPlugin(
+      new Plugin({
+        key: blankNumberKey,
+        props: {
+          decorations(current) {
+            const decorations: Decoration[] = [];
+            current.doc.descendants((node, position) => {
+              const number =
+                node.type.name === "taskBlank" &&
+                numbersRef.current?.[node.attrs.blankId];
+              if (number) {
+                decorations.push(
+                  Decoration.node(position, position + node.nodeSize, {
+                    "data-number": String(number),
+                  }),
+                );
+              }
+            });
+            return DecorationSet.create(current.doc, decorations);
+          },
+        },
+      }),
+    );
+    return () => {
+      if (!editor.isDestroyed) editor.unregisterPlugin(blankNumberKey);
+    };
+  }, [editor]);
+  useEffect(() => {
+    numbersRef.current = blankNumbers;
+    if (editor && !editor.isDestroyed) {
+      editor.view.dispatch(editor.state.tr.setMeta(blankNumberKey, true));
+    }
+  }, [editor, blankNumbers]);
+
   const state = useEditorState({
     editor,
     selector: ({ editor: current }) => ({
@@ -302,59 +337,11 @@ export function TaskRichTextEditor({
   }, [editor, content, richText]);
 
   return (
-    <>
+    <div>
       <AuthoringDeleteDialog
         pending={pendingDelete}
         onClose={() => setPendingDelete(null)}
       />
-      {allowBlanks && editor && (
-        <div
-          className="flex flex-wrap items-center gap-1"
-          role="group"
-          aria-label="Huecos y sangría"
-        >
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() =>
-              editor
-                .chain()
-                .focus()
-                .insertContent({
-                  type: "taskBlank",
-                  attrs: { blankId: crypto.randomUUID() },
-                })
-                .run()
-            }
-          >
-            Insertar hueco
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Reducir sangría"
-            title="Reducir sangría"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => changeTaskIndent(editor, -1)}
-          >
-            <IndentDecreaseIcon />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Aumentar sangría"
-            title="Aumentar sangría"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => changeTaskIndent(editor, 1)}
-          >
-            <IndentIncreaseIcon />
-          </Button>
-        </div>
-      )}
       <EditorContent editor={editor} />
       {editor && (
         <BubbleMenu
@@ -381,42 +368,59 @@ export function TaskRichTextEditor({
           }}
         >
           <TooltipProvider delayDuration={400}>
-            <ToggleGroup
-              type="multiple"
-              size="sm"
-              aria-label="Formato del texto"
-              className="rounded-full border bg-popover p-1 shadow-lg"
-              value={state?.active ?? []}
-            >
-              {formats.map(({ name, label, shortcut, icon: Icon }) => (
-                <Tooltip key={name}>
-                  <TooltipTrigger asChild>
-                    <ToggleGroupItem
-                      value={name}
-                      aria-label={label}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => {
-                        const chain = editor.chain();
-                        if (name === "bulletList")
-                          chain.toggleBulletList().run();
-                        else if (name === "orderedList")
-                          chain.toggleOrderedList().run();
-                        else chain.toggleMark(name).run();
-                        editor.view.focus();
-                      }}
-                    >
-                      <Icon />
-                    </ToggleGroupItem>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {label} · {shortcut}
-                  </TooltipContent>
-                </Tooltip>
-              ))}
-            </ToggleGroup>
+            <div className="flex items-center gap-1 rounded-full border bg-popover p-1 shadow-lg">
+              <ToggleGroup
+                type="multiple"
+                size="sm"
+                aria-label="Formato del texto"
+                value={state?.active ?? []}
+              >
+                {formats.map(({ name, label, shortcut, icon: Icon }) => (
+                  <Tooltip key={name}>
+                    <TooltipTrigger asChild>
+                      <ToggleGroupItem
+                        value={name}
+                        aria-label={label}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          const chain = editor.chain();
+                          if (name === "bulletList")
+                            chain.toggleBulletList().run();
+                          else if (name === "orderedList")
+                            chain.toggleOrderedList().run();
+                          else chain.toggleMark(name).run();
+                          editor.view.focus();
+                        }}
+                      >
+                        <Icon />
+                      </ToggleGroupItem>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {label} · {shortcut}
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
+              </ToggleGroup>
+            </div>
           </TooltipProvider>
         </BubbleMenu>
       )}
-    </>
+    </div>
   );
+}
+
+/** Pone un hueco en el cursor o convierte en hueco las palabras seleccionadas. */
+export function insertTaskBlank(
+  editor: Editor,
+  onBlankFromText?: (blankId: string, text: string) => void,
+) {
+  const { from, to, empty } = editor.state.selection;
+  const text = empty ? "" : editor.state.doc.textBetween(from, to, " ").trim();
+  const blankId = crypto.randomUUID();
+  editor
+    .chain()
+    .focus()
+    .insertContentAt({ from, to }, { type: "taskBlank", attrs: { blankId } })
+    .run();
+  if (text) onBlankFromText?.(blankId, text);
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   StateGridPlayer,
   readAssignments,
@@ -20,6 +21,36 @@ import {
   type StoredTaskDragDropTarget,
 } from "@/lib/task-schema";
 import { cn } from "@/lib/utils";
+
+/** La proporción (ancho / alto) de la imagen más angosta, o null mientras cargan. */
+function useNarrowestRatio(urls: string[]) {
+  const key = urls.join("\n");
+  const [ratio, setRatio] = useState<{ key: string; value: number } | null>(
+    null,
+  );
+  useEffect(() => {
+    if (!key) return;
+    let active = true;
+    Promise.all(
+      key.split("\n").map(
+        (url) =>
+          new Promise<number>((resolve) => {
+            const image = new Image();
+            image.onload = () =>
+              resolve(image.naturalWidth / Math.max(1, image.naturalHeight));
+            image.onerror = () => resolve(1);
+            image.src = url;
+          }),
+      ),
+    ).then((ratios) => {
+      if (active) setRatio({ key, value: Math.min(...ratios) });
+    });
+    return () => {
+      active = false;
+    };
+  }, [key]);
+  return key && ratio?.key === key ? ratio.value : null;
+}
 
 function compareIds(left: string, right: string) {
   if (left === right) {
@@ -126,6 +157,15 @@ export function PlayTaskFields({
     task.answers.some((answer) =>
       answer.blocks.some((block) => block.type === "image" && block.image),
     );
+  const imageRatio = useNarrowestRatio(
+    imageChoices
+      ? task.answers.flatMap((answer) =>
+          answer.blocks.flatMap((block) =>
+            block.type === "image" && block.image ? [block.image.url] : [],
+          ),
+        )
+      : [],
+  );
 
   return (
     <>
@@ -152,16 +192,20 @@ export function PlayTaskFields({
         <div
           className={cn(
             "gap-3",
-            imageChoices
-              ? cn(
-                  "grid grid-cols-2",
-                  task.answers.length === 4
-                    ? "md:grid-cols-4"
-                    : "md:grid-cols-3",
-                )
-              : horizontalChoices
-                ? "grid grid-cols-2 items-stretch lg:grid-cols-4"
-                : "flex flex-col",
+            imageRatio !== null && imageRatio >= 2.5
+              ? "flex flex-col"
+              : imageRatio !== null && imageRatio >= 1.5
+                ? "grid grid-cols-1 sm:grid-cols-2"
+                : imageChoices
+                  ? cn(
+                      "grid grid-cols-2",
+                      task.answers.length === 4
+                        ? "md:grid-cols-4"
+                        : "md:grid-cols-3",
+                    )
+                  : horizontalChoices
+                    ? "grid grid-cols-2 items-stretch lg:grid-cols-4"
+                    : "flex flex-col",
           )}
         >
           {task.answers.map((answer, index) => {

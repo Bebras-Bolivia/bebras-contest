@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Fragment,
   type PointerEvent as ReactPointerEvent,
   useEffect,
   useRef,
@@ -8,7 +9,10 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import type { Editor, JSONContent } from "@tiptap/react";
-import { TaskRichTextEditor } from "@/components/task-rich-text-editor";
+import {
+  TaskRichTextEditor,
+  insertTaskBlank,
+} from "@/components/task-rich-text-editor";
 import { cn } from "@/lib/utils";
 import { getTaskBlankIds, hasTaskBlanks } from "@/lib/task-blank";
 import { AuthoringDeleteDialog } from "@/components/authoring-delete-dialog";
@@ -16,9 +20,15 @@ import { type ContentBlock, type ContentBlockType } from "@/lib/task-schema";
 import { Button } from "@/components/ui/button";
 import { ImageUploadButton } from "@/components/image-upload-button";
 import { ImageWidthResizer } from "@/components/image-width-resizer";
-import { FieldHint } from "@/components/field-hint";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Field, FieldContent, FieldGroup } from "@/components/ui/field";
 import {
+  BracketsIcon,
+  HelpCircleIcon,
   GripVerticalIcon,
   ImageIcon,
   MessageSquareTextIcon,
@@ -51,6 +61,8 @@ type TaskContentBuilderProps = {
   allowCrossSectionDrag?: boolean;
   allowBlanks?: boolean;
   onSelectBlank?: (blankId: string) => void;
+  onBlankFromText?: (blankId: string, text: string) => void;
+  blankNumbers?: Record<string, number>;
   blankRemovalDescription?: (ids: string[]) => string | null;
   /** Identifica esta lista, para saber si un bloque cambió de sección. */
   sectionId?: string;
@@ -80,6 +92,8 @@ export function TaskContentBuilder({
   allowCrossSectionDrag = false,
   allowBlanks = false,
   onSelectBlank,
+  onBlankFromText,
+  blankNumbers,
   blankRemovalDescription,
   sectionId,
   onMoveBlockToSection,
@@ -164,6 +178,14 @@ export function TaskContentBuilder({
     if (!newBlockId) return;
     onMoveBlock(newBlockId, blockId, "after");
     pendingFocusRef.current = { blockId: newBlockId, atEnd: false };
+  };
+
+  const lastTextBlockRef = useRef<string | null>(null);
+  const textEditor = () => {
+    const id =
+      lastTextBlockRef.current ??
+      blocks.findLast((block) => block.type !== "image")?.id;
+    return id ? editorRefs.current[id] : null;
   };
 
   const handleAddImage = () => {
@@ -297,6 +319,9 @@ export function TaskContentBuilder({
             dragPreview?.blockId === block.id && "opacity-40",
           )}
           data-content-block-id={block.id}
+          onFocusCapture={() => {
+            if (block.type !== "image") lastTextBlockRef.current = block.id;
+          }}
         >
           {allowReorderingBlocks ? (
             <Button
@@ -358,6 +383,7 @@ export function TaskContentBuilder({
                   <TaskRichTextEditor
                     allowBlanks={allowBlanks}
                     onSelectBlank={onSelectBlank}
+                    blankNumbers={blankNumbers}
                     blankRemovalDescription={blankRemovalDescription}
                     id={`block-content-${block.id}`}
                     content={block.content}
@@ -461,6 +487,23 @@ export function TaskContentBuilder({
               Agregar texto
             </Button>
           )}
+          {allowBlanks && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="font-normal"
+              title="Selecciona palabras y toca aquí para volverlas un hueco. Sin selección, pone un hueco vacío en el cursor."
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                const editor = textEditor();
+                if (editor) insertTaskBlank(editor, onBlankFromText);
+              }}
+            >
+              <BracketsIcon data-icon="inline-start" />
+              Hueco
+            </Button>
+          )}
           {allowedBlockTypes.includes("challenge") && (
             <Button
               type="button"
@@ -473,26 +516,7 @@ export function TaskContentBuilder({
               Agregar pregunta o desafío
             </Button>
           )}
-          <FieldHint>
-            <div className="flex flex-col gap-1.5">
-              <p>Enter abre un bloque nuevo; Shift+Enter, un salto de línea.</p>
-              <p>
-                Listas: Ctrl+Shift+8 para viñetas y Ctrl+Shift+7 para
-                numeración. Dentro de una lista, Enter agrega un elemento; Enter
-                en un elemento vacío sale de la lista.
-              </p>
-              <p>
-                Selecciona texto para abrir el menú de formato, o usa Ctrl+B
-                negrita, Ctrl+I cursiva, Ctrl+U subrayado y Ctrl+Shift+X
-                tachado. Repite el atajo para quitarlo. En Mac, ⌘ en lugar de
-                Ctrl.
-              </p>
-              <p>
-                También puedes escribirlo: *negrita* · _cursiva_ ·
-                __subrayado__.
-              </p>
-            </div>
-          </FieldHint>
+          <ShortcutsHelp />
         </div>
       )}
     </FieldGroup>
@@ -534,5 +558,50 @@ function DragPreview({
         </span>
       )}
     </div>
+  );
+}
+
+const shortcuts = [
+  ["Enter", "Párrafo nuevo"],
+  ["Shift + Enter", "Salto de línea"],
+  ["Ctrl + B", "Negrita"],
+  ["Ctrl + I", "Cursiva"],
+  ["Ctrl + U", "Subrayado"],
+  ["Ctrl + Shift + 8", "Lista con viñetas"],
+  ["Ctrl + Shift + 7", "Lista numerada"],
+] as const;
+
+function ShortcutsHelp() {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          aria-label="Atajos de teclado"
+          title="Atajos de teclado"
+        >
+          <HelpCircleIcon />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-auto p-3 text-sm">
+        <p className="mb-2 text-xs text-muted-foreground">
+          Selecciona texto para ver el menú de formato.
+        </p>
+        <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5">
+          {shortcuts.map(([keys, action]) => (
+            <Fragment key={keys}>
+              <dt>
+                <kbd className="bg-muted px-1.5 py-0.5 font-sans text-xs whitespace-nowrap">
+                  {keys}
+                </kbd>
+              </dt>
+              <dd className="whitespace-nowrap">{action}</dd>
+            </Fragment>
+          ))}
+        </dl>
+      </PopoverContent>
+    </Popover>
   );
 }
