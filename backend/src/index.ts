@@ -138,6 +138,9 @@ function rosterUploadMiddleware(
   });
 }
 
+/** Fila de los títulos en la plantilla: arriba van el título, el grupo y las instrucciones. */
+const ROSTER_TEMPLATE_HEADER_ROW = 5;
+
 const ROSTER_COLUMNS = [
   "Nombres",
   "Apellidos",
@@ -1225,6 +1228,7 @@ function deserializeContest(contest: {
   consolidatedAt: Date | null;
   resultsPublishedAt: Date | null;
   resultsAt: Date | null;
+  resultsUntil: Date | null;
   createdAt: Date;
   updatedAt: Date;
   tasks?: Array<{
@@ -1284,6 +1288,7 @@ function deserializeContest(contest: {
     consolidatedAt: contest.consolidatedAt?.toISOString() ?? null,
     resultsPublishedAt: contest.resultsPublishedAt?.toISOString() ?? null,
     resultsAt: contest.resultsAt?.toISOString() ?? null,
+    resultsUntil: contest.resultsUntil?.toISOString() ?? null,
     state,
     isOpen,
     createdAt: contest.createdAt.toISOString(),
@@ -1382,6 +1387,17 @@ function parseContestPayload(body: Record<string, unknown>) {
     );
   }
 
+  const resultsUntil = body.resultsUntil
+    ? parseDateInput(body.resultsUntil, "resultsUntil")
+    : null;
+  const resultsFrom = resultsAt ?? endsAt;
+
+  if (resultsUntil && resultsFrom && resultsUntil <= resultsFrom) {
+    throw new Error(
+      "Los resultados tienen que mostrarse hasta después de publicarse.",
+    );
+  }
+
   if (Boolean(startsAt) !== Boolean(endsAt)) {
     throw new Error(
       "La ventana de rendición necesita su inicio y su fin, o ninguno de los dos.",
@@ -1419,6 +1435,7 @@ function parseContestPayload(body: Record<string, unknown>) {
     startsAt,
     endsAt,
     resultsAt,
+    resultsUntil,
   };
 }
 
@@ -2115,7 +2132,26 @@ app.get("/api/schools", async (req, res) => {
   res.json(schools);
 });
 
+/** Desde cuándo y hasta cuándo un desafío muestra sus resultados. */
+function resultsWindow(contest: {
+  endsAt: Date | null;
+  resultsAt: Date | null;
+  resultsUntil: Date | null;
+}) {
+  if (!contest.endsAt) {
+    return { from: null, until: null };
+  }
+  const from =
+    contest.resultsAt && contest.resultsAt > contest.endsAt
+      ? contest.resultsAt
+      : contest.endsAt;
+  const until =
+    contest.resultsUntil ?? new Date(from.getTime() + 7 * 24 * 3600000);
+  return { from, until };
+}
+
 app.get("/api/public-contests", async (_req, res) => {
+  await releaseDueResults();
   const contests = await prisma.contest.findMany({
     where: { publishedAt: { not: null }, isPractice: false },
     orderBy: { startsAt: "asc" },
@@ -2132,13 +2168,32 @@ app.get("/api/public-contests", async (_req, res) => {
       suspendedAt: true,
       consolidatedAt: true,
       resultsPublishedAt: true,
+      resultsAt: true,
+      resultsUntil: true,
     },
   });
+
+  const enrolled = await prisma.team.findMany({
+    where: { group: { contestId: { in: contests.map((contest) => contest.id) } } },
+    select: { participationMode: true, group: { select: { contestId: true } } },
+  });
+  const participantsOf = new Map<string, number>();
+  for (const team of enrolled) {
+    participantsOf.set(
+      team.group.contestId,
+      (participantsOf.get(team.group.contestId) ?? 0) +
+        (team.participationMode === "pareja" ? 2 : 1),
+    );
+  }
 
   res.json(
     contests.map((contest) => {
       const { state, isOpen } = computeContestState(contest);
+      const window = resultsWindow(contest);
       return {
+        participants: participantsOf.get(contest.id) ?? 0,
+        resultsAt: window.from?.toISOString() ?? null,
+        resultsUntil: window.until?.toISOString() ?? null,
         id: contest.id,
         title: contest.title,
         categories: contestCategories(contest),
@@ -2153,6 +2208,177 @@ app.get("/api/public-contests", async (_req, res) => {
       };
     }),
   );
+});
+
+/** «Ana Q.»: en lo público va el nombre con la inicial del apellido, nunca el nombre completo. */
+function publicName(first: string, last: string | null) {
+  const initial = last?.trim().charAt(0);
+  return initial ? `${first.trim()} ${initial.toUpperCase()}.` : first.trim();
+}
+
+const PUBLIC_RANKING_SIZE = 10;
+
+/** Departamentos del catálogo de colegios, con el castor que los representa. */
+const DEPARTMENTS: Record<string, { name: string; slug: string }> = {
+  "LA PAZ": { name: "La Paz", slug: "la-paz" },
+  COCHABAMBA: { name: "Cochabamba", slug: "cochabamba" },
+  "SANTA CRUZ": { name: "Santa Cruz", slug: "santa-cruz" },
+  ORURO: { name: "Oruro", slug: "oruro" },
+  POTOSI: { name: "Potosí", slug: "potosi" },
+  CHUQUISACA: { name: "Chuquisaca", slug: "sucre" },
+  TARIJA: { name: "Tarija", slug: "tarija" },
+  BENI: { name: "Beni", slug: "beni" },
+  PANDO: { name: "Pando", slug: "pando" },
+};
+
+const MINOR_WORDS = new Set(["de", "del", "la", "las", "los", "el", "y", "e"]);
+
+function titleCase(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .split(/\s+/)
+    .map((word, index) =>
+      index > 0 && MINOR_WORDS.has(word)
+        ? word
+        : word.replace(/\p{L}/u, (letter) => letter.toUpperCase()),
+    )
+    .join(" ");
+}
+
+/** «CAPITAL (COCHABAMBA)» es la ciudad de Cochabamba. */
+function townName(sec: string) {
+  const capital = /^capital\s*\((.+)\)$/i.exec(sec.trim());
+  return titleCase(capital ? capital[1] : sec);
+}
+
+app.get("/api/public-ranking", async (_req, res) => {
+  await releaseDueResults();
+  const now = currentDate();
+  const contests = await prisma.contest.findMany({
+    where: {
+      publishedAt: { not: null },
+      isPractice: false,
+      resultsPublishedAt: { not: null },
+    },
+    orderBy: { endsAt: "desc" },
+    select: {
+      id: true,
+      title: true,
+      categories: true,
+      endsAt: true,
+      resultsAt: true,
+      resultsUntil: true,
+    },
+  });
+  const visible = contests.filter((contest) => {
+    const { until } = resultsWindow(contest);
+    return Boolean(until && now < until);
+  });
+
+  const ranking = [];
+
+  for (const contest of visible) {
+    const categories = contestCategories(contest);
+    const results = await prisma.result.findMany({
+      where: {
+        rankPosition: { not: null, lte: PUBLIC_RANKING_SIZE },
+        attempt: { team: { group: { contestId: contest.id } } },
+      },
+      orderBy: [{ rankPosition: "asc" }, { totalScore: "desc" }],
+      include: {
+        attempt: {
+          include: {
+            team: {
+              include: { group: { select: { createdById: true } } },
+            },
+          },
+        },
+      },
+    });
+    const teacherIds = [
+      ...new Set(
+        results
+          .map((result) => result.attempt.team.group.createdById)
+          .filter((id): id is number => id !== null),
+      ),
+    ];
+    const teachers = await prisma.user.findMany({
+      where: { id: { in: teacherIds }, role: "maestro" },
+      select: { id: true, schoolName: true, schoolCodUe: true },
+    });
+    const places = await prisma.school.findMany({
+      where: {
+        codUe: {
+          in: teachers
+            .map((teacher) => teacher.schoolCodUe)
+            .filter((code): code is string => Boolean(code)),
+        },
+      },
+      select: { codUe: true, dep: true, sec: true },
+    });
+    const placeOf = new Map(places.map((place) => [place.codUe, place]));
+    const schoolOf = new Map(
+      teachers.map((teacher) => {
+        const place = teacher.schoolCodUe
+          ? placeOf.get(teacher.schoolCodUe)
+          : undefined;
+        const department = place ? DEPARTMENTS[place.dep] : undefined;
+        const town = place ? townName(place.sec) : null;
+        return [
+          teacher.id,
+          {
+            school: teacher.schoolName ? titleCase(teacher.schoolName) : null,
+            department: department?.slug ?? null,
+            place: department
+              ? town && normalizeHeader(town) !== normalizeHeader(department.name)
+                ? `${town}, ${department.name}`
+                : department.name
+              : null,
+          },
+        ];
+      }),
+    );
+
+    const byCategory = categories
+      .map((name) => ({
+        name,
+        rows: results
+          .filter(
+            (result) =>
+              teamCategory(result.attempt.team.grade, categories) === name,
+          )
+          .map((result) => {
+            const team = result.attempt.team;
+            const one = publicName(
+              team.memberOneFirstName,
+              team.memberOneLastName,
+            );
+            const two =
+              team.participationMode === "pareja" && team.memberTwoFirstName
+                ? publicName(team.memberTwoFirstName, team.memberTwoLastName)
+                : null;
+            const createdById = team.group.createdById;
+            const origin =
+              createdById !== null ? schoolOf.get(createdById) : undefined;
+            return {
+              rank: result.rankPosition!,
+              name: two ? `${one} y ${two}` : one,
+              school: origin?.school ?? null,
+              place: origin?.place ?? null,
+              department: origin?.department ?? null,
+              score: result.totalScore,
+            };
+          }),
+      }))
+      .filter((category) => category.rows.length > 0);
+
+    if (byCategory.length > 0) {
+      ranking.push({ id: contest.id, title: contest.title, categories: byCategory });
+    }
+  }
+
+  res.json(ranking);
 });
 
 // ---- Práctica pública (sin login) ----
@@ -2272,6 +2498,104 @@ app.post("/api/practice/tasks/:id/check", async (req, res) => {
 
 // Banco de tareas, desafíos y gestión de usuarios: solo admin.
 app.use(["/api/tasks", "/api/contests", "/api/users"], requireAdmin);
+
+app.use("/api/admin", requireAdmin);
+
+const INFO_SITE_KEY = "infoSiteUrl";
+
+async function readSiteSetting(key: string) {
+  const row = await prisma.siteSetting.findUnique({ where: { key } });
+  return row?.value || null;
+}
+
+app.get("/api/site-settings", async (_req, res) => {
+  res.json({ infoSiteUrl: await readSiteSetting(INFO_SITE_KEY) });
+});
+
+app.put("/api/admin/site-settings", async (req, res) => {
+  const raw =
+    typeof req.body?.infoSiteUrl === "string" ? req.body.infoSiteUrl.trim() : "";
+  let value = "";
+
+  if (raw) {
+    try {
+      const url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+      if (!["http:", "https:"].includes(url.protocol) || !url.hostname.includes(".")) {
+        throw new Error();
+      }
+      value = url.toString();
+    } catch {
+      res.status(400).json({
+        message: "Ese enlace no es válido. Ejemplo: https://bebras.bo",
+        field: "infoSiteUrl",
+      });
+      return;
+    }
+  }
+
+  if (value) {
+    await prisma.siteSetting.upsert({
+      where: { key: INFO_SITE_KEY },
+      create: { key: INFO_SITE_KEY, value },
+      update: { value },
+    });
+  } else {
+    await prisma.siteSetting.deleteMany({ where: { key: INFO_SITE_KEY } });
+  }
+
+  res.json({ infoSiteUrl: value || null });
+});
+
+function serializeAdmin(
+  user: { id: number; email: string; name: string | null },
+  selfId?: number,
+) {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name === null ? null : formatPersonName(user.name),
+    isSelf: user.id === selfId,
+  };
+}
+
+app.get("/api/admin/admins", async (req, res) => {
+  const admins = await prisma.user.findMany({
+    where: { role: "admin" },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, email: true, name: true },
+  });
+  res.json(admins.map((admin) => serializeAdmin(admin, req.user?.id)));
+});
+
+app.post("/api/admin/admins", async (req, res) => {
+  const email =
+    typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    res.status(400).json({ message: "Escribe un correo válido.", field: "email" });
+    return;
+  }
+
+  const existing = await prisma.user.findUnique({ where: { email } });
+
+  if (existing?.role === "admin") {
+    res.status(409).json({ message: "Ese correo ya es administrador.", field: "email" });
+    return;
+  }
+
+  const admin = existing
+    ? await prisma.user.update({
+        where: { id: existing.id },
+        data: { role: "admin", status: "approved" },
+      })
+    : await prisma.user.create({
+        data: { email, role: "admin", status: "approved" },
+      });
+
+  res.status(201).json(serializeAdmin(admin, req.user?.id));
+});
+
+
 // Grupos: admin y maestro (con sesión); el alcance se filtra por rol.
 async function requireApproved(
   req: express.Request,
@@ -2868,6 +3192,7 @@ app.post("/api/contests", async (req, res) => {
       startsAt: payload.startsAt,
       endsAt: payload.endsAt,
       resultsAt: payload.resultsAt,
+      resultsUntil: payload.resultsUntil,
       scoring: JSON.stringify(payload.scoring),
       questionDisplayMode: payload.questionDisplayMode,
       allowPairs: payload.allowPairs,
@@ -3006,7 +3331,7 @@ app.put("/api/contests/:id", async (req, res) => {
     env.DB.prepare('DELETE FROM "ContestTask" WHERE "contestId" = ?').bind(contestId),
     env.DB.prepare(`UPDATE "Contest" SET
       "title" = ?, "categories" = ?, "durationMinutes" = ?,
-      "registrationStartsAt" = ?, "registrationEndsAt" = ?, "startsAt" = ?, "endsAt" = ?, "resultsAt" = ?,
+      "registrationStartsAt" = ?, "registrationEndsAt" = ?, "startsAt" = ?, "endsAt" = ?, "resultsAt" = ?, "resultsUntil" = ?,
       "scoring" = ?, "questionDisplayMode" = ?,
       "allowPairs" = ?, "shuffleOptions" = ?, "showFeedback" = ?, "showSolutions" = ?, "showTotalScore" = ?,
       "showScoreOnSubmit" = ?, "showFeedbackOnSubmit" = ?, "showSolutionsOnSubmit" = ?,
@@ -3016,6 +3341,7 @@ app.put("/api/contests/:id", async (req, res) => {
       payload.registrationEndsAt?.toISOString() ?? null,
       payload.startsAt?.toISOString() ?? null, payload.endsAt?.toISOString() ?? null,
       payload.resultsAt?.toISOString() ?? null,
+      payload.resultsUntil?.toISOString() ?? null,
       JSON.stringify(payload.scoring), payload.questionDisplayMode,
       Number(payload.allowPairs), Number(payload.shuffleOptions), Number(payload.showFeedback), Number(payload.showSolutions),
       Number(payload.showTotalScore), Number(payload.showScoreOnSubmit),
@@ -3816,6 +4142,150 @@ app.get("/api/groups/:id", async (req, res) => {
   res.json(serializeGroup(group));
 });
 
+app.get("/api/groups/:id/results", async (req, res) => {
+  const owner = await prisma.contestGroup.findUnique({
+    where: { id: req.params.id },
+    select: { createdById: true, contestId: true },
+  });
+
+  if (
+    !owner ||
+    (req.user?.role === "maestro" && owner.createdById !== req.user.id)
+  ) {
+    res.status(404).json({ message: "Grupo no encontrado." });
+    return;
+  }
+
+  await releaseDueResults(owner.contestId);
+
+  const group = await prisma.contestGroup.findUniqueOrThrow({
+    where: { id: req.params.id },
+    include: {
+      contest: {
+        include: {
+          tasks: {
+            orderBy: { position: "asc" },
+            include: { taskDraft: { select: { title: true } } },
+          },
+        },
+      },
+      teams: {
+        orderBy: { createdAt: "asc" },
+        include: {
+          attempt: {
+            include: {
+              result: true,
+              answers: {
+                select: { taskDraftId: true, isCorrect: true, answeredAt: true },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  const contest = group.contest;
+  const { state } = computeContestState(contest);
+  // Durante la rendición el maestro solo ve el avance; los aciertos, cuando cierra.
+  const showScores = contest.isPractice || contestHasEnded(state);
+  const categories = groupCategories(group);
+
+  const teams = group.teams.map((team) => {
+    const category = teamCategory(team.grade, contestCategories(contest));
+    const tasks = tasksOfCategory(contest.tasks, category);
+    const attempt = team.attempt;
+    const answers = new Map(
+      (attempt?.answers ?? []).map((answer) => [answer.taskDraftId, answer]),
+    );
+    const finished = attempt?.status === "finished";
+    const scored = showScores && finished;
+
+    return {
+      ...serializeTeam(team),
+      category,
+      progress: attempt?.startedAt
+        ? finished
+          ? "finished"
+          : "in_progress"
+        : "not_started",
+      startedAt: attempt?.startedAt?.toISOString() ?? null,
+      finishedAt: attempt?.finishedAt?.toISOString() ?? null,
+      taskCount: tasks.length,
+      answeredCount: tasks.filter((task) =>
+        Boolean(answers.get(task.taskDraftId)?.answeredAt),
+      ).length,
+      score: scored ? (attempt?.result?.totalScore ?? null) : null,
+      maxScore: scored
+        ? initialScoreOf(tasks) +
+          tasks.reduce((total, task) => total + task.maxScore, 0)
+        : null,
+      correctCount: scored ? (attempt?.result?.correctCount ?? null) : null,
+      rank:
+        scored && contest.resultsPublishedAt
+          ? (attempt?.result?.rankPosition ?? null)
+          : null,
+      answers: scored
+        ? tasks.map((task) => {
+            const answer = answers.get(task.taskDraftId);
+            return !answer?.answeredAt
+              ? "blank"
+              : answer.isCorrect
+                ? "correct"
+                : "wrong";
+          })
+        : null,
+    };
+  });
+
+  const tasks = showScores
+    ? contest.tasks
+        .filter((task) => categories.includes(task.category))
+        .map((task) => {
+          const takers = teams.filter(
+            (team) =>
+              team.category === task.category && team.progress === "finished",
+          );
+          const index = tasksOfCategory(contest.tasks, task.category).indexOf(
+            task,
+          );
+          return {
+            id: task.taskDraftId,
+            title: task.taskDraft.title,
+            category: task.category,
+            difficulty: task.difficulty,
+            takers: takers.length,
+            correct: takers.filter((team) => team.answers?.[index] === "correct")
+              .length,
+            wrong: takers.filter((team) => team.answers?.[index] === "wrong")
+              .length,
+          };
+        })
+    : [];
+
+  res.json({
+    group: {
+      id: group.id,
+      name: group.name,
+      accessCode: group.accessCode,
+      category: group.category,
+    },
+    contest: {
+      id: contest.id,
+      title: contest.title,
+      state,
+      isPractice: contest.isPractice,
+      startsAt: contest.startsAt?.toISOString() ?? null,
+      endsAt: contest.endsAt?.toISOString() ?? null,
+      resultsPublished: Boolean(contest.resultsPublishedAt),
+      registrationOpen: contestRegistrationIsOpen(contest),
+    },
+    categories,
+    showScores,
+    teams,
+    tasks,
+  });
+});
+
 app.post("/api/groups", async (req, res) => {
   const contestId =
     typeof req.body?.contestId === "string" ? req.body.contestId : "";
@@ -3899,11 +4369,55 @@ app.post("/api/groups", async (req, res) => {
   res.status(201).json(serializeGroup(group));
 });
 
+app.patch("/api/groups/:id", async (req, res) => {
+  const group = await prisma.contestGroup.findUnique({
+    where: { id: req.params.id },
+    select: { createdById: true },
+  });
+
+  if (
+    !group ||
+    (req.user?.role === "maestro" && group.createdById !== req.user.id)
+  ) {
+    res.status(404).json({ message: "Grupo no encontrado." });
+    return;
+  }
+
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+
+  if (!name) {
+    res.status(400).json({
+      message: "Ponle un nombre al grupo.",
+      code: "GROUP_NAME_REQUIRED",
+      field: "name",
+    });
+    return;
+  }
+
+  if (name.length > 80) {
+    res.status(400).json({
+      message: "El nombre es muy largo: usa 80 caracteres o menos.",
+      code: "GROUP_NAME_TOO_LONG",
+      field: "name",
+    });
+    return;
+  }
+
+  const updated = await prisma.contestGroup.update({
+    where: { id: req.params.id },
+    data: { name },
+    include: { ...groupContestSelect, teams: true },
+  });
+
+  res.json(serializeGroup(updated));
+});
+
 app.delete("/api/groups/:id", async (req, res) => {
   const group = await prisma.contestGroup.findUnique({
     where: { id: req.params.id },
     select: {
       createdById: true,
+      contest: true,
       teams: { select: { attempt: { select: { status: true } } } },
     },
   });
@@ -3913,6 +4427,14 @@ app.delete("/api/groups/:id", async (req, res) => {
     (req.user?.role === "maestro" && group.createdById !== req.user.id)
   ) {
     res.status(404).json({ message: "Grupo no encontrado." });
+    return;
+  }
+
+  if (!contestRegistrationIsOpen(group.contest)) {
+    res.status(409).json({
+      message: "La inscripción ya cerró: el grupo no se puede eliminar.",
+      code: "GROUP_REGISTRATION_CLOSED",
+    });
     return;
   }
 
@@ -3962,7 +4484,7 @@ app.delete("/api/teams/:id", async (req, res) => {
     where: { id: req.params.id },
     include: {
       attempt: { select: { status: true } },
-      group: { select: { createdById: true } },
+      group: { select: { createdById: true, contest: true } },
     },
   });
 
@@ -3971,6 +4493,14 @@ app.delete("/api/teams/:id", async (req, res) => {
     (req.user?.role === "maestro" && team.group.createdById !== req.user.id)
   ) {
     res.status(404).json({ message: "Participante no encontrado." });
+    return;
+  }
+
+  if (!contestRegistrationIsOpen(team.group.contest)) {
+    res.status(409).json({
+      message: "La inscripción ya cerró: no se puede quitar a nadie.",
+      code: "TEAM_REGISTRATION_CLOSED",
+    });
     return;
   }
 
@@ -4125,77 +4655,127 @@ app.get("/api/groups/:id/roster-template", async (req, res) => {
 
   const grades = gradesForCategories(groupCategories(group));
   const allowPairs = group.contest.allowPairs;
-  // Si el desafio es solo individual, Modalidad tendria un unico valor posible
-  // y las columnas del companero solo podrian provocar errores: la planilla se
-  // queda con lo que de verdad hay que llenar.
+  // Si el desafio es solo individual, las columnas del companero solo podrian
+  // provocar errores: la planilla se queda con lo que de verdad hay que llenar.
   const headers = allowPairs ? ROSTER_COLUMNS : ROSTER_COLUMNS.slice(0, 3);
-  const widths = allowPairs ? [22, 22, 26, 16, 22, 22] : [26, 26, 30];
-  const BLANK_ROWS = 40;
+  const widths = allowPairs ? [24, 24, 24, 14, 24, 24] : [30, 30, 26];
+  const HEADER_ROW = ROSTER_TEMPLATE_HEADER_ROW;
+  const firstRow = HEADER_ROW + 1;
+  const lastRow = HEADER_ROW + 60;
+  const categories = groupCategories(group);
 
-  const HEADER_FILL: ExcelJS.Fill = {
-    type: "pattern",
-    pattern: "solid",
-    fgColor: { argb: "FF334155" },
-  };
+  const thin = { style: "thin" as const, color: { argb: "FFBFBFBF" } };
   const CELL_BORDER: Partial<ExcelJS.Borders> = {
-    top: { style: "thin", color: { argb: "FFD8DEE7" } },
-    left: { style: "thin", color: { argb: "FFD8DEE7" } },
-    bottom: { style: "thin", color: { argb: "FFD8DEE7" } },
-    right: { style: "thin", color: { argb: "FFD8DEE7" } },
+    top: thin,
+    left: thin,
+    bottom: thin,
+    right: thin,
   };
-
-  function dressHeader(sheet: ExcelJS.Worksheet, rowNumber: number) {
-    const row = sheet.getRow(rowNumber);
-    row.height = 22;
-    row.font = { bold: true, color: { argb: "FFFFFFFF" } };
-    row.alignment = { vertical: "middle" };
-    for (let column = 1; column <= headers.length; column += 1) {
-      const cell = row.getCell(column);
-      cell.fill = HEADER_FILL;
-      cell.border = CELL_BORDER;
-    }
-  }
 
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("Participantes");
+  const sheet = workbook.addWorksheet("Estudiantes", {
+    pageSetup: {
+      orientation: allowPairs ? "landscape" : "portrait",
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+    },
+  });
 
   // Las listas viven en una hoja oculta y se referencian por rango: escritas
   // dentro de la formula el formato las limita a 255 caracteres y Excel las
   // descarta sin avisar. El importador acepta el codigo (P3) o la etiqueta
   // (3.º de primaria); se ofrece la etiqueta porque es la que el maestro lee.
-  const data = workbook.addWorksheet("Datos", { state: "hidden" });
-  data.getCell("A1").value = "Cursos";
+  const data = workbook.addWorksheet("Datos", { state: "veryHidden" });
   grades.forEach((grade, index) => {
-    data.getCell(`A${index + 2}`).value = grade.label;
+    data.getCell(`A${index + 1}`).value = grade.label;
   });
   if (allowPairs) {
-    data.getCell("B1").value = "Modalidades";
-    data.getCell("B2").value = "individual";
-    data.getCell("B3").value = "pareja";
+    data.getCell("B1").value = "individual";
+    data.getCell("B2").value = "pareja";
   }
-  const gradeRange = `Datos!$A$2:$A$${grades.length + 1}`;
-  const modeRange = "Datos!$B$2:$B$3";
 
-  sheet.columns = headers.map((header, index) => ({
-    header,
-    key: header,
-    width: widths[index],
-  }));
-  dressHeader(sheet, 1);
-  sheet.views = [{ state: "frozen", ySplit: 1 }];
-  sheet.autoFilter = {
-    from: { row: 1, column: 1 },
-    to: { row: 1, column: headers.length },
+  sheet.columns = headers.map((_, index) => ({ width: widths[index] }));
+
+  const banner = (
+    rowNumber: number,
+    value: string,
+    font: Partial<ExcelJS.Font>,
+    height?: number,
+  ) => {
+    sheet.mergeCells(rowNumber, 1, rowNumber, headers.length);
+    const cell = sheet.getCell(rowNumber, 1);
+    cell.value = value;
+    cell.font = font;
+    cell.alignment = { vertical: "middle", wrapText: true };
+    if (height) sheet.getRow(rowNumber).height = height;
   };
 
-  // Filas en blanco ya formateadas: la hoja se abre como un formulario listo
-  // para llenar.
-  const lastRow = BLANK_ROWS + 1;
-  for (let rowNumber = 2; rowNumber <= lastRow; rowNumber += 1) {
+  banner(1, "Lista de estudiantes", {
+    bold: true,
+    size: 18,
+    color: { argb: "FFE34234" },
+  }, 30);
+  banner(
+    2,
+    [
+      `Grupo ${group.name}`,
+      group.contest.title,
+      categories.length === 1
+        ? `Categoría ${categories[0]}`
+        : `Categorías ${categories.join(", ")}`,
+      `Código ${group.accessCode}`,
+    ].join("   ·   "),
+    { bold: true, size: 11 },
+    20,
+  );
+  banner(
+    3,
+    [
+      "Escribe un estudiante por fila. El curso se elige de la lista: toca la celda y abre la flechita.",
+      allowPairs
+        ? "Si rinden en pareja, elige «pareja» y llena también las columnas del compañero; si no, déjalas vacías."
+        : "",
+      "Cuando termines, guarda el archivo y súbelo en la pantalla del grupo, en «súbela llena». Las filas vacías no se leen.",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    { size: 10, color: { argb: "FF595959" } },
+    allowPairs ? 44 : 32,
+  );
+
+  const header = sheet.getRow(HEADER_ROW);
+  header.values = headers;
+  header.height = 22;
+  headers.forEach((_, index) => {
+    const cell = header.getCell(index + 1);
+    cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF1F1F1F" },
+    };
+    cell.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+    cell.border = CELL_BORDER;
+  });
+  sheet.views = [{ state: "frozen", ySplit: HEADER_ROW }];
+
+  for (let rowNumber = firstRow; rowNumber <= lastRow; rowNumber += 1) {
     const row = sheet.getRow(rowNumber);
-    for (let column = 1; column <= headers.length; column += 1) {
-      row.getCell(column).border = CELL_BORDER;
-    }
+    row.height = 20;
+    headers.forEach((_, index) => {
+      const cell = row.getCell(index + 1);
+      cell.border = CELL_BORDER;
+      cell.alignment = { vertical: "middle", indent: 1 };
+      // La columna del curso se ve distinta: se elige, no se escribe.
+      if (index === 2 || index === 3) {
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFFFF4E5" },
+        };
+      }
+    });
   }
 
   // Una sola entrada por columna: aplicarlas celda a celda hace que ExcelJS
@@ -4209,89 +4789,33 @@ app.get("/api/groups/:id/roster-template", async (req, res) => {
     }
   ).dataValidations;
 
-  validations.add(`C2:C${lastRow}`, {
+  validations.add(`C${firstRow}:C${lastRow}`, {
     type: "list",
     allowBlank: true,
-    formulae: [gradeRange],
+    formulae: [`Datos!$A$1:$A$${grades.length}`],
+    showInputMessage: true,
+    promptTitle: "Curso",
+    prompt: "Elige el curso de la lista.",
     showErrorMessage: true,
-    errorStyle: "error",
+    errorStyle: "stop",
     errorTitle: "Curso no válido",
-    error: "Elige uno de los cursos de la lista.",
+    error: `Elige uno de estos: ${grades.map((grade) => grade.label).join(", ")}.`,
   });
 
   if (allowPairs) {
-    validations.add(`D2:D${lastRow}`, {
+    validations.add(`D${firstRow}:D${lastRow}`, {
       type: "list",
       allowBlank: true,
-      formulae: [modeRange],
+      formulae: ["Datos!$B$1:$B$2"],
+      showInputMessage: true,
+      promptTitle: "Modalidad",
+      prompt: "Vacío o «individual» si rinde solo; «pareja» si rinde con un compañero.",
       showErrorMessage: true,
-      errorStyle: "error",
+      errorStyle: "stop",
       errorTitle: "Modalidad no válida",
       error: "Elige individual o pareja.",
     });
   }
-
-  const example = workbook.addWorksheet("Ejemplo");
-  example.columns = headers.map((header, index) => ({
-    key: header,
-    width: widths[index],
-  }));
-  // Los titulos van en la fila 3 a proposito: el importador busca la hoja cuyos
-  // encabezados esten en la fila 1, y esta no debe competir con Participantes.
-  example.mergeCells(1, 1, 1, headers.length);
-  example.getCell(1, 1).value =
-    "Ejemplo de referencia — esta hoja no se importa";
-  example.getCell(1, 1).font = { bold: true };
-  example.addRow([]);
-  example.addRow(headers);
-  dressHeader(example, 3);
-
-  const sampleGrade = grades[0]?.label ?? "";
-  const sampleRows = allowPairs
-    ? [
-        ["Ana", "Quispe", sampleGrade, "individual", "", ""],
-        ["Luis", "Mamani", sampleGrade, "pareja", "Sofía", "Rojas"],
-      ]
-    : [
-        ["Ana", "Quispe", sampleGrade],
-        ["Luis", "Mamani", sampleGrade],
-      ];
-
-  for (const values of sampleRows) {
-    const row = example.addRow(values);
-    for (let column = 1; column <= headers.length; column += 1) {
-      row.getCell(column).border = CELL_BORDER;
-    }
-  }
-
-  const notes = workbook.addWorksheet("Instrucciones");
-  notes.columns = [{ width: 100 }];
-  notes.addRow(["Cómo llenar esta planilla"]);
-  notes.getRow(1).font = { bold: true };
-  notes.addRow([""]);
-  notes.addRow(["Llena la hoja Participantes: una fila por participante."]);
-  notes.addRow([
-    allowPairs
-      ? "Curso y Modalidad tienen lista desplegable: elige de la lista en vez de escribir."
-      : "La columna Curso tiene lista desplegable: elige de la lista en vez de escribir.",
-  ]);
-  notes.addRow([
-    `Cursos válidos en este desafío: ${grades
-      .map((grade) => `${grade.label} (${grade.value})`)
-      .join(", ")}. Cada estudiante rinde las preguntas de la categoría de su curso.`,
-  ]);
-  notes.addRow([
-    allowPairs
-      ? "En pareja, llena también las columnas del compañero. En individual, déjalas vacías."
-      : "Este desafío es solo individual, por eso la planilla no pide modalidad ni datos de compañero.",
-  ]);
-  notes.addRow([
-    "Conserva los títulos en la primera fila. Puedes cambiar el orden de las columnas.",
-  ]);
-  notes.addRow(["Deja sin llenar las filas que te sobren."]);
-  notes.addRow([
-    "La importación es todo o nada: si una fila tiene errores, no se guarda ninguna.",
-  ]);
 
   const buffer = await workbook.xlsx.writeBuffer();
 
@@ -4393,34 +4917,42 @@ app.post("/api/groups/:id/roster", rosterUploadMiddleware, async (req, res) => {
       return;
     }
 
-    // Modalidad solo se exige donde puede variar. En un desafio solo individual
-    // la plantilla ya no la trae, pero si el archivo la incluye se respeta.
-    const requiredColumns = group.contest.allowPairs
-      ? ROSTER_COLUMNS.slice(0, 4)
-      : ROSTER_COLUMNS.slice(0, 3);
+    // Modalidad es opcional: vacía, se deduce de si hay datos del compañero.
+    const requiredColumns = ROSTER_COLUMNS.slice(0, 3);
     const requiredHeaders = requiredColumns.map(normalizeHeader);
     const candidates: Array<{
       sheet: ExcelJS.Worksheet;
+      headerRow: number;
       columns: Map<string, number>;
       duplicateHeaders: string[];
     }> = [];
 
+    // Los títulos pueden no estar en la primera fila: la plantilla pone arriba
+    // el nombre del grupo y las instrucciones. La hoja «Ejemplo» de las
+    // plantillas antiguas no se importa.
     for (const worksheet of workbook.worksheets) {
-      const columns = new Map<string, number>();
-      const duplicateHeaders = new Set<string>();
-      worksheet.getRow(1).eachCell((cell, column) => {
-        const header = normalizeHeader(cell.value);
-        if (header && columns.has(header)) {
-          duplicateHeaders.add(header);
-        }
-        columns.set(header, column);
-      });
-      if (requiredHeaders.every((header) => columns.has(header))) {
-        candidates.push({
-          sheet: worksheet,
-          columns,
-          duplicateHeaders: [...duplicateHeaders],
+      if (normalizeHeader(worksheet.name) === "ejemplo") {
+        continue;
+      }
+      for (let rowNumber = 1; rowNumber <= 10; rowNumber += 1) {
+        const columns = new Map<string, number>();
+        const duplicateHeaders = new Set<string>();
+        worksheet.getRow(rowNumber).eachCell((cell, column) => {
+          const header = normalizeHeader(cell.value);
+          if (header && columns.has(header)) {
+            duplicateHeaders.add(header);
+          }
+          columns.set(header, column);
         });
+        if (requiredHeaders.every((header) => columns.has(header))) {
+          candidates.push({
+            sheet: worksheet,
+            headerRow: rowNumber,
+            columns,
+            duplicateHeaders: [...duplicateHeaders],
+          });
+          break;
+        }
       }
     }
 
@@ -4428,7 +4960,7 @@ app.post("/api/groups/:id/roster", rosterUploadMiddleware, async (req, res) => {
       res.status(400).json({
         message: `La planilla necesita una hoja con ${requiredColumns
           .slice(0, -1)
-          .join(", ")} y ${requiredColumns.at(-1)} en la primera fila.`,
+          .join(", ")} y ${requiredColumns.at(-1)} como títulos de columna.`,
         code: "ROSTER_SHEET_NOT_FOUND",
       });
       return;
@@ -4442,7 +4974,7 @@ app.post("/api/groups/:id/roster", rosterUploadMiddleware, async (req, res) => {
       return;
     }
 
-    const { sheet, columns, duplicateHeaders } = candidates[0];
+    const { sheet, headerRow, columns, duplicateHeaders } = candidates[0];
     const rosterHeaders = new Set(ROSTER_COLUMNS.map(normalizeHeader));
     if (duplicateHeaders.some((header) => rosterHeaders.has(header))) {
       res.status(400).json({
@@ -4506,7 +5038,11 @@ app.post("/api/groups/:id/roster", rosterUploadMiddleware, async (req, res) => {
     const drafts: RosterDraft[] = [];
     const issues: Array<{ row: number; name: string; reason: string }> = [];
 
-    for (let rowNumber = 2; rowNumber <= sheet.rowCount; rowNumber += 1) {
+    for (
+      let rowNumber = headerRow + 1;
+      rowNumber <= sheet.rowCount;
+      rowNumber += 1
+    ) {
       const row = sheet.getRow(rowNumber);
       const oneFirst = cellText(row, columnOf("Nombres"));
       const oneLast = cellText(row, columnOf("Apellidos"));
@@ -4538,10 +5074,9 @@ app.post("/api/groups/:id/roster", rosterUploadMiddleware, async (req, res) => {
         addIssue("Faltan nombres o apellidos.");
       }
 
-      // Sin columna de modalidad, individual es la unica lectura posible.
       const normalizedMode =
         normalizeHeader(modeText) ||
-        (group.contest.allowPairs ? "" : "individual");
+        (twoFirst || twoLast ? "pareja" : "individual");
       const hasValidMode =
         normalizedMode === "individual" || normalizedMode === "pareja";
       const isPair = normalizedMode === "pareja";

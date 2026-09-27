@@ -61,7 +61,8 @@ export const ModelName = {
   Team: 'Team',
   Attempt: 'Attempt',
   AttemptAnswer: 'AttemptAnswer',
-  Result: 'Result'
+  Result: 'Result',
+  SiteSetting: 'SiteSetting'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -188,6 +189,7 @@ export const ContestScalarFieldEnum = {
   resultsPublishedAt: 'resultsPublishedAt',
   resultsAt: 'resultsAt',
   resultsReleasedAt: 'resultsReleasedAt',
+  resultsUntil: 'resultsUntil',
   isPractice: 'isPractice',
   createdById: 'createdById',
   createdAt: 'createdAt',
@@ -293,6 +295,15 @@ export const ResultScalarFieldEnum = {
 } as const
 
 export type ResultScalarFieldEnum = (typeof ResultScalarFieldEnum)[keyof typeof ResultScalarFieldEnum]
+
+
+export const SiteSettingScalarFieldEnum = {
+  key: 'key',
+  value: 'value',
+  updatedAt: 'updatedAt'
+} as const
+
+export type SiteSettingScalarFieldEnum = (typeof SiteSettingScalarFieldEnum)[keyof typeof SiteSettingScalarFieldEnum]
 
 
 export const SortOrder = {

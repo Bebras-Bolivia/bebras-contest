@@ -122,6 +122,8 @@ model Contest {
   // Cuándo se publican solos los resultados; sin fecha, al cerrar la rendición.
   resultsAt            DateTime?
   resultsReleasedAt    DateTime?
+  // Hasta cuándo sale con sus resultados en la portada; sin fecha, 7 días.
+  resultsUntil         DateTime?
   // Una practica la crea un maestro para sus propios estudiantes: solo el la
   // ve y nunca sale en los listados publicos ni en los del administrador.
   isPractice           Boolean        @default(false)
@@ -237,4 +239,10 @@ model Result {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   attempt       Attempt   @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+}
+
+model SiteSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
 }
