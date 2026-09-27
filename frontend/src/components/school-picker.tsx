@@ -30,6 +30,7 @@ export function SchoolPicker({
   invalid,
   describedBy,
   allowHomeschool = true,
+  onManualChange,
 }: {
   value: SchoolValue;
   onChange: (next: SchoolValue) => void;
@@ -37,10 +38,15 @@ export function SchoolPicker({
   invalid?: boolean;
   describedBy?: string;
   allowHomeschool?: boolean;
+  onManualChange?: (manual: boolean) => void;
 }) {
-  const [manual, setManual] = useState(
+  const [manual, setManualState] = useState(
     value.institutionType === "school" && !value.codUe && Boolean(value.name),
   );
+  const setManual = (next: boolean) => {
+    setManualState(next);
+    onManualChange?.(next);
+  };
   const [query, setQuery] = useState(value.codUe ? value.name : "");
   const [results, setResults] = useState<SchoolResult[]>([]);
   const [loading, setLoading] = useState(false);

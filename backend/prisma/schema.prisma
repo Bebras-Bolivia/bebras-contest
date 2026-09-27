@@ -22,6 +22,7 @@ model User {
   schoolCodUe     String?
   schoolName      String?
   institutionType String?
+  department      String?
   phone           String?
   letterFilename  String?
   idFrontFilename String?

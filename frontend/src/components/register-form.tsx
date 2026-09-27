@@ -70,8 +70,21 @@ type RegisterErrors = {
   password?: string;
   confirmPassword?: string;
   school?: string;
+  department?: string;
   form?: string;
 };
+
+const DEPARTMENTS = [
+  { value: "LA PAZ", name: "La Paz", slug: "la-paz" },
+  { value: "COCHABAMBA", name: "Cochabamba", slug: "cochabamba" },
+  { value: "SANTA CRUZ", name: "Santa Cruz", slug: "santa-cruz" },
+  { value: "ORURO", name: "Oruro", slug: "oruro" },
+  { value: "POTOSI", name: "Potosí", slug: "potosi" },
+  { value: "CHUQUISACA", name: "Chuquisaca", slug: "sucre" },
+  { value: "TARIJA", name: "Tarija", slug: "tarija" },
+  { value: "BENI", name: "Beni", slug: "beni" },
+  { value: "PANDO", name: "Pando", slug: "pando" },
+];
 
 function confirmationError(password: string, confirmation: string) {
   if (!confirmation) return "Confirma tu contraseña.";
@@ -104,6 +117,8 @@ export function RegisterForm() {
     institutionType: "school",
   });
   const [phone, setPhone] = useState("");
+  const [department, setDepartment] = useState("");
+  const [manualSchool, setManualSchool] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const confirmPasswordTouchedRef = useRef(false);
@@ -116,6 +131,7 @@ export function RegisterForm() {
   const passwordRef = useRef<HTMLInputElement>(null);
   const confirmPasswordRef = useRef<HTMLInputElement>(null);
   const schoolRef = useRef<HTMLInputElement>(null);
+  const departmentRef = useRef<HTMLButtonElement>(null);
   const formErrorRef = useRef<HTMLParagraphElement>(null);
   const prefilledRef = useRef(false);
   const verificationCheckRef = useRef<((showPendingMessage?: boolean) => void) | null>(
@@ -128,11 +144,13 @@ export function RegisterForm() {
     | "email"
     | "phone"
     | "password"
+    | "department"
     | null
   >(null);
 
   const isSchool = school.institutionType === "school";
   const hasSchoolChoice = Boolean(school.name.trim());
+  const needsDepartment = !isSchool || (manualSchool && !school.codUe);
 
   const clearErrors = (...fields: (keyof RegisterErrors)[]) => {
     setErrors((current) => {
@@ -192,6 +210,7 @@ export function RegisterForm() {
       email: emailRef,
       phone: phoneRef,
       password: passwordRef,
+      department: departmentRef,
     };
     refs[pendingResponseFocusRef.current].current?.focus();
     pendingResponseFocusRef.current = null;
@@ -309,6 +328,8 @@ export function RegisterForm() {
       school: hasSchoolChoice
         ? validatedSchool.error
         : "Indica tu colegio o selecciona educación en casa.",
+      department:
+        needsDepartment && !department ? "Elige tu departamento." : undefined,
     };
     const fieldOrder = [
       "firstName",
@@ -318,6 +339,7 @@ export function RegisterForm() {
       "password",
       "confirmPassword",
       "school",
+      "department",
     ] as const;
     const firstInvalid = fieldOrder.find((field) => nextErrors[field]);
 
@@ -331,6 +353,7 @@ export function RegisterForm() {
         password: passwordRef,
         confirmPassword: confirmPasswordRef,
         school: schoolRef,
+        department: departmentRef,
       };
       refs[firstInvalid].current?.focus();
       return;
@@ -424,6 +447,8 @@ export function RegisterForm() {
       form.append("phone", phone.trim());
       if (school.codUe) {
         form.append("schoolCodUe", school.codUe);
+      } else {
+        form.append("department", department);
       }
 
       const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
@@ -440,7 +465,8 @@ export function RegisterForm() {
           | "schoolName"
           | "email"
           | "phone"
-          | "password";
+          | "password"
+          | "department";
       };
 
       if (!response.ok) {
@@ -566,6 +592,15 @@ export function RegisterForm() {
       ["Correo", email.trim()],
       ["Teléfono", phone.trim()],
       [isSchool ? "Colegio" : "Dónde enseñas", school.name.trim()],
+      ...(needsDepartment
+        ? [
+            [
+              "Departamento",
+              DEPARTMENTS.find((item) => item.value === department)?.name ??
+                "",
+            ],
+          ]
+        : []),
     ];
     return (
       <section className="mx-auto w-full max-w-md">
@@ -872,6 +907,7 @@ export function RegisterForm() {
                     clearErrors("school");
                   }
                 }}
+                onManualChange={setManualSchool}
                 inputRef={schoolRef}
                 invalid={Boolean(errors.school)}
                 describedBy={errors.school ? "reg-school-error" : undefined}
@@ -879,6 +915,70 @@ export function RegisterForm() {
               <FieldError id="reg-school-error">{errors.school}</FieldError>
             </FieldContent>
           </Field>
+          <div
+            className={cn(
+              "-mt-6 grid transition-[grid-template-rows] duration-300 ease-out",
+              needsDepartment ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+            )}
+            inert={!needsDepartment}
+          >
+            <div className="overflow-hidden">
+              <Field
+                className="pt-6"
+                data-invalid={Boolean(errors.department) || undefined}
+              >
+                <FieldLabel id="reg-department-label">
+                  ¿En qué departamento?
+                </FieldLabel>
+                <FieldContent>
+                  <div
+                    role="radiogroup"
+                    aria-labelledby="reg-department-label"
+                    aria-describedby={
+                      errors.department ? "reg-department-error" : undefined
+                    }
+                    className="grid grid-cols-3 gap-1.5"
+                  >
+                    {DEPARTMENTS.map((item, index) => {
+                      const selected = department === item.value;
+                      return (
+                        <button
+                          key={item.value}
+                          ref={index === 0 ? departmentRef : undefined}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => {
+                            setDepartment(item.value);
+                            if (errors.department) clearErrors("department");
+                          }}
+                          className={cn(
+                            "flex flex-col items-center gap-1 border-2 px-1 py-2 text-sm text-foreground transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/60 sm:flex-row sm:gap-2 sm:px-2 sm:py-1.5 sm:text-left",
+                            selected
+                              ? "border-primary bg-primary/10 font-semibold"
+                              : "border-border/30 hover:border-primary/60",
+                            errors.department &&
+                              !selected &&
+                              "border-destructive/60",
+                          )}
+                        >
+                          <img
+                            src={`/castores/${item.slug}-cabeza.webp`}
+                            alt=""
+                            className="size-7 shrink-0 object-contain"
+                          />
+                          <span className="min-w-0">{item.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <FieldError id="reg-department-error">
+                    {errors.department}
+                  </FieldError>
+                </FieldContent>
+              </Field>
+            </div>
+          </div>
           <Button type="submit" className="w-full" disabled={googleBusy}>
             Continuar
           </Button>

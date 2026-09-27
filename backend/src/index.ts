@@ -1981,6 +1981,26 @@ app.post("/api/auth/register", registerUploadMiddleware, async (req, res) => {
     return;
   }
 
+  const catalogSchool = schoolCodUe
+    ? await prisma.school.findUnique({
+        where: { codUe: schoolCodUe },
+        select: { dep: true },
+      })
+    : null;
+  const department = catalogSchool
+    ? catalogSchool.dep
+    : typeof req.body?.department === "string"
+      ? req.body.department.trim()
+      : "";
+  if (!Object.hasOwn(DEPARTMENTS, department)) {
+    await cleanupFiles(...allFiles);
+    res.status(400).json({
+      message: "Elige tu departamento.",
+      field: "department",
+    });
+    return;
+  }
+
   const emailError = validateEmail(email).error;
   if (emailError) {
     await cleanupFiles(...allFiles);
@@ -2044,6 +2064,7 @@ app.post("/api/auth/register", registerUploadMiddleware, async (req, res) => {
         schoolCodUe,
         schoolName,
         institutionType,
+        department,
         phone: validatedPhone.number,
         letterFilename: isSchool ? (letterFile?.filename ?? null) : null,
         idFrontFilename: isSchool ? null : (idFrontFile?.filename ?? null),
@@ -2305,7 +2326,12 @@ app.get("/api/public-ranking", async (_req, res) => {
     ];
     const teachers = await prisma.user.findMany({
       where: { id: { in: teacherIds }, role: "maestro" },
-      select: { id: true, schoolName: true, schoolCodUe: true },
+      select: {
+        id: true,
+        schoolName: true,
+        schoolCodUe: true,
+        department: true,
+      },
     });
     const places = await prisma.school.findMany({
       where: {
@@ -2323,7 +2349,8 @@ app.get("/api/public-ranking", async (_req, res) => {
         const place = teacher.schoolCodUe
           ? placeOf.get(teacher.schoolCodUe)
           : undefined;
-        const department = place ? DEPARTMENTS[place.dep] : undefined;
+        const department =
+          DEPARTMENTS[place?.dep ?? teacher.department ?? ""];
         const town = place ? townName(place.sec) : null;
         return [
           teacher.id,

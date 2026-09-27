@@ -91,6 +91,7 @@ export const UserScalarFieldEnum = {
   schoolCodUe: 'schoolCodUe',
   schoolName: 'schoolName',
   institutionType: 'institutionType',
+  department: 'department',
   phone: 'phone',
   letterFilename: 'letterFilename',
   idFrontFilename: 'idFrontFilename',
