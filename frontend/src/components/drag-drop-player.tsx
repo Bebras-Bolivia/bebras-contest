@@ -48,7 +48,7 @@ type PointerDrag = {
 };
 
 /** Punto donde se soltó una pieza, para que se deslice desde ahí a su lugar. */
-type Settle = { itemId: string; x: number; y: number };
+type Settle = { itemId: string; x: number; y: number; lifted?: boolean };
 
 type DragPreview = {
   itemId: string;
@@ -150,13 +150,15 @@ export function DragDropPlayer({
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
   const [hoverTargetId, setHoverTargetId] = useState<string | null>(null);
-  const settleRef = useRef<Settle | null>(null);
+  const settleRef = useRef<Settle[]>([]);
+  const [settleTick, setSettleTick] = useState(0);
   const [keyboardCursor, setKeyboardCursor] = useState<KeyboardCursor | null>(
     null,
   );
   const [keyboardMode, setKeyboardMode] = useState(false);
   // La bandeja se ordena a gusto: cada posición guarda qué pieza le toca, y una
   // pieza colocada deja su hueco en la posición donde estaba.
+  const [hoverSlot, setHoverSlot] = useState<number | null>(null);
   const [trayOrder, setTrayOrder] = useState(() =>
     items.map((item) => item.id),
   );
@@ -223,30 +225,34 @@ export function DragDropPlayer({
     );
   };
 
-  // La pieza recién soltada se desliza desde donde quedó el dedo hasta el
-  // centro de su destino, en vez de aparecer ahí de golpe.
+  // La pieza recién soltada se desliza desde donde quedó el dedo hasta su
+  // lugar, en la imagen o en la bandeja, en vez de aparecer ahí de golpe.
   useLayoutEffect(() => {
-    const settle = settleRef.current;
-    settleRef.current = null;
-    if (!settle || !targetById.has(placements[settle.itemId] ?? "")) return;
-    const element = itemButtonRefs.current.get(settle.itemId);
+    const moves = settleRef.current;
+    settleRef.current = [];
     if (
-      !element?.animate ||
+      !moves.length ||
       window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ) {
       return;
     }
-    const rect = element.getBoundingClientRect();
-    const dx = settle.x - (rect.left + rect.width / 2);
-    const dy = settle.y - (rect.top + rect.height / 2);
-    element.animate(
-      [
-        { transform: `translate(${dx}px, ${dy}px) scale(1.06)` },
-        { transform: "none" },
-      ],
-      { duration: 240, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
-    );
-  }, [placements, targetById]);
+    for (const move of moves) {
+      const element = itemButtonRefs.current.get(move.itemId);
+      if (!element?.animate) continue;
+      const rect = element.getBoundingClientRect();
+      const dx = move.x - (rect.left + rect.width / 2);
+      const dy = move.y - (rect.top + rect.height / 2);
+      element.animate(
+        [
+          {
+            transform: `translate(${dx}px, ${dy}px) scale(${move.lifted ? 1.06 : 1})`,
+          },
+          { transform: "none" },
+        ],
+        { duration: 240, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+      );
+    }
+  }, [placements, targetById, trayOrder, settleTick]);
 
   const cursorForItem = (itemId: string): KeyboardCursor => {
     const target = targetById.get(placements[itemId] ?? "");
@@ -537,10 +543,17 @@ export function DragDropPlayer({
     const x = event.clientX - drag.grabX * width;
     const y = event.clientY - drag.grabY * width;
     setDragPreview({ itemId: drag.itemId, x, y, width });
+    const outside = isOutsideStage(event.clientX, event.clientY);
     setHoverTargetId(
-      isOutsideStage(event.clientX, event.clientY)
-        ? null
-        : (dropTargetAt(drag.itemId, x, y)?.id ?? null),
+      outside ? null : (dropTargetAt(drag.itemId, x, y)?.id ?? null),
+    );
+    // Fuera de la imagen la pieza vuelve a la bandeja: al lugar que está bajo
+    // el dedo o, si no hay ninguno, al suyo.
+    setHoverSlot(
+      outside
+        ? (traySlotAtPoint(event.clientX, event.clientY) ??
+            trayOrder.indexOf(drag.itemId))
+        : null,
     );
   };
 
@@ -555,6 +568,7 @@ export function DragDropPlayer({
     const preview = dragPreview;
     setDragPreview(null);
     setHoverTargetId(null);
+    setHoverSlot(null);
 
     if (drag.moved && !disabled) {
       suppressClickItemIdRef.current = drag.itemId;
@@ -566,22 +580,41 @@ export function DragDropPlayer({
       // Soltar fuera del escenario devuelve la pieza a la bandeja, en la
       // posición donde caiga; soltar dentro pero lejos de un destino la deja
       // donde estaba.
+      // Cuenta dónde quedó la pieza, no la punta del dedo.
+      const x = preview?.itemId === drag.itemId ? preview.x : event.clientX;
+      const y = preview?.itemId === drag.itemId ? preview.y : event.clientY;
+      const moves: Settle[] = [{ itemId: drag.itemId, x, y, lifted: true }];
       if (isOutsideStage(event.clientX, event.clientY)) {
         const slotIndex = traySlotAtPoint(event.clientX, event.clientY);
 
         if (slotIndex !== null) {
+          // La pieza que estaba en ese lugar también se desliza al suyo nuevo.
+          const other = trayOrder[slotIndex];
+          const element =
+            other &&
+            other !== drag.itemId &&
+            !targetById.has(placements[other] ?? "")
+              ? itemButtonRefs.current.get(other)
+              : null;
+          if (element) {
+            const rect = element.getBoundingClientRect();
+            moves.push({
+              itemId: other,
+              x: rect.left + rect.width / 2,
+              y: rect.top + rect.height / 2,
+            });
+          }
           moveToSlot(drag.itemId, slotIndex);
         }
 
+        settleRef.current = moves;
         returnItem(drag.itemId);
         clearSelection();
       } else {
-        // Cuenta dónde quedó la pieza, no la punta del dedo.
-        const x = preview?.itemId === drag.itemId ? preview.x : event.clientX;
-        const y = preview?.itemId === drag.itemId ? preview.y : event.clientY;
-        settleRef.current = { itemId: drag.itemId, x, y };
-        if (!placeItemAtPoint(drag.itemId, x, y)) settleRef.current = null;
+        settleRef.current = moves;
+        placeItemAtPoint(drag.itemId, x, y);
       }
+      setSettleTick((tick) => tick + 1);
     }
   };
 
@@ -595,6 +628,7 @@ export function DragDropPlayer({
     pointerDragRef.current = null;
     setDragPreview(null);
     setHoverTargetId(null);
+    setHoverSlot(null);
   };
 
   /** La bandeja pinta la pieza igual esté puesta o no, para que el hueco no se mueva. */
@@ -931,10 +965,7 @@ export function DragDropPlayer({
                   Con el teclado: Enter para tomarlo, las flechas para moverlo
                   (Shift avanza más rápido) y Enter otra vez para soltarlo.
                 </li>
-                <li>
-                  Para devolverlo, arrástralo fuera de la imagen o toca un hueco
-                  de esta fila.
-                </li>
+                <li>Para devolverlo, arrástralo de vuelta a esta fila.</li>
                 <li>
                   Los objetos de la fila se acomodan a tu gusto: arrastra uno
                   sobre el lugar de otro para intercambiarlos.
@@ -949,7 +980,12 @@ export function DragDropPlayer({
               <button
                 key={item.id}
                 aria-label={`Lugar ${slotIndex + 1} de la bandeja, vacío`}
-                className="flex items-center justify-center rounded-sm border-2 border-dashed border-muted-foreground/40 bg-muted/40 transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-muted/40"
+                className={cn(
+                  "flex items-center justify-center rounded-sm border-2 border-dashed transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default",
+                  hoverSlot === slotIndex
+                    ? "border-primary bg-primary/15"
+                    : "border-transparent",
+                )}
                 data-tray-slot={slotIndex}
                 disabled={disabled}
                 style={slotStyle(item)}
@@ -982,10 +1018,10 @@ export function DragDropPlayer({
                 {...itemButtonProps(item)}
                 className={cn(
                   "flex touch-none cursor-pointer items-center justify-center rounded-sm border-2 border-transparent transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-70",
-                  selectedItemId === item.id
-                    ? "ring-2 ring-primary"
-                    : "hover:bg-muted/60",
+                  selectedItemId === item.id && "ring-2 ring-primary",
                   dragPreview?.itemId === item.id && "opacity-50",
+                  hoverSlot === slotIndex &&
+                    "border-dashed border-primary bg-primary/15",
                 )}
                 data-tray-slot={slotIndex}
                 data-piece-transition=""
