@@ -191,12 +191,14 @@ export function StateGridEditor({
       <section className="flex flex-col gap-2">
         <h3 className="text-sm font-semibold">Casillas</h3>
         <p className="text-xs text-muted-foreground">
-          Toca cada casilla y elige su estado. Encima puedes escribir un rótulo
-          que vea el estudiante (opcional).
+          {states.length
+            ? "Toca cada casilla y elige su estado. Encima puedes escribir un rótulo que vea el estudiante (opcional)."
+            : "Agrega un estado para poder marcar las casillas."}
         </p>
         <StateGridPlayer
           config={grid}
           value={value}
+          disabled={!states.length}
           onChange={setAnswer}
           renderLabel={(cell, index) => (
             <input

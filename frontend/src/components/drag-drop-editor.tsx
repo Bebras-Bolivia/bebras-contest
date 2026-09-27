@@ -229,16 +229,21 @@ export function DragDropEditor(p: Props) {
 
   if (!backgroundUrl) {
     return (
-      <div className="flex flex-col items-center gap-3 border-2 border-dashed border-border px-4 py-10 text-center">
-        <ImagePlusIcon className="size-8 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">
-          Empieza por la imagen de fondo, donde se sueltan las piezas.
-        </p>
-        <PickImage onPick={p.onUploadBackground} label="Imagen de fondo">
-          <ImagePlusIcon data-icon="inline-start" />
-          Subir imagen de fondo
-        </PickImage>
-      </div>
+      <label className="flex h-40 cursor-pointer flex-col items-center justify-center gap-2 border-2 border-dashed border-border/30 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-foreground has-focus-visible:ring-2 has-focus-visible:ring-primary/60">
+        <input
+          type="file"
+          accept="image/*"
+          aria-label="Imagen de fondo"
+          className="sr-only"
+          onChange={(event) => {
+            if (event.target.files?.length)
+              p.onUploadBackground(event.target.files);
+            event.target.value = "";
+          }}
+        />
+        <ImagePlusIcon className="size-6" />
+        Subir la imagen de fondo, donde se sueltan las piezas
+      </label>
     );
   }
 

@@ -252,7 +252,6 @@ export function TaskTester() {
               task={playTask}
               value={answer}
               onChange={handleAnswerChange}
-              showHeadings
             />
           )}
 
@@ -261,13 +260,6 @@ export function TaskTester() {
               correct={result.correct}
               explanationBlocks={result.explanationBlocks}
               reveal={justChecked}
-              className={
-                ["image_hotspot", "state_grid", "text_cloze"].includes(
-                  playTask?.answerType ?? "",
-                )
-                  ? "order-1"
-                  : undefined
-              }
             />
           )}
 
@@ -290,9 +282,13 @@ export function TaskTester() {
               <Button
                 type="button"
                 onClick={handleCheckAnswer}
-                disabled={!playTask || checking}
+                disabled={
+                  !playTask ||
+                  checking ||
+                  !answerHasResponse(playTask.answerType, answer)
+                }
               >
-                {checking ? "Comprobando…" : "Probar"}
+                {checking ? "Comprobando…" : "Comprobar"}
               </Button>
             </div>
           </div>

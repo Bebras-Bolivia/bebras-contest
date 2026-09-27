@@ -172,7 +172,7 @@ export function PracticeSolver() {
             disabled={checking || !answerHasResponse(task.answerType, answer)}
             onClick={check}
           >
-            {checking ? "Verificando..." : "Comprobar"}
+            {checking ? "Comprobando…" : "Comprobar"}
           </Button>
         )}
       </div>

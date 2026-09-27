@@ -320,12 +320,14 @@ export function TextClozePlayer({
   value,
   onChange,
   disabled = false,
+  className,
 }: {
   config: ClozeConfig;
   blocks: ContentBlock[];
   value: Record<string, string>;
   onChange: (value: Record<string, string>) => void;
   disabled?: boolean;
+  className?: string;
 }) {
   const [picked, setPicked] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -364,6 +366,7 @@ export function TextClozePlayer({
     <div className="flex min-w-0 flex-col gap-6" data-assignment-surface>
       <TaskContentRenderer
         blocks={blocks}
+        className={className}
         renderBlank={(id) => {
           const index = config.blanks.findIndex((blank) => blank.id === id);
           if (index === -1) return <span>[hueco]</span>;

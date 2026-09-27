@@ -41,7 +41,6 @@ import { Button } from "@/components/ui/button";
 import {
   Field,
   FieldContent,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -125,6 +124,35 @@ const answerTypeIcons = {
   text_cloze: BracketsIcon,
 } satisfies Record<AnswerType, unknown>;
 type BlocksSection = "bodyBlocks" | "challengeBlocks" | "explanationBlocks";
+
+/** Lo que falta en la respuesta, dicho como en el resto del formulario. */
+function missingAnswerPart(state: FormState) {
+  if (state.answerType === "image_hotspot") {
+    if (!state.hotspotConfig) return "Falta la imagen.";
+    if (!state.hotspotConfig.regions.length) return "Falta marcar una zona.";
+    if (!state.hotspotKey.acceptedRegionIds.length)
+      return "Marca la zona correcta.";
+  }
+  if (state.answerType === "state_grid") {
+    if (!state.gridConfig.states.length) return "Falta al menos un estado.";
+    const answer = state.gridKey.acceptedAssignments[0] ?? {};
+    if (state.gridConfig.cells.some((cell) => !answer[cell.id]))
+      return "Falta elegir el estado de cada casilla.";
+  }
+  if (state.answerType === "text_cloze") {
+    const { blanks, options } = activeCloze(state.clozeConfig, [
+      ...state.bodyBlocks,
+      ...state.challengeBlocks,
+    ]);
+    if (!blanks.length) return "Falta poner un hueco en la pregunta.";
+    const answer = state.clozeKey.acceptedAssignments[0] ?? {};
+    if (blanks.some((blank) => !answer[blank.id]))
+      return "Falta la respuesta de algún hueco.";
+    if (options.some((option) => !option.label.trim()))
+      return "Falta el texto de alguna opción.";
+  }
+  return null;
+}
 
 /**
  * Año, país y un número correlativo (2024-BR-04). Si la tarea ya tiene un
@@ -437,7 +465,10 @@ function validateForm(state: FormState) {
     errors.push("Falta la respuesta correcta.");
   }
 
-  if (state.answerType === "image_hotspot") {
+  const missingAnswer = missingAnswerPart(state);
+  if (missingAnswer) {
+    errors.push(missingAnswer);
+  } else if (state.answerType === "image_hotspot") {
     try {
       parseHotspotKey(
         state.hotspotKey,
@@ -453,7 +484,10 @@ function validateForm(state: FormState) {
   }
 
   const year = state.year.trim();
-  if (state.answerType === "state_grid" || state.answerType === "text_cloze") {
+  if (
+    !missingAnswer &&
+    (state.answerType === "state_grid" || state.answerType === "text_cloze")
+  ) {
     try {
       const task = buildStoredTask(state);
       const config = parseAssignmentConfig(
@@ -490,11 +524,11 @@ function validateForm(state: FormState) {
 
     for (const item of state.dragDropItems) {
       if (!item.label.trim()) {
-        errors.push("Cada objeto arrastrable debe tener un nombre.");
+        errors.push("Falta el nombre de alguna pieza.");
       }
 
       if (!item.image) {
-        errors.push("Cada objeto arrastrable debe tener una imagen.");
+        errors.push("Falta la imagen de alguna pieza.");
       }
 
       if (
@@ -503,7 +537,7 @@ function validateForm(state: FormState) {
         item.widthPercent > 100
       ) {
         errors.push(
-          "El ancho de cada objeto debe ser mayor que 0 y hasta 100.",
+          "El tamaño de cada pieza debe ser mayor que 0 y hasta 100.",
         );
       }
     }
@@ -524,9 +558,7 @@ function validateForm(state: FormState) {
       correctTargetIds.every((targetId) => targetIds.includes(targetId));
 
     if (!hasOneToOneMapping) {
-      errors.push(
-        "Cada objeto debe tener un único destino de encaje asociado.",
-      );
+      errors.push("Cada pieza debe ir a un solo lugar.");
     }
 
     if (
@@ -540,7 +572,7 @@ function validateForm(state: FormState) {
           target.y > 100,
       )
     ) {
-      errors.push("Las coordenadas de cada destino deben estar entre 0 y 100.");
+      errors.push("Hay un lugar fuera de la imagen.");
     }
 
     if (
@@ -551,9 +583,7 @@ function validateForm(state: FormState) {
           target.snapRadius > 100,
       )
     ) {
-      errors.push(
-        "El radio de encaje de cada destino debe ser mayor que 0 y hasta 100.",
-      );
+      errors.push("Hay un lugar con un tamaño no válido.");
     }
 
     // Las alternativas reparten los mismos objetos entre los mismos destinos.
@@ -589,7 +619,7 @@ function validateForm(state: FormState) {
 
       if (!valid) {
         errors.push(
-          "Cada solución alternativa debe colocar todos los objetos en un destino distinto.",
+          "Cada otra respuesta correcta debe poner todas las piezas, cada una en un lugar distinto.",
         );
         break;
       }
@@ -600,7 +630,7 @@ function validateForm(state: FormState) {
       );
 
       if (!signature || signatures.has(signature)) {
-        errors.push("Hay una solución alternativa repetida.");
+        errors.push("Hay otra respuesta correcta repetida.");
         break;
       }
 
@@ -1302,27 +1332,26 @@ export function TaskUploadForm({
           )}
 
           {form.answerType === "short_text" && (
-            <Field data-invalid={!form.shortAnswer.trim() && errors.length > 0}>
-              <FieldLabel htmlFor="short-answer">Respuesta correcta</FieldLabel>
-              <FieldContent>
-                <Input
-                  id="short-answer"
-                  aria-invalid={!form.shortAnswer.trim() && errors.length > 0}
-                  placeholder="Ej. 42"
-                  className="max-w-xs"
-                  value={form.shortAnswer}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      shortAnswer: event.target.value,
-                    }))
-                  }
-                />
-                <FieldDescription>
-                  No importan las mayúsculas ni los espacios de más.
-                </FieldDescription>
-              </FieldContent>
-            </Field>
+            <section className="flex flex-col gap-2">
+              <h3 className="text-sm font-semibold">Respuesta correcta</h3>
+              <input
+                id="short-answer"
+                aria-label="Respuesta correcta"
+                aria-invalid={!form.shortAnswer.trim() && errors.length > 0}
+                placeholder="Ej. 42"
+                value={form.shortAnswer}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    shortAnswer: event.target.value,
+                  }))
+                }
+                className="h-9 w-full max-w-xs border-2 border-difficulty-easy/60 bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-primary aria-invalid:border-destructive/60"
+              />
+              <p className="text-xs text-muted-foreground">
+                No importan las mayúsculas ni los espacios de más.
+              </p>
+            </section>
           )}
 
           {form.answerType === "image_hotspot" && (
