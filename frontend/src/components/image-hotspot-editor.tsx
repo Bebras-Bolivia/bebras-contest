@@ -7,7 +7,7 @@ import {
   ImagePlusIcon,
   PenLineIcon,
   PlusIcon,
-  Trash2Icon,
+  XIcon,
   Undo2Icon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -613,7 +613,7 @@ export function ImageHotspotEditor({
                     }}
                     className="grid size-8 place-items-center text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/60"
                   >
-                    <Trash2Icon className="size-4" />
+                    <XIcon className="size-4" />
                   </button>
                 </div>
               )}

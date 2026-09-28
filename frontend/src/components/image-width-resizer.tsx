@@ -29,6 +29,8 @@ export function ImageWidthResizer({
   alt,
   widthPercent,
   minPercent = 20,
+  maxHeight,
+  minWidth,
   className,
   onChange,
 }: {
@@ -36,11 +38,42 @@ export function ImageWidthResizer({
   alt: string;
   widthPercent: number;
   minPercent?: number;
+  /** Tope de alto del tamaño automático (100 %), el mismo de la vista del estudiante. */
+  maxHeight?: string;
+  /** Piso de ancho de un tamaño elegido, el mismo de la vista del estudiante. */
+  minWidth?: string;
   className?: string;
   onChange: (widthPercent: number) => void;
 }) {
   const areaRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
+  const automatic = Boolean(maxHeight) && widthPercent >= 100;
+  const [aspect, setAspect] = useState<number | null>(null);
+  const widthFor = (percent: number) =>
+    minWidth ? `min(100%, max(${percent}%, ${minWidth}))` : `${percent}%`;
+  // El automático ocupa lo que ocupa la imagen: a lo ancho, salvo que su alto
+  // llegue al tope. El marco la abraza para que los tiradores queden en sus bordes.
+  const frameStyle = automatic
+    ? {
+        width: aspect ? `min(100%, calc(${maxHeight} * ${aspect}))` : "100%",
+        maxWidth: "100%",
+      }
+    : { width: widthFor(widthPercent), maxWidth: "100%" };
+
+  // Porcentaje que ocupa ahora la imagen, aunque esté en su tamaño automático.
+  const shownPercent = () => {
+    const area = areaRef.current?.getBoundingClientRect().width;
+    const frame = frameRef.current?.getBoundingClientRect().width;
+    return area && frame ? Math.round((frame / area) * 100) : widthPercent;
+  };
+
+  const setFrameWidth = (percent: number) => {
+    if (frameRef.current) frameRef.current.style.width = widthFor(percent);
+  };
+
+  const resetFrame = () => {
+    if (frameRef.current) frameRef.current.style.width = frameStyle.width;
+  };
   const resizeRef = useRef<ResizeState | null>(null);
   const [resizing, setResizing] = useState(false);
 
@@ -57,14 +90,16 @@ export function ImageWidthResizer({
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     const containerWidth = area.getBoundingClientRect().width;
+    const startPercent = shownPercent();
     resizeRef.current = {
       pointerId: event.pointerId,
       side,
       startX: event.clientX,
-      startWidthPx: (containerWidth * widthPercent) / 100,
+      startWidthPx: (containerWidth * startPercent) / 100,
       containerWidth,
-      widthPercent,
+      widthPercent: startPercent,
     };
+    setFrameWidth(startPercent);
     setResizing(true);
   };
 
@@ -85,9 +120,7 @@ export function ImageWidthResizer({
         Math.min(100, (nextWidthPx / state.containerWidth) * 100),
       ),
     );
-    if (frameRef.current) {
-      frameRef.current.style.width = `${state.widthPercent}%`;
-    }
+    setFrameWidth(state.widthPercent);
   };
 
   const finishResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -104,10 +137,12 @@ export function ImageWidthResizer({
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
 
+    resetFrame();
     if (event.type === "pointerup" && state.widthPercent !== widthPercent) {
-      onChange(state.widthPercent);
-    } else if (frameRef.current) {
-      frameRef.current.style.width = `${widthPercent}%`;
+      // Estirar hasta el borde deja un tamaño fijo: 100 % es el automático.
+      onChange(
+        automatic ? Math.min(99, state.widthPercent) : state.widthPercent,
+      );
     }
   };
 
@@ -134,7 +169,10 @@ export function ImageWidthResizer({
         onChange(
           Math.max(
             minPercent,
-            Math.min(100, widthPercent + (side === "right" ? step : -step)),
+            Math.min(
+              automatic ? 99 : 100,
+              shownPercent() + (side === "right" ? step : -step),
+            ),
           ),
         );
       }}
@@ -153,16 +191,18 @@ export function ImageWidthResizer({
       className={cn("group/image flex justify-center", className)}
       ref={areaRef}
     >
-      <div
-        className="relative"
-        ref={frameRef}
-        style={{ width: `${widthPercent}%`, maxWidth: "100%" }}
-      >
+      <div className="relative" ref={frameRef} style={frameStyle}>
         <img
           alt={alt}
           className="block h-auto w-full"
           draggable={false}
           src={src}
+          onLoad={(event) => {
+            const { naturalWidth, naturalHeight } = event.currentTarget;
+            if (naturalWidth && naturalHeight) {
+              setAspect(naturalWidth / naturalHeight);
+            }
+          }}
         />
         {handle("left")}
         {handle("right")}

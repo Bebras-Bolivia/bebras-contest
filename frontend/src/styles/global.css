@@ -574,11 +574,52 @@
    navegador lo mueve y lo estira hasta la sección nueva. */
 .nav-pill {
   position: absolute;
-  inset: 0;
-  border-radius: calc(infinity * 1px);
+  inset-inline: 0.875rem;
+  bottom: calc(50% - 1.1rem);
+  height: 3px;
   background: var(--primary);
   view-transition-name: nav-pill;
   z-index: 0;
+}
+
+/* Al pasar el mouse, una barra más clara crece desde el centro: adelanta
+   dónde quedaría la barra roja de la sección activa. */
+.nav-hover::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0.875rem;
+  bottom: calc(50% - 1.1rem);
+  height: 3px;
+  background: color-mix(in oklab, var(--primary) 45%, transparent);
+  transform: scaleX(0);
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.nav-hover:hover::after,
+.nav-hover:focus-visible::after {
+  transform: scaleX(1);
+}
+
+.nav-hover [data-nav-label] {
+  display: inline-block;
+  transition:
+    color 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.nav-hover:hover [data-nav-label] {
+  transform: translateY(-1px);
+}
+
+.nav-hover:active [data-nav-label] {
+  transform: translateY(1px) scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-hover::after,
+  .nav-hover [data-nav-label] {
+    transition: none;
+  }
 }
 
 ::view-transition-group(nav-pill) {
@@ -625,6 +666,84 @@
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-group(nav-pill) {
     animation-duration: 1ms;
+  }
+}
+
+/* Pestaña activa: la barra roja crece desde el centro al elegirla. */
+.tab-underline::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0.75rem;
+  bottom: 0;
+  height: 3px;
+  background: var(--primary);
+  animation: tab-underline 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes tab-underline {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+/* Fila recién agregada: entra y se ilumina un momento en amarillo suave. */
+@keyframes row-flash {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px);
+    background-color: color-mix(in oklab, var(--secondary) 45%, transparent);
+  }
+  30% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.row-flash {
+  animation: row-flash 1.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row-flash {
+    animation: none;
+  }
+}
+
+/* Barras y líneas que crecen al aparecer (pestañas, avance de preguntas). */
+.grow-x {
+  animation: tab-underline 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-underline::after,
+  .grow-x {
+    animation: none;
+  }
+}
+
+/* Cambio de pantalla: la vieja se va rápido y la nueva sube apenas mientras
+   aparece. Un deslizamiento lateral, sumado a la entrada propia de cada
+   pantalla, se sentía como dos movimientos seguidos. */
+@keyframes bebras-page-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes bebras-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(app-content),
+  ::view-transition-new(app-content) {
+    animation: none !important;
   }
 }
 
@@ -855,4 +974,66 @@
 .task-blank.ProseMirror-selectednode {
   outline: 2px solid var(--primary);
   outline-offset: 1px;
+}
+
+/* Castor de la portada: entra saltando cada vez que cambia de departamento. */
+@keyframes beaver-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.86);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-6px) scale(1.03);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes beaver-name {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.beaver-pop {
+  animation: beaver-pop 560ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.beaver-name {
+  animation: beaver-name 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Sobre de la pantalla «Revisa tu correo»: entra después del castor y flota. */
+@keyframes envelope-in {
+  from {
+    opacity: 0;
+    transform: translate(-10px, 14px) rotate(-18deg) scale(0.6);
+  }
+}
+
+@keyframes envelope-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-6deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(4deg);
+  }
+}
+
+.envelope-bob {
+  animation:
+    envelope-in 520ms cubic-bezier(0.34, 1.56, 0.64, 1) 280ms both,
+    envelope-bob 2.8s ease-in-out 800ms infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .beaver-pop,
+  .beaver-name,
+  .envelope-bob {
+    animation: none;
+  }
 }

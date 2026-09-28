@@ -1,23 +1,26 @@
 "use client";
-import { REGISTRATION_ONLY } from "@/lib/registration-only";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { EyeIcon, EyeOffIcon } from "lucide-react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+  type Ref,
+} from "react";
+import {
+  CircleAlertIcon,
+  ExternalLinkIcon,
+  EyeIcon,
+  EyeOffIcon,
+  MailIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Field,
   FieldContent,
-  FieldError,
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
@@ -29,9 +32,18 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import { SchoolPicker, type SchoolValue } from "@/components/school-picker";
+import {
+  EMPTY_LOCATION,
+  LocationPicker,
+  type LocationValue,
+} from "@/components/location-picker";
+import { Expand, Reveal } from "@/components/reveal";
+import { DEPARTMENTS } from "@/lib/departments";
 import { cn } from "@/lib/utils";
+import { surface } from "@/lib/surface";
 import { formatPersonName } from "@/lib/person-name";
 import { validatePhone } from "@/lib/phone";
+import { displayPhone } from "@/lib/phone-display";
 import { validateEmail } from "@/lib/email";
 import { validateRegistrationText } from "@/lib/registration-text";
 import { registrationPasswordError } from "@/lib/registration-password";
@@ -48,7 +60,7 @@ import {
 } from "@/lib/email-verification";
 import { EMAIL_VERIFICATION_CHANNEL } from "@/lib/email-action";
 import { GoogleButton } from "@/components/google-button";
-import { isFirebaseConfigured } from "@/lib/firebase";
+import { AUTH_EMULATOR_HOST, isFirebaseConfigured } from "@/lib/firebase";
 import {
   GoogleRedirectStarted,
   continueWithGoogle,
@@ -60,6 +72,7 @@ import {
   rememberGoogleProfile,
   sendVerificationEmail,
   signOutFirebase,
+  verifyEmailWithEmulator,
 } from "@/lib/firebase-auth";
 import { useFirebaseSession } from "@/lib/use-firebase-session";
 import { landingPath, openBebrasSession } from "@/lib/session-api";
@@ -72,27 +85,13 @@ type RegisterErrors = {
   password?: string;
   confirmPassword?: string;
   school?: string;
-  letter?: string;
-  idFront?: string;
-  idBack?: string;
+  department?: string;
+  city?: string;
   form?: string;
 };
 
-type DocumentField = "letter" | "idFront" | "idBack";
-
-const DOC_MAX_BYTES = 5 * 1024 * 1024;
-const DOC_ALLOWED_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png"];
-
-function documentError(file: File) {
-  const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
-  if (!DOC_ALLOWED_EXTENSIONS.includes(extension)) {
-    return "Elige un archivo PDF, JPG, JPEG o PNG.";
-  }
-  if (file.size > DOC_MAX_BYTES) {
-    return "El archivo no debe superar los 5 MB.";
-  }
-  return undefined;
-}
+const stepClass =
+  "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-3 motion-safe:duration-300 motion-safe:ease-out";
 
 function confirmationError(password: string, confirmation: string) {
   if (!confirmation) return "Confirma tu contraseña.";
@@ -111,6 +110,9 @@ export function RegisterForm() {
   const [googleBusy, setGoogleBusy] = useState(false);
   const [resending, setResending] = useState(false);
   const [checkingVerification, setCheckingVerification] = useState(false);
+  const [verifyingLocally, setVerifyingLocally] = useState(false);
+  const [resendAt, setResendAt] = useState(0);
+  const [now, setNow] = useState(0);
   const [verificationDeliveryFailed, setVerificationDeliveryFailed] =
     useState(false);
   const [verificationError, setVerificationError] = useState("");
@@ -124,10 +126,9 @@ export function RegisterForm() {
     name: "",
     institutionType: "school",
   });
+  const [schoolManual, setSchoolManual] = useState(false);
+  const [place, setPlace] = useState<LocationValue>(EMPTY_LOCATION);
   const [phone, setPhone] = useState("");
-  const [letterFile, setLetterFile] = useState<File | null>(null);
-  const [idFrontFile, setIdFrontFile] = useState<File | null>(null);
-  const [idBackFile, setIdBackFile] = useState<File | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const confirmPasswordTouchedRef = useRef(false);
@@ -140,10 +141,9 @@ export function RegisterForm() {
   const passwordRef = useRef<HTMLInputElement>(null);
   const confirmPasswordRef = useRef<HTMLInputElement>(null);
   const schoolRef = useRef<HTMLInputElement>(null);
-  const letterRef = useRef<HTMLInputElement>(null);
-  const idFrontRef = useRef<HTMLInputElement>(null);
-  const idBackRef = useRef<HTMLInputElement>(null);
-  const formErrorRef = useRef<HTMLDivElement>(null);
+  const departmentRef = useRef<HTMLButtonElement>(null);
+  const cityRef = useRef<HTMLElement>(null);
+  const formErrorRef = useRef<HTMLParagraphElement>(null);
   const prefilledRef = useRef(false);
   const verificationCheckRef = useRef<((showPendingMessage?: boolean) => void) | null>(
     null,
@@ -152,15 +152,18 @@ export function RegisterForm() {
     | "firstName"
     | "lastName"
     | "school"
+    | "department"
+    | "city"
     | "email"
     | "phone"
     | "password"
-    | DocumentField
     | null
   >(null);
 
   const isSchool = school.institutionType === "school";
   const hasSchoolChoice = Boolean(school.name.trim());
+  const needsLocation =
+    !school.codUe && (school.institutionType === "homeschool" || schoolManual);
 
   const clearErrors = (...fields: (keyof RegisterErrors)[]) => {
     setErrors((current) => {
@@ -191,19 +194,6 @@ export function RegisterForm() {
     return !error;
   };
 
-  const updateDocument = (
-    field: DocumentField,
-    file: File | null,
-    setFile: (value: File | null) => void,
-  ) => {
-    setFile(file);
-    const error = file ? documentError(file) : undefined;
-    setErrors((current) => ({ ...current, [field]: error, form: undefined }));
-    if (error) {
-      toast.error(error);
-    }
-  };
-
   useEffect(() => {
     if (errors.form) {
       formErrorRef.current?.focus();
@@ -230,16 +220,37 @@ export function RegisterForm() {
       firstName: firstNameRef,
       lastName: lastNameRef,
       school: schoolRef,
+      department: departmentRef,
+      city: cityRef,
       email: emailRef,
       phone: phoneRef,
       password: passwordRef,
-      letter: letterRef,
-      idFront: idFrontRef,
-      idBack: idBackRef,
     };
     refs[pendingResponseFocusRef.current].current?.focus();
     pendingResponseFocusRef.current = null;
   }, [step, submitting]);
+
+  const startResendCooldown = () => {
+    const current = Date.now();
+    setNow(current);
+    setResendAt(current + RESEND_COOLDOWN_MS);
+  };
+
+  useEffect(() => {
+    if (resendAt <= now) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [resendAt, now]);
+
+  const firstStepRender = useRef(true);
+  useEffect(() => {
+    if (firstStepRender.current) {
+      firstStepRender.current = false;
+      return;
+    }
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+  }, [step]);
 
   useEffect(() => {
     if (step !== "verify" || !session.user) return;
@@ -353,12 +364,17 @@ export function RegisterForm() {
       school: hasSchoolChoice
         ? validatedSchool.error
         : "Indica tu colegio o selecciona educación en casa.",
-      // Los documentos son opcionales al registrarse: la carta necesita la
-      // firma del director y casi nadie la tiene a mano. Solo se revisa el
-      // formato de lo que sí adjunten.
-      letter: letterFile ? documentError(letterFile) : undefined,
-      idFront: idFrontFile ? documentError(idFrontFile) : undefined,
-      idBack: idBackFile ? documentError(idBackFile) : undefined,
+      department:
+        needsLocation && !place.department
+          ? "Elige tu departamento."
+          : undefined,
+      city: !needsLocation || !place.department
+        ? undefined
+        : !place.city.trim()
+          ? "Elige tu ciudad."
+          : !/^[\p{L}][\p{L} .'-]*$/u.test(place.city.trim())
+            ? "Escribe solo el nombre de la ciudad."
+            : undefined,
     };
     const fieldOrder = [
       "firstName",
@@ -368,7 +384,8 @@ export function RegisterForm() {
       "password",
       "confirmPassword",
       "school",
-      ...(isSchool ? (["letter"] as const) : (["idFront", "idBack"] as const)),
+      "department",
+      "city",
     ] as const;
     const firstInvalid = fieldOrder.find((field) => nextErrors[field]);
 
@@ -382,9 +399,8 @@ export function RegisterForm() {
         password: passwordRef,
         confirmPassword: confirmPasswordRef,
         school: schoolRef,
-        letter: letterRef,
-        idFront: idFrontRef,
-        idBack: idBackRef,
+        department: departmentRef,
+        city: cityRef,
       };
       refs[firstInvalid].current?.focus();
       return;
@@ -431,6 +447,21 @@ export function RegisterForm() {
     }
   };
 
+  const handleLocalVerify = async () => {
+    setVerifyingLocally(true);
+    setVerificationError("");
+    try {
+      await verifyEmailWithEmulator(email);
+      verificationCheckRef.current?.(true);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "No se pudo verificar el correo.",
+      );
+    } finally {
+      setVerifyingLocally(false);
+    }
+  };
+
   const handleResend = async () => {
     if (!session.user) return;
     setResending(true);
@@ -438,6 +469,7 @@ export function RegisterForm() {
       await sendVerificationEmail(session.user);
       setVerificationDeliveryFailed(false);
       toast.success("Te reenviamos el correo de verificación.");
+      startResendCooldown();
     } catch (error) {
       toast.error(firebaseErrorMessage(error, "No se pudo reenviar el correo."));
     } finally {
@@ -478,19 +510,9 @@ export function RegisterForm() {
       form.append("phone", phone.trim());
       if (school.codUe) {
         form.append("schoolCodUe", school.codUe);
-      }
-      // Lo que se haya adjuntado viaja; lo que no, se completa desde el perfil.
-      const attached = isSchool
-        ? [["letter", letterFile] as const]
-        : ([
-            ["idFront", idFrontFile],
-            ["idBack", idBackFile],
-          ] as const);
-
-      for (const [field, file] of attached) {
-        if (file) {
-          form.append(field, file);
-        }
+      } else if (place.department && place.city.trim()) {
+        form.append("department", place.department);
+        form.append("city", place.city.trim());
       }
 
       const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
@@ -505,10 +527,11 @@ export function RegisterForm() {
           | "firstName"
           | "lastName"
           | "schoolName"
+          | "department"
+          | "city"
           | "email"
           | "phone"
-          | "password"
-          | DocumentField;
+          | "password";
       };
 
       if (!response.ok) {
@@ -547,6 +570,7 @@ export function RegisterForm() {
       try {
         await sendVerificationEmail(user);
         setVerificationDeliveryFailed(false);
+        startResendCooldown();
       } catch (error) {
         setVerificationDeliveryFailed(true);
         toast.error(
@@ -566,141 +590,205 @@ export function RegisterForm() {
 
   if (!configured) {
     return (
-      <Card className="mx-auto w-full max-w-2xl">
-        <CardHeader>
-          <CardTitle>Registro de maestro</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Alert variant="destructive">
-            <AlertDescription>
-              Este entorno todavía no tiene configurado Firebase Authentication.
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
+      <section className="mx-auto w-full max-w-md">
+        <Heading title="Registro de maestro" />
+        <FormMessage>
+          Este entorno todavía no tiene configurado Firebase Authentication.
+        </FormMessage>
+      </section>
     );
   }
 
   if (step === "verify") {
+    const webmail = webmailFor(email);
+    const cooldown = Math.max(0, Math.ceil((resendAt - now) / 1000));
+    const resendLabel = resending
+      ? "Enviando..."
+      : cooldown > 0
+        ? `Reenviar en ${cooldown} s`
+        : "Reenviar correo";
     return (
-      <Card className="mx-auto w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Verifica tu correo</CardTitle>
-          <CardDescription>
-            {verificationDeliveryFailed
-              ? `Tu cuenta quedó creada, pero el correo no pudo enviarse. Intenta reenviarlo a ${email.trim()}.`
-              : `Te enviamos un enlace a ${email.trim()}. Al verificarlo, iniciaremos tu sesión automáticamente.`}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          {verificationError && (
-            <Alert variant="destructive">
-              <AlertDescription>{verificationError}</AlertDescription>
-            </Alert>
-          )}
-          <Button
-            type="button"
-            variant="outline"
-            disabled={resending}
-            onClick={() => void handleResend()}
+      <section
+        key="verify"
+        className={cn(
+          "mx-auto flex w-full max-w-md flex-col items-center text-center",
+          stepClass,
+        )}
+      >
+        <div className="relative mb-6">
+          <img
+            src="/castores/estandar.webp"
+            alt=""
+            width={496}
+            height={560}
+            className="beaver-pop h-36 w-auto"
+          />
+          <span className="envelope-bob absolute -right-5 bottom-4 flex size-12 items-center justify-center bg-primary text-primary-foreground shadow-[var(--shadow-hard)]">
+            <MailIcon className="size-6" />
+          </span>
+        </div>
+
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Revisa tu correo
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {verificationDeliveryFailed
+            ? "Tu cuenta quedó creada, pero no pudimos enviar el enlace a"
+            : "Te enviamos un enlace de verificación a"}
+        </p>
+        <p className="mt-1 font-semibold break-all">{email.trim()}</p>
+
+        {!verificationDeliveryFailed && (
+          <p
+            role="status"
+            aria-live="polite"
+            className="mt-4 inline-flex items-center gap-2 bg-muted/60 px-3 py-1.5 text-xs text-muted-foreground"
           >
-            {resending ? "Enviando..." : "Reenviar correo de verificación"}
-          </Button>
-          <Button
-            type="button"
-            disabled={checkingVerification}
-            onClick={() => {
-              setVerificationError("");
-              verificationCheckRef.current?.(true);
-            }}
-          >
+            <span className="relative flex size-2">
+              <span className="absolute inline-flex size-full animate-ping bg-primary opacity-60 motion-reduce:animate-none" />
+              <span className="relative inline-flex size-2 bg-primary" />
+            </span>
             {checkingVerification
               ? "Comprobando..."
-              : "Ya verifiqué mi correo"}
-          </Button>
-          <Button
+              : "Esperando que abras el enlace"}
+          </p>
+        )}
+
+        <ol className={cn(surface, "mt-6 flex w-full flex-col gap-2.5 p-4 text-left text-sm")}>
+          {VERIFY_STEPS.map((text, index) => (
+            <li
+              key={text}
+              className="flex items-center gap-3 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-left-2 motion-safe:duration-300 motion-safe:fill-mode-both"
+              style={{ animationDelay: `${250 + index * 90}ms` }}
+            >
+              <span className="flex size-7 shrink-0 items-center justify-center bg-primary/10 font-semibold text-primary">
+                {index + 1}
+              </span>
+              {text}
+            </li>
+          ))}
+        </ol>
+
+        <Reveal message={verificationError}>
+          {(message) => (
+            <FormMessage className="mt-5 text-left">{message}</FormMessage>
+          )}
+        </Reveal>
+
+        <div className="mt-6 flex w-full flex-col gap-3">
+          {verificationDeliveryFailed ? (
+            <Button
+              type="button"
+              disabled={resending}
+              onClick={() => void handleResend()}
+            >
+              {resending ? "Enviando..." : "Enviar el correo otra vez"}
+            </Button>
+          ) : (
+            <>
+              {webmail && (
+                <Button asChild variant="outline">
+                  <a href={webmail.url} target="_blank" rel="noreferrer">
+                    Abrir {webmail.name}
+                    <ExternalLinkIcon data-icon="inline-end" />
+                  </a>
+                </Button>
+              )}
+              <Button
+                type="button"
+                disabled={checkingVerification}
+                onClick={() => {
+                  setVerificationError("");
+                  verificationCheckRef.current?.(true);
+                }}
+              >
+                {checkingVerification
+                  ? "Comprobando..."
+                  : "Ya verifiqué mi correo"}
+              </Button>
+            </>
+          )}
+          {AUTH_EMULATOR_HOST && (
+            <Button
+              type="button"
+              variant="outline"
+              className="border-dashed"
+              disabled={verifyingLocally || checkingVerification}
+              onClick={() => void handleLocalVerify()}
+            >
+              {verifyingLocally
+                ? "Verificando..."
+                : "Verificar ahora (solo local)"}
+            </Button>
+          )}
+        </div>
+
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
+          {!verificationDeliveryFailed && (
+            <button
+              type="button"
+              disabled={resending || cooldown > 0}
+              onClick={() => void handleResend()}
+              className="text-muted-foreground tabular-nums underline underline-offset-4 transition-colors hover:text-foreground disabled:no-underline disabled:opacity-60"
+            >
+              {resendLabel}
+            </button>
+          )}
+          <button
             type="button"
-            variant="ghost"
             onClick={() => {
               void signOutFirebase().then(() => {
                 window.location.replace("/login");
               });
             }}
+            className="text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground"
           >
-            Usar otra cuenta
-          </Button>
-          <p className="text-center text-xs text-muted-foreground">
-            Revisa también la carpeta de correo no deseado.
-          </p>
-        </CardContent>
-      </Card>
+            Usar otro correo
+          </button>
+        </div>
+        <p className="mt-4 text-xs text-muted-foreground">
+          ¿No llega? Revisa la carpeta de correo no deseado.
+        </p>
+      </section>
     );
   }
 
   if (step === "confirm") {
+    const summary = [
+      ["Nombres", formatPersonName(firstName)],
+      ["Apellidos", formatPersonName(lastName)],
+      ["Correo", email.trim()],
+      ["Teléfono", displayPhone(phone.trim())],
+      [isSchool ? "Colegio" : "Dónde enseñas", school.name.trim()],
+      ...(needsLocation
+        ? [
+            ["Departamento", DEPARTMENT_NAMES[place.department ?? ""] ?? ""],
+            ["Ciudad", place.city.trim()],
+          ]
+        : []),
+    ];
     return (
-      <Card className="mx-auto w-full max-w-2xl">
-        <CardHeader>
-          <CardTitle>Confirma tus datos</CardTitle>
-          <CardDescription>
-            Revisa que esté todo correcto antes de crear tu cuenta.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {errors.form && (
-            <Alert ref={formErrorRef} variant="destructive" tabIndex={-1}>
-              <AlertDescription>{errors.form}</AlertDescription>
-            </Alert>
-          )}
-          <dl className="flex flex-col gap-2 rounded-md border bg-background px-4 py-3 text-sm">
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Nombres</dt>
-              <dd className="text-right font-medium">
-                {formatPersonName(firstName)}
-              </dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Apellidos</dt>
-              <dd className="text-right font-medium">
-                {formatPersonName(lastName)}
-              </dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Correo</dt>
-              <dd className="text-right font-medium">{email.trim()}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Teléfono</dt>
-              <dd className="text-right font-medium">{phone.trim()}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Colegio</dt>
-              <dd className="text-right font-medium">{school.name.trim()}</dd>
-            </div>
-            {isSchool ? (
-              <div className="flex justify-between gap-4">
-                <dt className="text-muted-foreground">Carta</dt>
-                <dd className="text-right font-medium">
-                  {letterFile?.name ?? "—"}
-                </dd>
+      <section key="confirm" className={cn("mx-auto w-full max-w-md", stepClass)}>
+        <Heading
+          title="Confirma tus datos"
+          description="Revisa que esté todo correcto antes de crear tu cuenta."
+        />
+        <div className="flex flex-col gap-6">
+          <dl className="divide-y border-y text-sm">
+            {summary.map(([label, value], index) => (
+              <div
+                key={label}
+                className="flex justify-between gap-4 py-3 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-left-2 motion-safe:duration-300 motion-safe:fill-mode-both"
+                style={{ animationDelay: `${120 + index * 50}ms` }}
+              >
+                <dt className="text-muted-foreground">{label}</dt>
+                <dd className="text-right font-medium">{value}</dd>
               </div>
-            ) : (
-              <>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">Carnet anverso</dt>
-                  <dd className="text-right font-medium">
-                    {idFrontFile?.name ?? "—"}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">Carnet reverso</dt>
-                  <dd className="text-right font-medium">
-                    {idBackFile?.name ?? "—"}
-                  </dd>
-                </div>
-              </>
-            )}
+            ))}
           </dl>
+          {errors.form && (
+            <FormMessage ref={formErrorRef}>{errors.form}</FormMessage>
+          )}
           <div className="flex items-center justify-between gap-3">
             <Button
               type="button"
@@ -721,24 +809,20 @@ export function RegisterForm() {
               {submitting ? "Creando cuenta..." : "Confirmar y crear cuenta"}
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     );
   }
 
   return (
-    <Card className="mx-auto w-full max-w-2xl">
-      <CardHeader>
-        <CardTitle>Registro de maestro</CardTitle>
-        <CardDescription>
-          {completing
-            ? "Confirma tus datos y completa lo que falta para terminar tu registro."
-            : REGISTRATION_ONLY
-              ? "Crea tu cuenta y completa tus datos y documentos. Un administrador revisará tu registro."
-              : "Crea tu cuenta y entra enseguida. El administrador la aprueba para que puedas crear grupos e inscribir estudiantes."}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+    <section key="form" className={cn("mx-auto w-full max-w-2xl", stepClass)}>
+      <Heading
+        title="Registro de maestro"
+        description={
+          completing ? "Completa tus datos para terminar tu registro." : undefined
+        }
+      />
+      <div>
         {!completing && (
           <>
             <GoogleButton
@@ -755,11 +839,13 @@ export function RegisterForm() {
             </div>
           </>
         )}
-        {errors.form && (
-          <Alert ref={formErrorRef} variant="destructive" tabIndex={-1} className="mb-4">
-            <AlertDescription>{errors.form}</AlertDescription>
-          </Alert>
-        )}
+        <Reveal message={errors.form}>
+          {(message) => (
+            <FormMessage ref={formErrorRef} className="mb-4">
+              {message}
+            </FormMessage>
+          )}
+        </Reveal>
         <form className="flex flex-col gap-6" onSubmit={goToConfirm} noValidate>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field data-invalid={Boolean(errors.firstName) || undefined}>
@@ -784,7 +870,7 @@ export function RegisterForm() {
                     errors.firstName ? "reg-first-error" : undefined
                   }
                 />
-                <FieldError id="reg-first-error">{errors.firstName}</FieldError>
+                <ErrorText id="reg-first-error" message={errors.firstName} />
               </FieldContent>
             </Field>
             <Field data-invalid={Boolean(errors.lastName) || undefined}>
@@ -809,7 +895,7 @@ export function RegisterForm() {
                     errors.lastName ? "reg-last-error" : undefined
                   }
                 />
-                <FieldError id="reg-last-error">{errors.lastName}</FieldError>
+                <ErrorText id="reg-last-error" message={errors.lastName} />
               </FieldContent>
             </Field>
           </div>
@@ -834,16 +920,10 @@ export function RegisterForm() {
                   placeholder="tu@correo.com"
                   aria-invalid={Boolean(errors.email)}
                   aria-describedby={
-                    errors.email ? "reg-email-error" : "reg-email-hint"
+                    errors.email ? "reg-email-error" : undefined
                   }
                 />
-                {completing && (
-                  <p id="reg-email-hint" className="text-xs text-muted-foreground">
-                    Es el correo de la cuenta con la que entraste; no se puede
-                    cambiar.
-                  </p>
-                )}
-                <FieldError id="reg-email-error">{errors.email}</FieldError>
+                <ErrorText id="reg-email-error" message={errors.email} />
               </FieldContent>
             </Field>
             <Field data-invalid={Boolean(errors.phone) || undefined}>
@@ -871,7 +951,7 @@ export function RegisterForm() {
                     errors.phone ? "reg-phone-error" : undefined
                   }
                 />
-                <FieldError id="reg-phone-error">{errors.phone}</FieldError>
+                <ErrorText id="reg-phone-error" message={errors.phone} />
               </FieldContent>
             </Field>
           </div>
@@ -925,9 +1005,7 @@ export function RegisterForm() {
                     </InputGroupButton>
                   </InputGroupAddon>
                 </InputGroup>
-                <FieldError id="reg-password-error">
-                  {errors.password}
-                </FieldError>
+                <ErrorText id="reg-password-error" message={errors.password} />
               </FieldContent>
             </Field>
             <Field data-invalid={Boolean(errors.confirmPassword) || undefined}>
@@ -980,9 +1058,7 @@ export function RegisterForm() {
                     </InputGroupButton>
                   </InputGroupAddon>
                 </InputGroup>
-                <FieldError id="reg-confirm-error">
-                  {errors.confirmPassword}
-                </FieldError>
+                <ErrorText id="reg-confirm-error" message={errors.confirmPassword} />
               </FieldContent>
             </Field>
           </FieldGroup>
@@ -995,168 +1071,124 @@ export function RegisterForm() {
                 onChange={(value) => {
                   setSchool(value);
                   if (value.name.trim() && errors.school) {
-                    clearErrors("school", "letter", "idFront", "idBack");
-                  } else if (errors.letter || errors.idFront || errors.idBack) {
-                    clearErrors("letter", "idFront", "idBack");
+                    clearErrors("school");
                   }
                 }}
                 inputRef={schoolRef}
                 invalid={Boolean(errors.school)}
                 describedBy={errors.school ? "reg-school-error" : undefined}
+                onManualChange={setSchoolManual}
               />
-              <FieldError id="reg-school-error">{errors.school}</FieldError>
+              <ErrorText id="reg-school-error" message={errors.school} />
             </FieldContent>
           </Field>
-          <div
-            className={cn(
-              "grid transition-[grid-template-rows] duration-300 ease-out",
-              hasSchoolChoice && isSchool
-                ? "grid-rows-[1fr]"
-                : "grid-rows-[0fr]",
-            )}
-          >
-            <div className="overflow-hidden">
-              <Field
-                className="pt-2"
-                data-invalid={Boolean(errors.letter) || undefined}
-              >
-                <FieldLabel htmlFor="reg-letter">
-                  Carta de autorización del director{" "}
-                  <span className="font-normal text-muted-foreground">
-                    (opcional)
-                  </span>
-                </FieldLabel>
-                <FieldContent>
-                  <Input
-                    ref={letterRef}
-                    id="reg-letter"
-                    type="file"
-                    accept=".pdf,image/jpeg,image/png"
-                    onChange={(event) => {
-                      updateDocument(
-                        "letter",
-                        event.target.files?.[0] ?? null,
-                        setLetterFile,
-                      );
-                    }}
-                    aria-invalid={Boolean(errors.letter)}
-                    aria-describedby={
-                      errors.letter ? "reg-letter-error" : undefined
-                    }
-                  />
-                  <FieldError id="reg-letter-error">{errors.letter}</FieldError>
-                  {letterFile && (
-                    <p className="text-xs text-muted-foreground">
-                      Archivo: {letterFile.name}
-                    </p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    PDF o imagen (JPG, PNG), máximo 5 MB.{" "}
-                    <a
-                      href="/carta-modelo"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline underline-offset-4 hover:text-foreground"
-                    >
-                      Llenar la carta aquí
-                    </a>
-                  </p>
-                </FieldContent>
-              </Field>
-            </div>
-          </div>
-
-          <div
-            className={cn(
-              "grid transition-[grid-template-rows] duration-300 ease-out",
-              hasSchoolChoice && !isSchool
-                ? "grid-rows-[1fr]"
-                : "grid-rows-[0fr]",
-            )}
-          >
-            <div className="overflow-hidden">
-              <div className="mt-3 flex flex-col gap-3 rounded-md border bg-secondary/20 p-4">
-                <p className="text-sm text-muted-foreground">
-                  Como enseñas en casa, adjunta el anverso y el reverso de tu
-                  carnet de identidad para verificar tu registro.
-                </p>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field data-invalid={Boolean(errors.idFront) || undefined}>
-                    <FieldLabel htmlFor="reg-id-front">
-                      Carnet — anverso
-                    </FieldLabel>
-                    <FieldContent>
-                      <Input
-                        ref={idFrontRef}
-                        id="reg-id-front"
-                        type="file"
-                        accept=".pdf,image/jpeg,image/png"
-                        onChange={(event) => {
-                          updateDocument(
-                            "idFront",
-                            event.target.files?.[0] ?? null,
-                            setIdFrontFile,
-                          );
-                        }}
-                        aria-invalid={Boolean(errors.idFront)}
-                        aria-describedby={
-                          errors.idFront ? "reg-id-front-error" : undefined
-                        }
-                      />
-                      <FieldError id="reg-id-front-error">
-                        {errors.idFront}
-                      </FieldError>
-                      {idFrontFile && (
-                        <p className="truncate text-xs text-muted-foreground">
-                          {idFrontFile.name}
-                        </p>
-                      )}
-                    </FieldContent>
-                  </Field>
-                  <Field data-invalid={Boolean(errors.idBack) || undefined}>
-                    <FieldLabel htmlFor="reg-id-back">
-                      Carnet — reverso
-                    </FieldLabel>
-                    <FieldContent>
-                      <Input
-                        ref={idBackRef}
-                        id="reg-id-back"
-                        type="file"
-                        accept=".pdf,image/jpeg,image/png"
-                        onChange={(event) => {
-                          updateDocument(
-                            "idBack",
-                            event.target.files?.[0] ?? null,
-                            setIdBackFile,
-                          );
-                        }}
-                        aria-invalid={Boolean(errors.idBack)}
-                        aria-describedby={
-                          errors.idBack ? "reg-id-back-error" : undefined
-                        }
-                      />
-                      <FieldError id="reg-id-back-error">
-                        {errors.idBack}
-                      </FieldError>
-                      {idBackFile && (
-                        <p className="truncate text-xs text-muted-foreground">
-                          {idBackFile.name}
-                        </p>
-                      )}
-                    </FieldContent>
-                  </Field>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Imagen (JPG, PNG) o PDF, máximo 5 MB cada uno.
-                </p>
-              </div>
-            </div>
-          </div>
+          <Expand open={needsLocation} className="-mt-6">
+            <LocationPicker
+              value={place}
+              onChange={(next) => {
+                setPlace(next);
+                if (next.department !== place.department) {
+                  clearErrors("department", "city");
+                } else if (next.city) {
+                  clearErrors("city");
+                }
+              }}
+              departmentError={errors.department}
+              cityError={errors.city}
+              departmentRef={departmentRef}
+              cityRef={cityRef}
+            />
+          </Expand>
           <Button type="submit" className="w-full" disabled={googleBusy}>
             Continuar
           </Button>
         </form>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
+  );
+}
+
+const RESEND_COOLDOWN_MS = 30_000;
+
+const VERIFY_STEPS = [
+  "Abre el correo que te enviamos.",
+  "Toca el enlace para verificarlo.",
+  "Vuelve aquí: entrarás solo.",
+];
+
+const WEBMAILS: { domains: string[]; name: string; url: string }[] = [
+  { domains: ["gmail.com"], name: "Gmail", url: "https://mail.google.com/" },
+  {
+    domains: ["outlook.com", "outlook.es", "hotmail.com", "hotmail.es", "live.com"],
+    name: "Outlook",
+    url: "https://outlook.live.com/mail/",
+  },
+  {
+    domains: ["yahoo.com", "yahoo.es"],
+    name: "Yahoo Mail",
+    url: "https://mail.yahoo.com/",
+  },
+];
+
+function webmailFor(email: string) {
+  const domain = email.trim().toLowerCase().split("@")[1] ?? "";
+  return WEBMAILS.find((item) => item.domains.includes(domain)) ?? null;
+}
+
+const DEPARTMENT_NAMES: Record<string, string> = Object.fromEntries(
+  DEPARTMENTS.map((department) => [department.key, department.name]),
+);
+
+function ErrorText({ id, message }: { id: string; message?: string }) {
+  return (
+    <Reveal className="-mt-1" message={message}>
+      {(text) => (
+        <p id={id} role="alert" className="text-sm text-destructive">
+          {text}
+        </p>
+      )}
+    </Reveal>
+  );
+}
+
+function Heading({
+  title,
+  description,
+}: {
+  title: string;
+  description?: string;
+}) {
+  return (
+    <header className="mb-6 flex flex-col gap-1.5">
+      <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+      {description && (
+        <p className="text-sm text-muted-foreground">{description}</p>
+      )}
+    </header>
+  );
+}
+
+function FormMessage({
+  ref,
+  className,
+  children,
+}: {
+  ref?: Ref<HTMLParagraphElement>;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <p
+      ref={ref}
+      role="alert"
+      tabIndex={-1}
+      className={cn(
+        "flex items-start gap-2 text-sm font-medium text-destructive outline-none",
+        className,
+      )}
+    >
+      <CircleAlertIcon className="mt-0.5 size-4 shrink-0" />
+      {children}
+    </p>
   );
 }

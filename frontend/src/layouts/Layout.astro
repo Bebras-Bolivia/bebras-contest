@@ -1,6 +1,6 @@
 ---
 import "../styles/global.css";
-import { ClientRouter, slide } from "astro:transitions";
+import { ClientRouter } from "astro:transitions";
 import { AppToaster } from "../components/app-toaster";
 import AuthGuard from "../components/AuthGuard.astro";
 import SiteHeader from "../components/SiteHeader.astro";
@@ -27,6 +27,24 @@ const {
   deferChrome = false,
 } = Astro.props;
 const registrationRestricted = isRegistrationRestrictedPath(Astro.url.pathname);
+
+const pageOut = {
+  name: "bebras-page-out",
+  duration: "140ms",
+  easing: "cubic-bezier(0.4, 0, 1, 1)",
+  fillMode: "both",
+};
+const pageIn = {
+  name: "bebras-page-in",
+  duration: "300ms",
+  delay: "60ms",
+  easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+  fillMode: "both",
+};
+const pageFade = {
+  forwards: { old: pageOut, new: pageIn },
+  backwards: { old: pageOut, new: pageIn },
+};
 ---
 
 <!doctype html>
@@ -55,10 +73,10 @@ const registrationRestricted = isRegistrationRestrictedPath(Astro.url.pathname);
     <div class="flex min-h-screen flex-col">
       <SiteHeader heading={heading} backHref={backHref} hidden={deferChrome} />
       <div
-        class="flex-1"
+        class="min-h-dvh flex-1"
         data-page-content
         transition:name="app-content"
-        transition:animate={slide({ duration: "220ms" })}
+        transition:animate={pageFade}
       >
         <slot />
       </div>

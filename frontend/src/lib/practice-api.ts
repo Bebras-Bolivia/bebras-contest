@@ -12,6 +12,7 @@ export type PracticeTaskItem = {
   id: string;
   title: string;
   answerType: string;
+  difficulty: "easy" | "medium" | "hard" | null;
 };
 
 export type PracticeTaskList = {
@@ -31,14 +32,29 @@ function get<T>(path: string) {
   return optionalAuthRequest<T>(path);
 }
 
-export function listPracticeCategories() {
-  return get<PracticeCategory[]>("/api/practice/categories");
+/** Lo último que se cargó: al volver a una pantalla ya vista se muestra al instante. */
+let cachedCategories: PracticeCategory[] | null = null;
+const cachedTaskLists = new Map<string, PracticeTaskList>();
+
+export function cachedPracticeCategories() {
+  return cachedCategories;
 }
 
-export function listPracticeTasks(category: string) {
-  return get<PracticeTaskList>(
+export function cachedPracticeTasks(category: string) {
+  return cachedTaskLists.get(category) ?? null;
+}
+
+export async function listPracticeCategories() {
+  cachedCategories = await get<PracticeCategory[]>("/api/practice/categories");
+  return cachedCategories;
+}
+
+export async function listPracticeTasks(category: string) {
+  const list = await get<PracticeTaskList>(
     `/api/practice/tasks?category=${encodeURIComponent(category)}`,
   );
+  cachedTaskLists.set(category, list);
+  return list;
 }
 
 export function getPracticeTask(id: string) {

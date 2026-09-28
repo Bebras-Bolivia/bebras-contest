@@ -1,39 +1,73 @@
 ---
 import Layout from "../layouts/Layout.astro";
+import { ArrowRightIcon, KeyRoundIcon } from "lucide-react";
 import { PracticeCategories } from "../components/practice-categories";
+import { enter, noticeLink } from "../lib/surface";
 
 const title = "Desafíos de práctica";
 ---
 
 <Layout title={title} heading="Desafíos de práctica" backHref="/">
-  <main class="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-10 sm:px-8">
-    <div class="flex flex-col gap-2">
-      <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">
-        Desafíos de práctica
-      </h1>
-      <p class="text-sm leading-6 text-muted-foreground sm:text-base">
-        Elige tu categoría según tu edad y empieza a practicar. No necesitas una
-        cuenta para practicar.
-      </p>
+  <main
+    class="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8"
+  >
+    <div class="flex items-center gap-6">
+      <div class:list={[enter, "flex flex-1 flex-col gap-2"]}>
+        <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">
+          Desafíos de práctica
+        </h1>
+        <p
+          class="max-w-prose text-sm leading-6 text-muted-foreground sm:text-base"
+        >
+          Elige tu categoría según tu edad y empieza a practicar. No necesitas
+          una cuenta.
+        </p>
+      </div>
+      <img
+        src="/castores/bandera.webp"
+        alt=""
+        width="564"
+        height="560"
+        class="beaver-pop hidden h-28 w-auto shrink-0 sm:block"
+      />
     </div>
 
-    <div
-      class="rounded-lg border bg-secondary/30 px-5 py-4 text-center text-sm"
+    <a
+      href="/entrar"
+      class:list={[enter, noticeLink, "group flex items-center gap-4 p-4"]}
+      style="animation-delay: 120ms"
     >
-      ¿Tu maestro te dio un <strong>código</strong> para el desafío oficial?{
-        " "
-      }
-      <a
-        href="/entrar"
-        class="underline underline-offset-2 hover:text-foreground"
+      <span
+        class="flex size-11 shrink-0 items-center justify-center bg-background text-primary"
       >
-        Entrar con el código
-      </a>.
-    </div>
+        <KeyRoundIcon
+          className="size-5 transition-transform duration-300 group-hover:-rotate-12"
+        />
+      </span>
+      <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span class="font-semibold">¿Tu maestro te dio un código?</span>
+        <span class="text-sm text-muted-foreground">
+          Úsalo para entrar al desafío oficial.
+        </span>
+      </span>
+      <span
+        class="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-primary"
+      >
+        <span class="hidden sm:inline">Entrar con mi código</span>
+        <ArrowRightIcon
+          className="size-5 transition-transform duration-200 group-hover:translate-x-1"
+        />
+      </span>
+    </a>
 
-    <div class="flex flex-col gap-4">
-      <h2 class="text-lg font-semibold">Categorías</h2>
+    <section class="flex flex-col gap-4">
+      <h2
+        class:list={[enter, "text-lg font-semibold tracking-tight"]}
+        style="animation-delay: 200ms"
+      >
+        Elige tu categoría
+      </h2>
       <PracticeCategories client:only="react" />
-    </div>
+    </section>
   </main>
 </Layout>

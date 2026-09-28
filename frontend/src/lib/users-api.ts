@@ -13,11 +13,17 @@ export type MaestroSchool = {
 export type Maestro = {
   id: number;
   name: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  schoolCodUe: string | null;
+  department: string | null;
+  city: string | null;
   email: string;
   status: string;
   schoolName: string | null;
   institutionType: "school" | "homeschool";
   phone: string | null;
+  place: string | null;
   isHomeschool: boolean;
   hasLetter: boolean;
   hasIdFront: boolean;
@@ -28,6 +34,26 @@ export type Maestro = {
 
 export function listMaestros() {
   return request<Maestro[]>("/api/users/maestros");
+}
+
+export type MaestroChanges = {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  institutionType: "school" | "homeschool";
+  schoolCodUe: string | null;
+  schoolName: string;
+  department: string | null;
+  city: string | null;
+};
+
+export function updateMaestro(id: number, changes: MaestroChanges) {
+  return request<Maestro>(`/api/users/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(changes),
+    headers: { "Content-Type": "application/json" },
+    fallbackMessage: "No se pudieron guardar los cambios.",
+  });
 }
 
 export function approveMaestro(id: number) {
@@ -65,6 +91,14 @@ export function openMaestroDocument(id: number, doc: MaestroDoc) {
 
 export function openSchoolLetter(schoolId: string) {
   return openPrivateDocument(`/api/users/schools/${schoolId}/letter`);
+}
+
+export function openMyDocument(doc: "letter" | "idFront" | "idBack") {
+  return openPrivateDocument(`/api/auth/me/documents/${doc}`);
+}
+
+export function openMySchoolLetter(schoolId: string) {
+  return openPrivateDocument(`/api/auth/me/schools/${schoolId}/letter`);
 }
 
 /**

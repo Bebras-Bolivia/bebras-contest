@@ -197,7 +197,7 @@ export function ContestIntro({
               >
                 <span
                   className={cn(
-                    "w-fit border border-foreground/50 px-1.5 py-0.5 text-xs font-semibold",
+                    "w-fit px-1.5 py-0.5 text-xs font-semibold",
                     difficultyStyles[row.difficulty]?.className,
                   )}
                 >

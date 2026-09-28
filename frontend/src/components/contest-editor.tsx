@@ -53,6 +53,7 @@ type Form = {
   startsAt: string;
   endsAt: string;
   resultsAt: string;
+  resultsUntil: string;
   scoring: ContestScoring;
   questionDisplayMode: QuestionDisplayMode;
   allowPairs: boolean;
@@ -97,6 +98,7 @@ function formFromContest(contest: StoredContest): Form {
     startsAt: localValue(contest.startsAt),
     endsAt: localValue(contest.endsAt),
     resultsAt: localValue(contest.resultsAt),
+    resultsUntil: localValue(contest.resultsUntil),
     scoring: contest.scoring ?? defaultContestScoring(),
     questionDisplayMode: contest.questionDisplayMode,
     allowPairs: contest.allowPairs,
@@ -123,6 +125,7 @@ function toPayload(form: Form): ContestDraftInput {
     startsAt: iso(form.startsAt),
     endsAt: iso(form.endsAt),
     resultsAt: iso(form.resultsAt),
+    resultsUntil: iso(form.resultsUntil),
     scoring: form.scoring,
     questionDisplayMode: form.questionDisplayMode,
     allowPairs: form.allowPairs,
@@ -192,6 +195,8 @@ function WindowField({
   minDate = null,
   maxDate = null,
   disabled,
+  startLabel = "Inicio",
+  endLabel = "Cierre",
   onChange,
 }: {
   id: string;
@@ -202,6 +207,8 @@ function WindowField({
   minDate?: Date | null;
   maxDate?: Date | null;
   disabled: boolean;
+  startLabel?: string;
+  endLabel?: string;
   onChange: (startsAt: string, endsAt: string) => void;
 }) {
   const length = formatLength(startsAt, endsAt);
@@ -230,11 +237,11 @@ function WindowField({
       <p className="-mt-2 text-sm text-muted-foreground">{help}</p>
       <div className="grid min-w-0 gap-3 sm:grid-cols-[4rem_minmax(0,1fr)] sm:items-center">
         <label htmlFor={id} className="text-sm">
-          Inicio
+          {startLabel}
         </label>
         <DateTimeField
           id={id}
-          label={`${title}, inicio`}
+          label={`${title}, ${startLabel.toLowerCase()}`}
           value={startsAt}
           minDate={minDate}
           maxDate={end ?? maxDate}
@@ -243,11 +250,11 @@ function WindowField({
           onChange={(value) => onChange(value, endsAt)}
         />
         <label htmlFor={`${id}-end`} className="text-sm">
-          Cierre
+          {endLabel}
         </label>
         <DateTimeField
           id={`${id}-end`}
-          label={`${title}, cierre`}
+          label={`${title}, ${endLabel.toLowerCase()}`}
           value={endsAt}
           fallbackHour={18}
           minDate={start ?? minDate}
@@ -400,6 +407,9 @@ function ContestSummary({
             {form.resultsAt
               ? `Se publican solos el ${formatDateTime(form.resultsAt)}`
               : "Se publican solos al cerrar la rendición"}
+            {form.resultsUntil
+              ? ` y salen en la página principal hasta el ${formatDateTime(form.resultsUntil)}.`
+              : " y salen en la página principal durante 7 días."}
           </SummaryRow>
           <SummaryRow label="Tiempo por equipo">
             {form.durationMinutes} minutos
@@ -548,6 +558,17 @@ export function ContestEditor() {
       isBefore(form.resultsAt, form.endsAt)
     ) {
       list.push("Los resultados no pueden publicarse antes del cierre.");
+    }
+
+    const resultsFrom = form.resultsAt || form.endsAt;
+    if (
+      form.resultsUntil &&
+      resultsFrom &&
+      !isBefore(resultsFrom, form.resultsUntil)
+    ) {
+      list.push(
+        "Los resultados tienen que mostrarse hasta después de publicarse.",
+      );
     }
 
     if (!Number.isInteger(form.durationMinutes) || form.durationMinutes <= 0) {
@@ -980,20 +1001,20 @@ export function ContestEditor() {
                 onChange={(startsAt, endsAt) => update({ startsAt, endsAt })}
               />
             </div>
-            <div className="flex max-w-md flex-col gap-2">
-              <h3 className="text-sm font-semibold">Resultados</h3>
-              <p className="text-sm text-muted-foreground">
-                Se publican solos. Sin fecha, apenas cierra la rendición; pon
-                una si quieres revisarlos antes.
-              </p>
-              <DateTimeField
+            <div className="lg:w-1/2 lg:pr-4">
+              <WindowField
                 id="contest-results"
-                label="Publicar resultados"
-                value={form.resultsAt}
+                title="Resultados"
+                help="Desde: se publican solos y el desafío aparece con sus resultados en la página principal (sin fecha, al cerrar la rendición). Hasta: deja de salir ahí (sin fecha, 7 días después). Cada estudiante los sigue viendo con su código."
+                startsAt={form.resultsAt}
+                endsAt={form.resultsUntil}
                 minDate={parseDateTimeLocal(form.endsAt)}
                 disabled={locked}
-                allowClear
-                onChange={(resultsAt) => update({ resultsAt })}
+                startLabel="Desde"
+                endLabel="Hasta"
+                onChange={(resultsAt, resultsUntil) =>
+                  update({ resultsAt, resultsUntil })
+                }
               />
             </div>
             <label className="flex flex-wrap items-center gap-3 text-sm">

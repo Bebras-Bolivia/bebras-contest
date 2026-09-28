@@ -1,28 +1,86 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { LiveContests } from "../components/live-contests";
+import { DepartmentBeavers } from "../components/department-beavers";
+import { InfoSiteBanner } from "../components/info-site-banner";
+import { PublicRanking } from "../components/public-ranking";
 import { REGISTRATION_ONLY } from "../lib/registration-only";
 
 const title = "Desafío Bebras Bolivia";
+
+const steps = [
+  {
+    image: "bandera",
+    title: "Te inscribes",
+    text: "Tu maestro te da el código de tu grupo. Con él te inscribes y recibes tu código personal.",
+  },
+  {
+    image: "laptop",
+    title: "Resuelves el desafío",
+    text: "El día de la prueba entras con tu código personal y tienes unos minutos para resolver preguntas de lógica.",
+  },
+  {
+    image: "idea",
+    title: "Ves tus resultados",
+    text: "Cuando cierra el desafío se publican tus puntos, tu lugar en tu categoría y las soluciones.",
+  },
+];
 ---
 
 <Layout title={title}>
-  <div class="mx-auto flex w-full max-w-4xl flex-col gap-10 px-6 py-14 sm:px-8">
-    <header class="text-center">
-      <img
-        src="/castor.png"
-        alt="Desafío Bebras Bolivia"
-        class="mx-auto mb-6 h-24 w-auto"
-      />
-      <h1 class="text-4xl font-bold tracking-tight sm:text-5xl">
-        Bienvenido al Desafío Bebras Bolivia
-      </h1>
-      <p
-        class="mx-auto mt-3 max-w-2xl text-base text-muted-foreground sm:text-lg"
-      >
-        Pon a prueba tu lógica y pensamiento computacional con problemas
-        divertidos y desafiantes.
-      </p>
+  <div
+    class="mx-auto flex w-full max-w-6xl flex-col gap-16 px-4 py-12 sm:px-6 lg:px-8"
+  >
+    <header
+      class="grid items-center gap-8 md:grid-cols-[minmax(0,1fr)_auto] md:gap-12"
+    >
+      <div class="flex flex-col items-start gap-5">
+        <span
+          class="text-sm font-semibold tracking-wide text-primary uppercase"
+        >
+          Pensamiento computacional para todos
+        </span>
+        <h1
+          class="font-heading text-4xl font-semibold tracking-tight sm:text-5xl"
+        >
+          Desafío Bebras Bolivia
+        </h1>
+        <p
+          class="max-w-xl text-base leading-7 text-muted-foreground sm:text-lg"
+        >
+          Problemas cortos y divertidos para pensar como informático. No
+          necesitas saber programar: solo ganas de resolverlos.
+        </p>
+        <div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+          {
+            !REGISTRATION_ONLY && (
+              <a
+                href="/entrar"
+                class="inline-flex h-12 items-center justify-center gap-2 bg-primary px-6 text-base font-semibold text-primary-foreground shadow-[var(--shadow-hard)] transition hover:opacity-90"
+              >
+                Entrar con mi código
+              </a>
+            )
+          }
+          <a
+            href="/login"
+            class="inline-flex h-12 items-center justify-center gap-2 border-2 border-foreground bg-background px-6 text-base font-semibold shadow-[var(--shadow-hard)] transition hover:bg-muted"
+          >
+            Soy maestro
+          </a>
+        </div>
+        {
+          !REGISTRATION_ONLY && (
+            <a
+              href="/practica"
+              class="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+            >
+              ¿Solo quieres practicar?
+            </a>
+          )
+        }
+      </div>
+      <DepartmentBeavers client:load />
     </header>
 
     {
@@ -33,88 +91,71 @@ const title = "Desafío Bebras Bolivia";
       )
     }
 
-    <section class="grid gap-4 sm:grid-cols-2">
-      {
-        !REGISTRATION_ONLY && (
-          <a
-            href="/entrar"
-            class="flex items-center justify-center gap-3 rounded-lg bg-primary px-6 py-6 text-center text-base font-semibold text-primary-foreground transition hover:opacity-90"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="shrink-0"
-              aria-hidden="true"
-            >
-              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-              <polyline points="10 17 15 12 10 7" />
-              <line x1="15" x2="3" y1="12" y2="12" />
-            </svg>
-            Estudiantes: entrar al desafío
-          </a>
-        )
-      }
-      <a
-        href="/login"
-        class="flex items-center justify-center gap-3 rounded-lg bg-accent px-6 py-6 text-center text-base font-semibold text-accent-foreground transition hover:opacity-90"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          class="shrink-0"
-          aria-hidden="true"
-        >
-          <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
-          <path d="M6 12v5c3 3 9 3 12 0v-5"></path>
-        </svg>
-        Maestros: iniciar sesión o registrarse
-      </a>
+    {!REGISTRATION_ONLY && <PublicRanking client:only="react" />}
+
+    <section class="flex flex-col gap-6">
+      <h2 class="font-heading text-2xl font-semibold tracking-tight">
+        ¿Cómo funciona?
+      </h2>
+      <ol class="grid gap-4 md:grid-cols-3">
+        {
+          steps.map((step, index) => (
+            <li class="group flex flex-col gap-2 border-2 border-border/20 px-5 py-5 transition-colors hover:border-primary/60">
+              <div class="flex items-end justify-between gap-3">
+                <span class="font-heading text-3xl font-semibold text-primary">
+                  {index + 1}
+                </span>
+                <img
+                  src={`/castores/${step.image}.webp`}
+                  alt=""
+                  loading="lazy"
+                  class="h-20 w-auto transition-transform duration-300 group-hover:-translate-y-1 group-hover:-rotate-6"
+                />
+              </div>
+              <h3 class="text-base font-semibold">{step.title}</h3>
+              <p class="text-sm leading-6 text-muted-foreground">{step.text}</p>
+            </li>
+          ))
+        }
+      </ol>
     </section>
 
-    {
-      !REGISTRATION_ONLY && (
-        <p class="-mt-6 text-center text-sm text-muted-foreground">
-          ¿Solo quieres practicar?{" "}
-          <a
-            href="/practica"
-            class="underline underline-offset-2 hover:text-foreground"
-          >
-            Ir a los desafíos de práctica
-          </a>
-          .
-        </p>
-      )
-    }
+    <InfoSiteBanner client:only="react" />
 
-    <section class="rounded-lg border bg-secondary/20 px-5 py-4">
-      <p class="text-sm leading-6 text-muted-foreground">
-        {
-          REGISTRATION_ONLY ? (
-            "Maestros: registren su cuenta y completen sus datos y documentos para la revisión del administrador."
-          ) : (
-            <>
-              <span class="font-medium text-foreground">Maestros:</span> aún
-              pueden registrar a sus estudiantes hasta el último día del
-              desafío. Una vez aprobado su registro, podrán crear las cuentas de
-              sus estudiantes.
-            </>
-          )
-        }
-      </p>
+    <section class="grid gap-6 border-t pt-10 md:grid-cols-2 md:gap-12">
+      {
+        !REGISTRATION_ONLY && (
+          <div class="flex flex-col items-start gap-3">
+            <h2 class="font-heading text-xl font-semibold">Practica</h2>
+            <p class="text-sm leading-6 text-muted-foreground">
+              Resuelve los desafíos de años anteriores cuando quieras, a tu
+              ritmo y viendo la solución de cada uno.
+            </p>
+            <a
+              href="/practica"
+              class="text-sm font-semibold text-primary underline underline-offset-4"
+            >
+              Ir a practicar
+            </a>
+          </div>
+        )
+      }
+      <div class="flex flex-col items-start gap-3">
+        <h2 class="font-heading text-xl font-semibold">Maestros</h2>
+        <p class="text-sm leading-6 text-muted-foreground">
+          {
+            REGISTRATION_ONLY
+              ? "Registren su cuenta y completen sus datos y documentos para la revisión del administrador."
+              : "Creen su cuenta, inscriban a sus estudiantes en un grupo por categoría y sigan sus resultados. También pueden armarles prácticas."
+          }
+        </p>
+        <a
+          href="/login"
+          class="text-sm font-semibold text-primary underline underline-offset-4"
+        >
+          Iniciar sesión o registrarse
+        </a>
+      </div>
     </section>
   </div>
 </Layout>

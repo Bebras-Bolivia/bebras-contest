@@ -4,6 +4,7 @@ import { useState } from "react";
 import { MenuIcon, XIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Collapsible,
   CollapsibleContent,
@@ -19,9 +20,12 @@ type MobileNavigationProps = {
 export function MobileNavigation({ pathname }: MobileNavigationProps) {
   const [open, setOpen] = useState(false);
   const user = useAuthUser();
-  const links = SITE_NAV_ITEMS.filter((item) =>
-    canAccessSiteNav(item.role, user?.role, user?.status),
-  );
+  const links = [
+    { href: "/", label: "Inicio" },
+    ...SITE_NAV_ITEMS.filter((item) =>
+      canAccessSiteNav(item.role, user?.role, user?.status),
+    ),
+  ];
 
   return (
     <Collapsible
@@ -46,20 +50,34 @@ export function MobileNavigation({ pathname }: MobileNavigationProps) {
         >
           {links.map((link) => {
             const active =
-              pathname === link.href || pathname.startsWith(`${link.href}/`);
+              link.href === "/"
+                ? pathname === "/"
+                : pathname === link.href ||
+                  pathname.startsWith(`${link.href}/`);
 
             return (
               <Button
                 key={link.href}
                 asChild
-                variant={active ? "default" : "ghost"}
-                className="w-full justify-start"
+                variant="ghost"
+                className={cn(
+                  "relative w-full justify-start",
+                  active
+                    ? "font-semibold text-foreground"
+                    : "text-muted-foreground",
+                )}
               >
                 <a
                   href={link.href}
                   aria-current={active ? "page" : undefined}
                   onClick={() => setOpen(false)}
                 >
+                  {active && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-y-2 left-0 w-[3px] bg-primary"
+                    />
+                  )}
                   {link.label}
                 </a>
               </Button>

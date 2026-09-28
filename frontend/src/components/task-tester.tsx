@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircleIcon, PencilIcon, RotateCcwIcon } from "lucide-react";
+import {
+  AlertCircleIcon,
+  PencilIcon,
+  RotateCcwIcon,
+  XIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 import { AnswerResult } from "@/components/answer-result";
 import { TaskPlayContent } from "@/components/task-play-content";
@@ -166,8 +171,23 @@ export function TaskTester() {
     }
   };
 
+  const exitButton = (
+    <Button
+      asChild
+      variant="ghost"
+      size="icon-sm"
+      aria-label="Salir del probador"
+      title="Salir"
+    >
+      <a href={backHref ?? "/tareas"}>
+        <XIcon />
+      </a>
+    </Button>
+  );
+
   return (
     <div className="flex w-full flex-col gap-6">
+      {!selectedTask && <div className="-mb-3">{exitButton}</div>}
       {loading && !selectedTask && <TesterSkeleton />}
 
       {!loading && !selectedTask && (
@@ -194,6 +214,7 @@ export function TaskTester() {
       {selectedTask && (
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300 sm:gap-7">
           <div className="flex flex-wrap items-center gap-2 border-b pb-3 text-sm text-muted-foreground">
+            {exitButton}
             <span>Probando:</span>
             <h1 className="font-medium text-foreground">
               {selectedTask.title}

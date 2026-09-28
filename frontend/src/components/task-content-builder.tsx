@@ -20,6 +20,7 @@ import { type ContentBlock, type ContentBlockType } from "@/lib/task-schema";
 import { Button } from "@/components/ui/button";
 import { ImageUploadButton } from "@/components/image-upload-button";
 import { ImageWidthResizer } from "@/components/image-width-resizer";
+import { IMAGE_MAX_HEIGHT } from "@/components/task-content-renderer";
 import {
   Popover,
   PopoverContent,
@@ -363,6 +364,9 @@ export function TaskContentBuilder({
                       alt={block.image.name}
                       src={block.image.url}
                       widthPercent={block.widthPercent}
+                      maxHeight={IMAGE_MAX_HEIGHT}
+                      minWidth="16rem"
+                      className="mx-auto w-full max-w-4xl"
                       onChange={(widthPercent) =>
                         onUpdateBlockWidth(block.id, widthPercent)
                       }

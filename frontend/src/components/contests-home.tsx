@@ -11,7 +11,7 @@ import {
   PauseIcon,
   PlayCircleIcon,
   PlayIcon,
-  Trash2Icon,
+  XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,6 +32,7 @@ import {
   type StoredContest,
 } from "@/lib/contest-schema";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
@@ -129,6 +130,7 @@ export function ContestsHome() {
         startsAt: "",
         endsAt: "",
         resultsAt: "",
+        resultsUntil: "",
         scoring: defaultContestScoring(),
         questionDisplayMode: "one_by_one",
         allowPairs: false,
@@ -284,19 +286,18 @@ export function ContestsHome() {
       </div>
 
       {contests === null ? (
-        <div className="flex min-h-40 items-center justify-center">
-          <LoaderCircleIcon className="size-6 animate-spin text-muted-foreground" />
-        </div>
+        <ContestsSkeleton />
       ) : contests.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           Todavía no hay desafíos. Crea uno y elige sus preguntas.
         </p>
       ) : (
         <ul className="divide-y border-b">
-          {contests.map((contest) => (
+          {contests.map((contest, index) => (
             <li
               key={contest.id}
-              className="flex min-w-0 flex-col gap-4 px-3 py-5 lg:flex-row lg:items-start lg:justify-between lg:gap-8"
+              style={{ animationDelay: `${Math.min(index, 10) * 45}ms` }}
+              className="flex min-w-0 flex-col gap-4 px-3 py-5 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 motion-safe:fill-mode-both lg:flex-row lg:items-start lg:justify-between lg:gap-8"
             >
               <div className="flex min-w-0 flex-1 flex-col gap-2">
                 <h2 className="text-lg font-semibold break-words">
@@ -394,7 +395,7 @@ export function ContestsHome() {
                   className={actionClass}
                   onClick={() => setConfirming({ action: "delete", contest })}
                 >
-                  <Trash2Icon data-icon="inline-start" />
+                  <XIcon data-icon="inline-start" />
                   <span className="max-lg:sr-only">Eliminar</span>
                 </Button>
               </div>
@@ -437,6 +438,45 @@ export function ContestsHome() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+/** La silueta de la lista mientras cargan los desafíos: la misma forma, sin saltos. */
+function ContestsSkeleton() {
+  return (
+    <div aria-busy>
+      <span className="sr-only">Cargando desafíos...</span>
+      <ul className="divide-y border-b">
+        {[56, 44, 64].map((width, index) => (
+          <li
+            key={index}
+            className="flex flex-col gap-4 px-3 py-5 lg:flex-row lg:items-start lg:justify-between lg:gap-8"
+          >
+            <div className="flex flex-1 flex-col gap-2.5">
+              <Skeleton
+                className="h-6 rounded-none"
+                style={{ width: `${width}%` }}
+              />
+              <Skeleton className="h-4 w-2/5 rounded-none" />
+              <div className="flex gap-1.5">
+                {[16, 12, 18, 14].map((badge, position) => (
+                  <Skeleton
+                    key={position}
+                    className="h-6 rounded-none"
+                    style={{ width: `${badge * 0.25}rem` }}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:w-[26rem]">
+              {[0, 1, 2, 3].map((button) => (
+                <Skeleton key={button} className="h-9 rounded-none" />
+              ))}
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -24,6 +24,16 @@ export function validatePhone(value: string): PhoneValidation {
     };
   }
 
+  const national = compact.startsWith("+591")
+    ? compact.slice(4)
+    : compact.startsWith("+")
+      ? null
+      : compact;
+  // La serie de celulares que empieza con 5 aún no figura en libphonenumber.
+  if (national && /^[567][0-9]{7}$/.test(national)) {
+    return { number: `+591${national}` };
+  }
+
   const phone = parsePhoneNumberFromString(compact, {
     defaultCountry: "BO",
     extract: false,

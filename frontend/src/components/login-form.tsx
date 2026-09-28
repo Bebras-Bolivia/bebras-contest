@@ -1,19 +1,12 @@
 "use client";
 import { REGISTRATION_ONLY } from "@/lib/registration-only";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-  type ReactNode,
-} from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { CircleAlertIcon, EyeIcon, EyeOffIcon } from "lucide-react";
 import { toast } from "sonner";
 import type { User } from "firebase/auth";
 
 import { getUser } from "@/lib/auth";
-import { cn } from "@/lib/utils";
 import {
   refreshEmailVerification,
   shouldResumeFirebaseSession,
@@ -29,6 +22,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Reveal } from "@/components/reveal";
 import { GoogleButton } from "@/components/google-button";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import { REGISTRATION_LIMITS } from "@/lib/registration-limits";
@@ -531,43 +525,5 @@ export function LoginForm() {
         )}
       </div>
     </section>
-  );
-}
-
-/**
- * Aviso que se abre y se cierra deslizándose, sin empujar el formulario de
- * golpe. Mientras se cierra conserva el último texto para que no desaparezca
- * antes de terminar la animación. El margen negativo compensa el espacio del
- * formulario cuando está cerrado.
- */
-function Reveal({
-  message,
-  className,
-  children,
-}: {
-  message?: string | null;
-  className?: string;
-  children: (message: string) => ReactNode;
-}) {
-  const open = Boolean(message);
-  const [shown, setShown] = useState(message ?? null);
-  if (message && message !== shown) setShown(message);
-  return (
-    <div
-      aria-hidden={!open}
-      onTransitionEnd={() => {
-        if (!open) setShown(null);
-      }}
-      className={cn(
-        "grid transition-[grid-template-rows,opacity,margin] duration-300 ease-out motion-reduce:transition-none",
-        open
-          ? "grid-rows-[1fr] opacity-100"
-          : cn("grid-rows-[0fr] opacity-0", className),
-      )}
-    >
-      <div className="min-h-0 overflow-hidden">
-        {shown ? children(shown) : null}
-      </div>
-    </div>
   );
 }

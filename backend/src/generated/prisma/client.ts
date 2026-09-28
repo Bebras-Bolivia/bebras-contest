@@ -93,3 +93,8 @@ export type AttemptAnswer = Prisma.AttemptAnswerModel
  * 
  */
 export type Result = Prisma.ResultModel
+/**
+ * Model SiteSetting
+ * 
+ */
+export type SiteSetting = Prisma.SiteSettingModel

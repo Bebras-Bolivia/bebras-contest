@@ -5,7 +5,7 @@ import {
   ImageIcon,
   ImagePlusIcon,
   PlusIcon,
-  Trash2Icon,
+  XIcon,
   TypeIcon,
 } from "lucide-react";
 
@@ -115,6 +115,31 @@ export function ClozeEditor({
           ...solutions.slice(1),
         ],
       },
+    );
+  };
+
+  const toggleAllowed = (blankId: string, optionId: string) => {
+    const current = blanks.find((blank) => blank.id === blankId);
+    if (!current) return;
+    const on = current.allowedOptionIds.includes(optionId);
+    const allowedOptionIds = on
+      ? current.allowedOptionIds.filter((id) => id !== optionId)
+      : config.options
+          .map((option) => option.id)
+          .filter(
+            (id) => id === optionId || current.allowedOptionIds.includes(id),
+          );
+    const known = config.blanks.some((blank) => blank.id === blankId);
+    onChange(
+      {
+        ...config,
+        blanks: known
+          ? config.blanks.map((blank) =>
+              blank.id === blankId ? { ...blank, allowedOptionIds } : blank,
+            )
+          : [...config.blanks, { id: blankId, allowedOptionIds }],
+      },
+      answerKey,
     );
   };
 
@@ -249,27 +274,75 @@ export function ClozeEditor({
           const option = config.options.find(
             (entry) => entry.id === primary[blank.id],
           );
+          const choices = config.options.filter(
+            (entry) => entry.label.trim() || entry.image,
+          );
           return (
-            <div key={blank.id} className="flex items-center gap-2">
-              <span className="w-20 shrink-0 border-b-2 border-primary bg-primary/10 px-2 py-1 text-center text-sm font-medium text-primary">
-                Hueco {index + 1}
-              </span>
-              {field(option, {
-                label: `Respuesta del hueco ${index + 1}`,
-                placeholder: "Qué va en este hueco",
-                correct: true,
-                onText: (text) =>
-                  option
-                    ? update(option.id, { label: text })
-                    : setBlankAnswer(blank.id, newOption(text)),
-                onImage: (image) =>
-                  option
-                    ? setImage(option, image)
-                    : setBlankAnswer(
-                        blank.id,
-                        newOption(nameFromFile(image), image),
-                      ),
-              })}
+            <div key={blank.id} className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-2">
+                <span className="w-20 shrink-0 border-b-2 border-primary bg-primary/10 px-2 py-1 text-center text-sm font-medium text-primary">
+                  Hueco {index + 1}
+                </span>
+                {field(option, {
+                  label: `Respuesta del hueco ${index + 1}`,
+                  placeholder: "Qué va en este hueco",
+                  correct: true,
+                  onText: (text) =>
+                    option
+                      ? update(option.id, { label: text })
+                      : setBlankAnswer(blank.id, newOption(text)),
+                  onImage: (image) =>
+                    option
+                      ? setImage(option, image)
+                      : setBlankAnswer(
+                          blank.id,
+                          newOption(nameFromFile(image), image),
+                        ),
+                })}
+              </div>
+              {blanks.length > 1 && choices.length > 1 && (
+                <div
+                  role="group"
+                  aria-label={`Opciones que aparecen en el hueco ${index + 1}`}
+                  className="flex flex-wrap items-center gap-1.5 sm:pl-22"
+                >
+                  <span className="text-xs text-muted-foreground">
+                    Se puede elegir:
+                  </span>
+                  {choices.map((entry) => {
+                    const isAnswer = entry.id === primary[blank.id];
+                    const allowed =
+                      isAnswer || blank.allowedOptionIds.includes(entry.id);
+                    return (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        aria-pressed={allowed}
+                        disabled={isAnswer}
+                        title={
+                          isAnswer
+                            ? "Es la respuesta de este hueco"
+                            : allowed
+                              ? "Quitar de este hueco"
+                              : "Mostrar en este hueco"
+                        }
+                        onClick={() => toggleAllowed(blank.id, entry.id)}
+                        className="flex h-7 items-center gap-1 border-2 border-dashed border-border/40 px-2 text-xs text-muted-foreground line-through transition-colors outline-none hover:border-primary/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/60 aria-pressed:border-solid aria-pressed:no-underline aria-pressed:text-foreground disabled:cursor-default disabled:border-difficulty-easy/60"
+                      >
+                        {entry.image ? (
+                          <img
+                            src={entry.image.url}
+                            alt={entry.label}
+                            className="h-5 max-w-12 object-contain mix-blend-multiply"
+                          />
+                        ) : (
+                          entry.label
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}
@@ -297,7 +370,7 @@ export function ClozeEditor({
                 onClick={() => remove(option.id)}
                 className="grid size-8 shrink-0 place-items-center text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/60"
               >
-                <Trash2Icon className="size-4" />
+                <XIcon className="size-4" />
               </button>
             </div>
           ))}

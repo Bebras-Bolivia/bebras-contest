@@ -16,6 +16,13 @@ const isPractice = pathname.startsWith("/practica");
 const hasContextualPracticeBack =
   pathname === "/practica/categoria" || pathname === "/practica/tarea";
 
+const isHome = pathname === "/";
+const linkClass = (active: boolean) => [
+  "relative flex h-full items-center px-3.5 text-sm font-medium transition-colors outline-none focus-visible:text-foreground",
+  active
+    ? "text-foreground"
+    : "nav-hover text-muted-foreground hover:text-foreground",
+];
 const links = SITE_NAV_ITEMS.filter((item) => item.role !== "public").map(
   (item) => ({
     ...item,
@@ -32,12 +39,27 @@ const links = SITE_NAV_ITEMS.filter((item) => item.role !== "public").map(
   transition:animate="none"
 >
   <div
-    class="flex min-h-[4.25rem] w-full flex-wrap items-center justify-between gap-x-2 px-4 py-3 sm:px-8 lg:min-h-[3.75rem] lg:flex-nowrap lg:gap-4 lg:px-12"
+    class="flex min-h-[4.25rem] w-full flex-wrap items-center justify-between gap-x-2 px-4 py-3 sm:px-8 lg:min-h-16 lg:flex-nowrap lg:gap-4 lg:px-12"
   >
     <div class="flex min-w-0 flex-1 items-center gap-3">
-      <a href="/" class="shrink-0 text-lg font-semibold tracking-tight"
-        >Bebras</a
+      <a
+        href="/"
+        aria-label="Bebras Bolivia, inicio"
+        class="group flex shrink-0 items-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
+        <img
+          src="/castor-logo.png"
+          alt=""
+          width="35"
+          height="40"
+          class="h-9 w-auto transition-transform duration-200 group-hover:-rotate-6"
+        />
+        <span class="text-lg leading-none font-bold tracking-tight">
+          Bebras<span class:list={["text-primary", heading && "max-sm:hidden"]}>
+            {" "}Bolivia</span
+          >
+        </span>
+      </a>
       {
         heading && (
           <div class="flex min-w-0 items-center border-l pl-3">
@@ -75,25 +97,30 @@ const links = SITE_NAV_ITEMS.filter((item) => item.role !== "public").map(
         )
       }
     </div>
-    <div class="hidden shrink-0 items-center gap-2 lg:flex">
+    <div class="-my-3 hidden shrink-0 items-stretch self-stretch lg:flex">
+      <a
+        href="/"
+        data-nav-active={isHome ? "" : undefined}
+        aria-current={isHome ? "page" : undefined}
+        class:list={linkClass(isHome)}
+      >
+        {isHome && <span class="nav-pill" aria-hidden="true" />}
+        <span class="relative" data-nav-label data-nav-key="inicio">
+          Inicio
+        </span>
+      </a>
       <a
         href="/practica"
         data-nav-role="public"
         data-nav-active={isPractice ? "" : undefined}
-        class:list={[
-          "relative rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
-          REGISTRATION_ONLY && "hidden",
-          isPractice
-            ? "text-primary-foreground"
-            : "text-muted-foreground hover:bg-muted hover:text-foreground",
-        ]}
+        class:list={[...linkClass(isPractice), REGISTRATION_ONLY && "hidden"]}
       >
         {isPractice && <span class="nav-pill" aria-hidden="true" />}
         <span class="relative" data-nav-label data-nav-key="practica">
           Práctica
         </span>
       </a>
-      <nav class="flex items-center gap-1">
+      <nav class="flex items-stretch">
         {
           links.map((link) => (
             <a
@@ -101,12 +128,7 @@ const links = SITE_NAV_ITEMS.filter((item) => item.role !== "public").map(
               data-nav-role={link.role}
               data-nav-active={link.active ? "" : undefined}
               aria-current={link.active ? "page" : undefined}
-              class:list={[
-                "relative hidden rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
-                link.active
-                  ? "text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
-              ]}
+              class:list={[...linkClass(link.active), "hidden"]}
             >
               {link.active && <span class="nav-pill" aria-hidden="true" />}
               <span

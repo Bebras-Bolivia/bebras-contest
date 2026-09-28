@@ -4,7 +4,6 @@ import {
   ImagePlusIcon,
   MapPinPlusIcon,
   PlusIcon,
-  Trash2Icon,
   XIcon,
 } from "lucide-react";
 import { DragDropPlayer } from "@/components/drag-drop-player";
@@ -469,7 +468,7 @@ function PieceButton({
             className="text-destructive"
             onClick={onRemove}
           >
-            <Trash2Icon data-icon="inline-start" />
+            <XIcon data-icon="inline-start" />
             Quitar
           </Button>
         </div>

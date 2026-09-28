@@ -23,6 +23,9 @@ export function DocumentUpload({
   busy,
   description,
   confirmLabel = "Sí, enviar documento",
+  variant = "outline",
+  size = "sm",
+  className,
   onPick,
 }: {
   id: string;
@@ -30,6 +33,9 @@ export function DocumentUpload({
   busy: boolean;
   description: string;
   confirmLabel?: string;
+  variant?: "default" | "outline";
+  size?: "sm" | "default";
+  className?: string;
   onPick: (file: File) => boolean | Promise<boolean>;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -95,8 +101,9 @@ export function DocumentUpload({
       <Button
         ref={trigger}
         type="button"
-        size="sm"
-        variant="outline"
+        size={size}
+        variant={variant}
+        className={className}
         disabled={locked}
         onClick={() => input.current?.click()}
       >

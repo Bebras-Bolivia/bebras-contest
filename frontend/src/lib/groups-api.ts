@@ -1,5 +1,6 @@
 import { API_BASE_URL, apiRequest as request } from "@/lib/api-client";
 import { authorizationHeaders } from "@/lib/firebase-auth";
+import type { ContestState } from "@/lib/contest-schema";
 
 export type GroupTeam = {
   id: string;
@@ -141,5 +142,63 @@ export function updateTeam(teamId: string, data: TeamUpdateInput) {
 export function removeTeam(teamId: string) {
   return request<null>(`/api/teams/${teamId}`, {
     method: "DELETE",
+  });
+}
+
+export type GroupResultTeam = GroupTeam & {
+  category: string | null;
+  progress: "not_started" | "in_progress" | "finished";
+  startedAt: string | null;
+  finishedAt: string | null;
+  taskCount: number;
+  answeredCount: number;
+  score: number | null;
+  maxScore: number | null;
+  correctCount: number | null;
+  rank: number | null;
+  answers: Array<"correct" | "wrong" | "blank"> | null;
+};
+
+export type GroupResultTask = {
+  id: string;
+  title: string;
+  category: string;
+  difficulty: string;
+  takers: number;
+  correct: number;
+  wrong: number;
+};
+
+export type GroupResults = {
+  group: {
+    id: string;
+    name: string;
+    accessCode: string;
+    category: string | null;
+  };
+  contest: {
+    id: string;
+    title: string;
+    state: ContestState;
+    isPractice: boolean;
+    startsAt: string | null;
+    endsAt: string | null;
+    resultsPublished: boolean;
+    registrationOpen: boolean;
+  };
+  categories: string[];
+  showScores: boolean;
+  teams: GroupResultTeam[];
+  tasks: GroupResultTask[];
+};
+
+export function getGroupResults(groupId: string) {
+  return request<GroupResults>(`/api/groups/${groupId}/results`);
+}
+
+export function renameGroup(groupId: string, name: string) {
+  return request<StoredGroup>(`/api/groups/${groupId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
   });
 }

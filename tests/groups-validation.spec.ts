@@ -738,25 +738,20 @@ test("validates complete rosters before writing any participant", async () => {
   const rejection = await rejected.json();
   expect(rejection.code).toBe("ROSTER_VALIDATION_FAILED");
   expect(rejection.details.map((issue: { row: number }) => issue.row)).toEqual([
-    4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 13,
+    4, 5, 7, 8, 9, 10, 11, 12, 13, 13,
   ]);
-  expect(rejection.details[2].reason).toContain("Falta la modalidad");
-  expect(rejection.details[4].reason).toContain("no puede incluir datos");
-  expect(rejection.details[5].reason).toContain("Faltan los datos");
+  expect(rejection.details[2].reason).toContain("no reconocida");
+  expect(rejection.details[3].reason).toContain("no puede incluir datos");
+  expect(rejection.details[4].reason).toContain("Faltan los datos");
+  expect(rejection.details[5].reason).toContain("Ya está inscrito");
   expect(rejection.details[6].reason).toContain("Ya está inscrito");
-  expect(rejection.details[7].reason).toContain("Ya está inscrito");
-  expect(rejection.details[8]).toMatchObject({
+  expect(rejection.details[7]).toMatchObject({
     name: "ana perez",
     reason: "Ya está inscrito en este desafío.",
   });
   expect(
-    rejection.details.slice(9).map((issue: { reason: string }) => issue.reason),
-  ).toEqual(
-    expect.arrayContaining([
-      "Faltan nombres o apellidos.",
-      "Falta la modalidad. Usa individual o pareja.",
-    ]),
-  );
+    rejection.details.slice(8).map((issue: { reason: string }) => issue.reason),
+  ).toEqual(expect.arrayContaining(["Faltan nombres o apellidos."]));
 
   const groupsAfterRejection = await api
     .get(`${API}/api/groups`, { headers })
@@ -930,17 +925,12 @@ test("discovers one importable XLSX sheet and keeps template examples inert", as
     templateWorkbook.worksheets
       .filter((sheet) => sheet.state === "visible")
       .map((sheet) => sheet.name),
-  ).toEqual(["Participantes", "Ejemplo", "Instrucciones"]);
-  expect(templateWorkbook.getWorksheet("Datos")?.state).toBe("hidden");
-  expect(
-    templateWorkbook.getWorksheet("Participantes")?.getRow(2).values,
-  ).toEqual([]);
-  expect(templateWorkbook.getWorksheet("Ejemplo")?.getCell("A1").value).toMatch(
-    /ejemplo.*esta hoja no se importa/i,
-  );
-  expect(templateWorkbook.getWorksheet("Ejemplo")?.getRow(3).values).toContain(
-    "Modalidad",
-  );
+  ).toEqual(["Estudiantes"]);
+  expect(templateWorkbook.getWorksheet("Datos")?.state).toBe("veryHidden");
+  const studentsSheet = templateWorkbook.getWorksheet("Estudiantes");
+  expect(studentsSheet?.getCell("A1").value).toBe("Lista de estudiantes");
+  expect(studentsSheet?.getRow(5).values).toContain("Modalidad");
+  expect(studentsSheet?.getRow(6).values).toEqual([]);
 
   const templateImport = await api.post(
     `${API}/api/groups/${templateGroup.id}/roster`,

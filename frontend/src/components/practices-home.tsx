@@ -8,7 +8,7 @@ import {
   LinkIcon,
   LoaderCircleIcon,
   PlusIcon,
-  Trash2Icon,
+  XIcon,
   UsersIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -646,7 +646,7 @@ export function PracticesHome() {
                     variant="outline"
                     onClick={() => setDeleting(practice)}
                   >
-                    <Trash2Icon data-icon="inline-start" />
+                    <XIcon data-icon="inline-start" />
                     Eliminar
                   </Button>
                 </div>

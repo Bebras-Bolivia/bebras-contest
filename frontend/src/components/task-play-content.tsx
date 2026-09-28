@@ -13,7 +13,7 @@ import type { ClozeConfig } from "@/lib/assignment-answers";
  * Las figuras llegan con el ancho del cuadernillo y algunas miden más que la
  * pantalla: en la vista del estudiante manda un alto máximo, con su proporción.
  */
-const playImages = "gap-4 [&_img]:max-h-[24rem] [&_img]:object-contain";
+const playImages = "gap-4";
 
 /** Shared document/interaction boundary for the tester and the contest player. */
 export function TaskPlayContent({

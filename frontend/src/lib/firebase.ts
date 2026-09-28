@@ -22,6 +22,9 @@ export function isFirebaseConfigured() {
 
 export const FIREBASE_PROJECT_ID = config.projectId;
 
+/** Solo con `bun run dev:local`: el emulador de Firebase Auth. */
+export const AUTH_EMULATOR_HOST = authEmulatorHost || null;
+
 let app: FirebaseApp | undefined;
 let auth: Auth | undefined;
 

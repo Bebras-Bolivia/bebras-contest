@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ImagePlusIcon, MinusIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { ImagePlusIcon, MinusIcon, PlusIcon, XIcon } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Popover,
@@ -303,7 +303,7 @@ function StateButton({
             className="text-destructive"
             onClick={onRemove}
           >
-            <Trash2Icon data-icon="inline-start" />
+            <XIcon data-icon="inline-start" />
             Quitar
           </Button>
         )}

@@ -1,0 +1,18 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { GroupPage } from "../../components/group-page";
+
+const title = "Grupo";
+---
+
+<Layout
+  title={title}
+  heading="Grupo"
+  backHref="/grupos"
+  requireAuth
+  allowMaestro
+>
+  <main class="mx-auto flex w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+    <GroupPage client:only="react" />
+  </main>
+</Layout>

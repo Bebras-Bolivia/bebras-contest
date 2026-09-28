@@ -15,7 +15,6 @@ import {
   FilePlus2Icon,
   PlayCircleIcon,
   SearchIcon,
-  Trash2Icon,
   XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -538,7 +537,7 @@ export function TasksHome() {
                           <span
                             aria-hidden="true"
                             className={cn(
-                              "size-2.5 border border-foreground/40",
+                              "size-2.5",
                               style.className,
                             )}
                           />
@@ -703,7 +702,7 @@ export function TasksHome() {
                       className="w-full max-lg:px-2 lg:justify-start"
                       onClick={() => setTaskToDelete(task)}
                     >
-                      <Trash2Icon data-icon="inline-start" />
+                      <XIcon data-icon="inline-start" />
                       <span className="max-lg:sr-only">Eliminar</span>
                     </Button>
                   </div>

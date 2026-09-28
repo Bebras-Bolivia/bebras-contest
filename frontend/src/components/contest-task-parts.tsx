@@ -46,7 +46,7 @@ export function DifficultyTag({
   return (
     <span
       className={cn(
-        "shrink-0 border border-foreground/50 px-1.5 py-0.5 text-xs font-semibold",
+        "shrink-0 px-1.5 py-0.5 text-xs font-semibold",
         difficultyStyles[difficulty].className,
       )}
     >

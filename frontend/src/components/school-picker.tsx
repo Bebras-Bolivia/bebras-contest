@@ -30,6 +30,7 @@ export function SchoolPicker({
   invalid,
   describedBy,
   allowHomeschool = true,
+  onManualChange,
 }: {
   value: SchoolValue;
   onChange: (next: SchoolValue) => void;
@@ -37,10 +38,15 @@ export function SchoolPicker({
   invalid?: boolean;
   describedBy?: string;
   allowHomeschool?: boolean;
+  onManualChange?: (manual: boolean) => void;
 }) {
-  const [manual, setManual] = useState(
+  const [manual, setManualState] = useState(
     value.institutionType === "school" && !value.codUe && Boolean(value.name),
   );
+  const setManual = (next: boolean) => {
+    setManualState(next);
+    onManualChange?.(next);
+  };
   const [query, setQuery] = useState(value.codUe ? value.name : "");
   const [results, setResults] = useState<SchoolResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -104,9 +110,6 @@ export function SchoolPicker({
           aria-invalid={invalid}
           aria-describedby={describedBy}
         />
-        <p className="pt-0.5 text-xs text-muted-foreground">
-          Escribe el nombre completo. Te pediremos la carta del director.
-        </p>
         <button
           type="button"
           onClick={() => {
@@ -199,7 +202,7 @@ export function SchoolPicker({
       </div>
 
       {open && query.trim().length >= 2 && (
-        <div className="flex flex-col overflow-hidden rounded-md border bg-background">
+        <div className="flex flex-col overflow-hidden rounded-md border bg-background motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1 motion-safe:duration-200">
           {failed && !loading ? (
             <div className="flex flex-col items-start gap-2 px-3 py-3">
               <p className="text-sm text-muted-foreground">
@@ -235,7 +238,7 @@ export function SchoolPicker({
                   setOpen(false);
                 }}
                 className={cn(
-                  "flex flex-col gap-0.5 border-b px-3 py-2 text-left transition last:border-b-0 hover:bg-muted",
+                  "flex flex-col gap-0.5 border-b px-3 py-2 text-left transition-colors duration-150 last:border-b-0 hover:bg-muted",
                 )}
               >
                 <span className="text-sm font-medium">{school.name}</span>
@@ -279,11 +282,6 @@ export function SchoolPicker({
             </button>
           )}
         </div>
-        <p className="text-xs text-muted-foreground">
-          {allowHomeschool
-            ? "Con un colegio te pediremos la carta del director; si enseñas en casa, tu carnet de identidad."
-            : "Después de elegir el colegio podrás adjuntar la carta de su director."}
-        </p>
       </div>
     </div>
   );

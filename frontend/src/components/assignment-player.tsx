@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, type KeyboardEvent, type ReactNode } from "react";
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { CheckIcon, PlusIcon } from "lucide-react";
 import {
   Popover,
@@ -340,30 +346,84 @@ export function TextClozePlayer({
   const used = (optionId: string) =>
     Object.values(value).filter((id) => id === optionId).length;
 
+  const surface = useRef<HTMLDivElement>(null);
+  // La palabra sale de donde estaba y viaja a su lugar nuevo: se mide antes
+  // del cambio y, ya dibujado, se anima desde ahí.
+  const flight = useRef<{ target: string; from: DOMRect } | null>(null);
+
+  const find = (selector: string) =>
+    surface.current?.querySelector<HTMLElement>(selector) ?? null;
+  const inSlot = (blankId: string) =>
+    `[data-assignment-slot="${CSS.escape(blankId)}"] [data-slot-word]`;
+  const inBank = (optionId: string) =>
+    `[data-bank-option="${CSS.escape(optionId)}"] > *`;
+
+  useLayoutEffect(() => {
+    const move = flight.current;
+    flight.current = null;
+    if (
+      !move ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+    const element = find(move.target);
+    if (!element) return;
+    const to = element.getBoundingClientRect();
+    const dx = move.from.left - to.left;
+    const dy = move.from.top - to.top;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+    element.style.position = "relative";
+    element.style.zIndex = "10";
+    const animation = element.animate(
+      [
+        { transform: `translate(${dx}px, ${dy}px) scale(1.04)` },
+        { transform: "translate(0, 0) scale(1)" },
+      ],
+      { duration: 460, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+    );
+    const settle = () => {
+      element.style.position = "";
+      element.style.zIndex = "";
+    };
+    animation.onfinish = settle;
+    animation.oncancel = settle;
+  }, [value]);
+
   function place(optionId: string) {
     if (disabled || !activeId) return;
     const next = withAssignment(config.options, value, activeId, optionId);
-    onChange(next);
     const index = config.blanks.findIndex((blank) => blank.id === activeId);
     const option = config.options.find((entry) => entry.id === optionId);
-    setAnnouncement(`Hueco ${index + 1}: ${option?.label ?? ""}`);
     const following = [
       ...config.blanks.slice(index + 1),
       ...config.blanks.slice(0, index),
     ].find((blank) => !next[blank.id]);
+    const from = find(inBank(optionId))?.getBoundingClientRect();
+    flight.current = from ? { target: inSlot(activeId), from } : null;
+    onChange(next);
+    setAnnouncement(`Hueco ${index + 1}: ${option?.label ?? ""}`);
     setPicked(following?.id ?? activeId);
   }
 
   function clear(blankId: string) {
     if (disabled) return;
-    onChange(withAssignment(config.options, value, blankId, ""));
     const index = config.blanks.findIndex((blank) => blank.id === blankId);
+    const optionId = value[blankId];
+    const from = find(inSlot(blankId))?.getBoundingClientRect();
+    flight.current =
+      from && optionId ? { target: inBank(optionId), from } : null;
+    onChange(withAssignment(config.options, value, blankId, ""));
     setAnnouncement(`Hueco ${index + 1}: vacío`);
     setPicked(blankId);
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-6" data-assignment-surface>
+    <div
+      ref={surface}
+      className="flex min-w-0 flex-col gap-6"
+      data-assignment-surface
+    >
       <TaskContentRenderer
         blocks={blocks}
         className={className}
@@ -416,7 +476,8 @@ export function TextClozePlayer({
               {chosen && (
                 <span
                   key={chosen.id}
-                  className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:duration-200"
+                  data-slot-word=""
+                  className="inline-block"
                 >
                   {chosen.image ? (
                     <img
@@ -450,6 +511,7 @@ export function TextClozePlayer({
                 <button
                   key={option.id}
                   type="button"
+                  data-bank-option={option.id}
                   disabled={spent || !allowed || !activeId}
                   onClick={() => place(option.id)}
                   className={cn(

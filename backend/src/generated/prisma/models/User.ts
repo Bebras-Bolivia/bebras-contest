@@ -47,6 +47,8 @@ export type UserMinAggregateOutputType = {
   schoolCodUe: string | null
   schoolName: string | null
   institutionType: string | null
+  department: string | null
+  city: string | null
   phone: string | null
   letterFilename: string | null
   idFrontFilename: string | null
@@ -68,6 +70,8 @@ export type UserMaxAggregateOutputType = {
   schoolCodUe: string | null
   schoolName: string | null
   institutionType: string | null
+  department: string | null
+  city: string | null
   phone: string | null
   letterFilename: string | null
   idFrontFilename: string | null
@@ -89,6 +93,8 @@ export type UserCountAggregateOutputType = {
   schoolCodUe: number
   schoolName: number
   institutionType: number
+  department: number
+  city: number
   phone: number
   letterFilename: number
   idFrontFilename: number
@@ -120,6 +126,8 @@ export type UserMinAggregateInputType = {
   schoolCodUe?: true
   schoolName?: true
   institutionType?: true
+  department?: true
+  city?: true
   phone?: true
   letterFilename?: true
   idFrontFilename?: true
@@ -141,6 +149,8 @@ export type UserMaxAggregateInputType = {
   schoolCodUe?: true
   schoolName?: true
   institutionType?: true
+  department?: true
+  city?: true
   phone?: true
   letterFilename?: true
   idFrontFilename?: true
@@ -162,6 +172,8 @@ export type UserCountAggregateInputType = {
   schoolCodUe?: true
   schoolName?: true
   institutionType?: true
+  department?: true
+  city?: true
   phone?: true
   letterFilename?: true
   idFrontFilename?: true
@@ -270,6 +282,8 @@ export type UserGroupByOutputType = {
   schoolCodUe: string | null
   schoolName: string | null
   institutionType: string | null
+  department: string | null
+  city: string | null
   phone: string | null
   letterFilename: string | null
   idFrontFilename: string | null
@@ -314,6 +328,8 @@ export type UserWhereInput = {
   schoolCodUe?: Prisma.StringNullableFilter<"User"> | string | null
   schoolName?: Prisma.StringNullableFilter<"User"> | string | null
   institutionType?: Prisma.StringNullableFilter<"User"> | string | null
+  department?: Prisma.StringNullableFilter<"User"> | string | null
+  city?: Prisma.StringNullableFilter<"User"> | string | null
   phone?: Prisma.StringNullableFilter<"User"> | string | null
   letterFilename?: Prisma.StringNullableFilter<"User"> | string | null
   idFrontFilename?: Prisma.StringNullableFilter<"User"> | string | null
@@ -337,6 +353,8 @@ export type UserOrderByWithRelationInput = {
   schoolCodUe?: Prisma.SortOrderInput | Prisma.SortOrder
   schoolName?: Prisma.SortOrderInput | Prisma.SortOrder
   institutionType?: Prisma.SortOrderInput | Prisma.SortOrder
+  department?: Prisma.SortOrderInput | Prisma.SortOrder
+  city?: Prisma.SortOrderInput | Prisma.SortOrder
   phone?: Prisma.SortOrderInput | Prisma.SortOrder
   letterFilename?: Prisma.SortOrderInput | Prisma.SortOrder
   idFrontFilename?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -363,6 +381,8 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   schoolCodUe?: Prisma.StringNullableFilter<"User"> | string | null
   schoolName?: Prisma.StringNullableFilter<"User"> | string | null
   institutionType?: Prisma.StringNullableFilter<"User"> | string | null
+  department?: Prisma.StringNullableFilter<"User"> | string | null
+  city?: Prisma.StringNullableFilter<"User"> | string | null
   phone?: Prisma.StringNullableFilter<"User"> | string | null
   letterFilename?: Prisma.StringNullableFilter<"User"> | string | null
   idFrontFilename?: Prisma.StringNullableFilter<"User"> | string | null
@@ -386,6 +406,8 @@ export type UserOrderByWithAggregationInput = {
   schoolCodUe?: Prisma.SortOrderInput | Prisma.SortOrder
   schoolName?: Prisma.SortOrderInput | Prisma.SortOrder
   institutionType?: Prisma.SortOrderInput | Prisma.SortOrder
+  department?: Prisma.SortOrderInput | Prisma.SortOrder
+  city?: Prisma.SortOrderInput | Prisma.SortOrder
   phone?: Prisma.SortOrderInput | Prisma.SortOrder
   letterFilename?: Prisma.SortOrderInput | Prisma.SortOrder
   idFrontFilename?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -415,6 +437,8 @@ export type UserScalarWhereWithAggregatesInput = {
   schoolCodUe?: Prisma.StringNullableWithAggregatesFilter<"User"> | string | null
   schoolName?: Prisma.StringNullableWithAggregatesFilter<"User"> | string | null
   institutionType?: Prisma.StringNullableWithAggregatesFilter<"User"> | string | null
+  department?: Prisma.StringNullableWithAggregatesFilter<"User"> | string | null
+  city?: Prisma.StringNullableWithAggregatesFilter<"User"> | string | null
   phone?: Prisma.StringNullableWithAggregatesFilter<"User"> | string | null
   letterFilename?: Prisma.StringNullableWithAggregatesFilter<"User"> | string | null
   idFrontFilename?: Prisma.StringNullableWithAggregatesFilter<"User"> | string | null
@@ -435,6 +459,8 @@ export type UserCreateInput = {
   schoolCodUe?: string | null
   schoolName?: string | null
   institutionType?: string | null
+  department?: string | null
+  city?: string | null
   phone?: string | null
   letterFilename?: string | null
   idFrontFilename?: string | null
@@ -458,6 +484,8 @@ export type UserUncheckedCreateInput = {
   schoolCodUe?: string | null
   schoolName?: string | null
   institutionType?: string | null
+  department?: string | null
+  city?: string | null
   phone?: string | null
   letterFilename?: string | null
   idFrontFilename?: string | null
@@ -480,6 +508,8 @@ export type UserUpdateInput = {
   schoolCodUe?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   schoolName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   institutionType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  department?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  city?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   letterFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   idFrontFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -503,6 +533,8 @@ export type UserUncheckedUpdateInput = {
   schoolCodUe?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   schoolName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   institutionType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  department?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  city?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   letterFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   idFrontFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -526,6 +558,8 @@ export type UserCreateManyInput = {
   schoolCodUe?: string | null
   schoolName?: string | null
   institutionType?: string | null
+  department?: string | null
+  city?: string | null
   phone?: string | null
   letterFilename?: string | null
   idFrontFilename?: string | null
@@ -546,6 +580,8 @@ export type UserUpdateManyMutationInput = {
   schoolCodUe?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   schoolName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   institutionType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  department?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  city?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   letterFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   idFrontFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -567,6 +603,8 @@ export type UserUncheckedUpdateManyInput = {
   schoolCodUe?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   schoolName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   institutionType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  department?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  city?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   letterFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   idFrontFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -588,6 +626,8 @@ export type UserCountOrderByAggregateInput = {
   schoolCodUe?: Prisma.SortOrder
   schoolName?: Prisma.SortOrder
   institutionType?: Prisma.SortOrder
+  department?: Prisma.SortOrder
+  city?: Prisma.SortOrder
   phone?: Prisma.SortOrder
   letterFilename?: Prisma.SortOrder
   idFrontFilename?: Prisma.SortOrder
@@ -613,6 +653,8 @@ export type UserMaxOrderByAggregateInput = {
   schoolCodUe?: Prisma.SortOrder
   schoolName?: Prisma.SortOrder
   institutionType?: Prisma.SortOrder
+  department?: Prisma.SortOrder
+  city?: Prisma.SortOrder
   phone?: Prisma.SortOrder
   letterFilename?: Prisma.SortOrder
   idFrontFilename?: Prisma.SortOrder
@@ -634,6 +676,8 @@ export type UserMinOrderByAggregateInput = {
   schoolCodUe?: Prisma.SortOrder
   schoolName?: Prisma.SortOrder
   institutionType?: Prisma.SortOrder
+  department?: Prisma.SortOrder
+  city?: Prisma.SortOrder
   phone?: Prisma.SortOrder
   letterFilename?: Prisma.SortOrder
   idFrontFilename?: Prisma.SortOrder
@@ -718,6 +762,8 @@ export type UserCreateWithoutSchoolsInput = {
   schoolCodUe?: string | null
   schoolName?: string | null
   institutionType?: string | null
+  department?: string | null
+  city?: string | null
   phone?: string | null
   letterFilename?: string | null
   idFrontFilename?: string | null
@@ -740,6 +786,8 @@ export type UserUncheckedCreateWithoutSchoolsInput = {
   schoolCodUe?: string | null
   schoolName?: string | null
   institutionType?: string | null
+  department?: string | null
+  city?: string | null
   phone?: string | null
   letterFilename?: string | null
   idFrontFilename?: string | null
@@ -777,6 +825,8 @@ export type UserUpdateWithoutSchoolsInput = {
   schoolCodUe?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   schoolName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   institutionType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  department?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  city?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   letterFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   idFrontFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -799,6 +849,8 @@ export type UserUncheckedUpdateWithoutSchoolsInput = {
   schoolCodUe?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   schoolName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   institutionType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  department?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  city?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   letterFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   idFrontFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -820,6 +872,8 @@ export type UserCreateWithoutContestsInput = {
   schoolCodUe?: string | null
   schoolName?: string | null
   institutionType?: string | null
+  department?: string | null
+  city?: string | null
   phone?: string | null
   letterFilename?: string | null
   idFrontFilename?: string | null
@@ -842,6 +896,8 @@ export type UserUncheckedCreateWithoutContestsInput = {
   schoolCodUe?: string | null
   schoolName?: string | null
   institutionType?: string | null
+  department?: string | null
+  city?: string | null
   phone?: string | null
   letterFilename?: string | null
   idFrontFilename?: string | null
@@ -879,6 +935,8 @@ export type UserUpdateWithoutContestsInput = {
   schoolCodUe?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   schoolName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   institutionType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  department?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  city?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   letterFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   idFrontFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -901,6 +959,8 @@ export type UserUncheckedUpdateWithoutContestsInput = {
   schoolCodUe?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   schoolName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   institutionType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  department?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  city?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   letterFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   idFrontFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -963,6 +1023,8 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   schoolCodUe?: boolean
   schoolName?: boolean
   institutionType?: boolean
+  department?: boolean
+  city?: boolean
   phone?: boolean
   letterFilename?: boolean
   idFrontFilename?: boolean
@@ -987,6 +1049,8 @@ export type UserSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   schoolCodUe?: boolean
   schoolName?: boolean
   institutionType?: boolean
+  department?: boolean
+  city?: boolean
   phone?: boolean
   letterFilename?: boolean
   idFrontFilename?: boolean
@@ -1008,6 +1072,8 @@ export type UserSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   schoolCodUe?: boolean
   schoolName?: boolean
   institutionType?: boolean
+  department?: boolean
+  city?: boolean
   phone?: boolean
   letterFilename?: boolean
   idFrontFilename?: boolean
@@ -1029,6 +1095,8 @@ export type UserSelectScalar = {
   schoolCodUe?: boolean
   schoolName?: boolean
   institutionType?: boolean
+  department?: boolean
+  city?: boolean
   phone?: boolean
   letterFilename?: boolean
   idFrontFilename?: boolean
@@ -1037,7 +1105,7 @@ export type UserSelectScalar = {
   updatedAt?: boolean
 }
 
-export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "firebaseUid" | "name" | "firstName" | "lastName" | "passwordHash" | "role" | "status" | "schoolCodUe" | "schoolName" | "institutionType" | "phone" | "letterFilename" | "idFrontFilename" | "idBackFilename" | "createdAt" | "updatedAt", ExtArgs["result"]["user"]>
+export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "firebaseUid" | "name" | "firstName" | "lastName" | "passwordHash" | "role" | "status" | "schoolCodUe" | "schoolName" | "institutionType" | "department" | "city" | "phone" | "letterFilename" | "idFrontFilename" | "idBackFilename" | "createdAt" | "updatedAt", ExtArgs["result"]["user"]>
 export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   schools?: boolean | Prisma.User$schoolsArgs<ExtArgs>
   contests?: boolean | Prisma.User$contestsArgs<ExtArgs>
@@ -1065,6 +1133,8 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     schoolCodUe: string | null
     schoolName: string | null
     institutionType: string | null
+    department: string | null
+    city: string | null
     phone: string | null
     letterFilename: string | null
     idFrontFilename: string | null
@@ -1508,6 +1578,8 @@ export interface UserFieldRefs {
   readonly schoolCodUe: Prisma.FieldRef<"User", 'String'>
   readonly schoolName: Prisma.FieldRef<"User", 'String'>
   readonly institutionType: Prisma.FieldRef<"User", 'String'>
+  readonly department: Prisma.FieldRef<"User", 'String'>
+  readonly city: Prisma.FieldRef<"User", 'String'>
   readonly phone: Prisma.FieldRef<"User", 'String'>
   readonly letterFilename: Prisma.FieldRef<"User", 'String'>
   readonly idFrontFilename: Prisma.FieldRef<"User", 'String'>

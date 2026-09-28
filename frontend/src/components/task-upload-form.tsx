@@ -1646,7 +1646,7 @@ export function TaskUploadForm({
                             selected
                               ? cn(
                                   difficultyStyles[option.value].className,
-                                  "border-foreground/50 font-semibold",
+                                  "border-transparent font-semibold",
                                 )
                               : "border-border/20 text-muted-foreground hover:border-foreground/40 hover:text-foreground",
                           )}

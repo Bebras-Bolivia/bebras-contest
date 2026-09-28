@@ -193,6 +193,8 @@ export type StoredContest = {
   endsAt: string | null;
   /** Cuándo se publican solos los resultados; sin fecha, al cerrar la rendición. */
   resultsAt: string | null;
+  /** Hasta cuándo sale con sus resultados en la portada; sin fecha, 7 días. */
+  resultsUntil: string | null;
   initialScores: Record<string, number>;
   scoring: ContestScoring;
   questionDisplayMode: QuestionDisplayMode;
@@ -225,6 +227,7 @@ export type ContestDraftInput = {
   startsAt: string;
   endsAt: string;
   resultsAt: string;
+  resultsUntil: string;
   scoring: ContestScoring;
   questionDisplayMode: QuestionDisplayMode;
   allowPairs: boolean;

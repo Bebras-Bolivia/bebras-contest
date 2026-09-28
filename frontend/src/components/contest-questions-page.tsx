@@ -221,6 +221,7 @@ export function ContestQuestionsPage() {
         startsAt: contest.startsAt ?? "",
         endsAt: contest.endsAt ?? "",
         resultsAt: contest.resultsAt ?? "",
+        resultsUntil: contest.resultsUntil ?? "",
         scoring: contest.scoring,
         questionDisplayMode: contest.questionDisplayMode,
         allowPairs: contest.allowPairs,
@@ -425,10 +426,7 @@ export function ContestQuestionsPage() {
               >
                 <span
                   aria-hidden="true"
-                  className={cn(
-                    "size-2.5 border border-foreground/50",
-                    difficultyStyles[value].className,
-                  )}
+                  className={cn("size-2.5", difficultyStyles[value].className)}
                 />
                 {BEBRAS_SCORING[value].label}
                 <span className="tabular-nums opacity-60">{total}</span>

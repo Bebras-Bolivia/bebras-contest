@@ -1,5 +1,6 @@
 import {
   GoogleAuthProvider,
+  applyActionCode,
   createUserWithEmailAndPassword,
   getAdditionalUserInfo,
   getRedirectResult,
@@ -17,7 +18,12 @@ import {
 
 import { clearToken, setToken } from "@/lib/auth";
 import { emailVerificationActionSettings } from "@/lib/email-verification";
-import { firebaseAuth, isFirebaseConfigured } from "@/lib/firebase";
+import {
+  AUTH_EMULATOR_HOST,
+  FIREBASE_PROJECT_ID,
+  firebaseAuth,
+  isFirebaseConfigured,
+} from "@/lib/firebase";
 import { idTokenFrom } from "@/lib/firebase-token";
 
 /** Estado unico de Firebase Authentication para todo el frontend (§16). */
@@ -190,6 +196,39 @@ export async function sendVerificationEmail(user: User) {
     user,
     emailVerificationActionSettings(window.location.origin),
   );
+}
+
+/** Solo en local: aplica el último enlace de verificación que guardó el emulador. */
+export async function verifyEmailWithEmulator(email: string) {
+  if (!AUTH_EMULATOR_HOST) {
+    throw new Error("Solo disponible con el emulador local.");
+  }
+  const base = AUTH_EMULATOR_HOST.startsWith("http")
+    ? AUTH_EMULATOR_HOST
+    : `http://${AUTH_EMULATOR_HOST}`;
+  const response = await fetch(
+    `${base}/emulator/v1/projects/${FIREBASE_PROJECT_ID}/oobCodes`,
+  );
+  if (!response.ok) {
+    throw new Error("El emulador no respondió.");
+  }
+  const { oobCodes = [] } = (await response.json()) as {
+    oobCodes?: { email: string; requestType: string; oobCode: string }[];
+  };
+  const wanted = email.trim().toLowerCase();
+  const code = oobCodes
+    .filter(
+      (item) =>
+        item.requestType === "VERIFY_EMAIL" &&
+        item.email.toLowerCase() === wanted,
+    )
+    .at(-1);
+  if (!code) {
+    throw new Error(
+      "El emulador no tiene un enlace de verificación para este correo.",
+    );
+  }
+  await applyActionCode(firebaseAuth(), code.oobCode);
 }
 
 // --- Google ---------------------------------------------------------------

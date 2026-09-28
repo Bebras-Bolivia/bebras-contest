@@ -10,7 +10,7 @@ import {
   ImageIcon,
   ImagePlusIcon,
   PlusIcon,
-  Trash2Icon,
+  XIcon,
   TypeIcon,
 } from "lucide-react";
 
@@ -197,7 +197,7 @@ export function MultipleChoiceEditor({
           label={`Quitar la opción ${key}`}
           onClick={() => remove(index)}
         >
-          <Trash2Icon />
+          <XIcon />
         </IconButton>
       )}
     </>

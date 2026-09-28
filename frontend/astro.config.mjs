@@ -7,6 +7,13 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   integrations: [react()],
 
+  // La página siguiente se pide al pasar el mouse o tocar el enlace: al hacer
+  // clic ya está lista y el cambio de pantalla no espera al servidor.
+  prefetch: {
+    prefetchAll: true,
+    defaultStrategy: "hover",
+  },
+
   // La sección se llama Desafíos y ahora la ruta también. Solo se redirige la
   // portada: el redirect estático pierde la query, así que las subpáginas
   // llegarían sin su `id`.

@@ -14,6 +14,9 @@ type TaskContentRendererProps = {
   renderBlank?: (blankId: string) => ReactNode;
 };
 
+/** Alto máximo de una imagen que quedó en su tamaño automático (100 %). */
+export const IMAGE_MAX_HEIGHT = "24rem";
+
 export function TaskContentRenderer({
   blocks,
   className,
@@ -30,11 +33,24 @@ export function TaskContentRenderer({
             <div key={block.id} className="flex justify-center py-2">
               <img
                 alt={block.image.name}
-                className="block h-auto max-w-full"
+                className={
+                  minImageWidth === "0px"
+                    ? "block h-auto max-w-full"
+                    : // En celular, a lo ancho de la pantalla con el mismo tope de alto.
+                      "block h-auto max-w-full max-sm:!w-full max-sm:!max-h-[24rem] max-sm:object-contain"
+                }
                 src={block.image.url}
-                style={{
-                  width: `min(100%, max(${block.widthPercent}%, ${minImageWidth}))`,
-                }}
+                style={
+                  block.widthPercent >= 100
+                    ? {
+                        width: "100%",
+                        maxHeight: IMAGE_MAX_HEIGHT,
+                        objectFit: "contain",
+                      }
+                    : {
+                        width: `min(100%, max(${block.widthPercent}%, ${minImageWidth}))`,
+                      }
+                }
               />
             </div>
           );
