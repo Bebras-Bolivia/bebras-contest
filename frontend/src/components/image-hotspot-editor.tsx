@@ -1,6 +1,13 @@
 "use client";
 
-import { useRef, useState, type PointerEvent, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type PointerEvent,
+  type KeyboardEvent,
+} from "react";
 import {
   CheckIcon,
   CircleDotIcon,
@@ -10,6 +17,17 @@ import {
   XIcon,
   Undo2Icon,
 } from "lucide-react";
+
+type Selection = { id: string; shape: number };
+type Snapshot = {
+  config: HotspotConfig;
+  answerKey: HotspotKey;
+  selection: Selection;
+};
+
+const HISTORY_LIMIT = 100;
+// Toques seguidos de flecha sobre lo mismo se deshacen juntos.
+const KEY_GROUP_MS = 800;
 import { toast } from "sonner";
 import { HotspotShapeView } from "@/components/image-hotspot-player";
 import { Button } from "@/components/ui/button";
@@ -34,7 +52,8 @@ export function ImageHotspotEditor({
   onChange: (config: HotspotConfig, key: HotspotKey) => void;
 }) {
   const svg = useRef<SVGSVGElement>(null);
-  const [selection, setSelection] = useState({ id: "", shape: 0 });
+  const container = useRef<HTMLDivElement>(null);
+  const [selection, setSelection] = useState<Selection>({ id: "", shape: 0 });
   const [drawing, setDrawing] = useState<"circle" | "polygon" | null>(null);
   const [append, setAppend] = useState(false);
   const [points, setPoints] = useState<HotspotPoint[]>([]);
@@ -45,7 +64,106 @@ export function ImageHotspotEditor({
     shape: HotspotShape;
     vertex?: number;
     radius?: boolean;
+    before: Snapshot | null;
+    moved: boolean;
   } | null>(null);
+  const past = useRef<Snapshot[]>([]);
+  const future = useRef<Snapshot[]>([]);
+  const keyGroup = useRef<{ tag: string; at: number } | null>(null);
+  const [canUndo, setCanUndo] = useState(false);
+  const snapshot = (): Snapshot | null =>
+    config ? { config, answerKey, selection } : null;
+  const pushPast = (entry: Snapshot | null) => {
+    if (!entry) return;
+    past.current = [...past.current.slice(-(HISTORY_LIMIT - 1)), entry];
+    future.current = [];
+    setCanUndo(true);
+  };
+  /** Guarda el estado actual antes de un cambio, para poder volver a él. */
+  const remember = (tag?: string, at = 0) => {
+    if (
+      tag &&
+      keyGroup.current?.tag === tag &&
+      at - keyGroup.current.at < KEY_GROUP_MS
+    ) {
+      keyGroup.current.at = at;
+      return;
+    }
+    keyGroup.current = tag ? { tag, at } : null;
+    pushPast(snapshot());
+  };
+  /** Un cambio que se puede deshacer. */
+  const change = (
+    nextConfig: HotspotConfig,
+    nextKey: HotspotKey,
+    tag?: string,
+  ) => {
+    remember(tag);
+    onChange(nextConfig, nextKey);
+  };
+  const restore = (entry: Snapshot) => {
+    onChange(entry.config, entry.answerKey);
+    setSelection(entry.selection);
+    keyGroup.current = null;
+  };
+  const undo = () => {
+    if (drawing === "polygon" && points.length) {
+      setPoints(points.slice(0, -1));
+      return true;
+    }
+    const current = snapshot();
+    const previous = past.current.at(-1);
+    if (!previous || !current) return false;
+    past.current = past.current.slice(0, -1);
+    future.current = [...future.current, current];
+    setCanUndo(past.current.length > 0);
+    restore(previous);
+    return true;
+  };
+  const redo = () => {
+    const current = snapshot();
+    const next = future.current.at(-1);
+    if (!next || !current || drawing) return false;
+    future.current = future.current.slice(0, -1);
+    past.current = [...past.current, current];
+    setCanUndo(true);
+    restore(next);
+    return true;
+  };
+  // Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y valen después de tocar este editor, y no
+  // cuando se escribe en un campo de texto: ahí deshacen el texto.
+  const touched = useRef(false);
+  const onHistoryKey = useEffectEvent((event: globalThis.KeyboardEvent) => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest("input, textarea, select, [contenteditable='true']"))
+      return;
+    const inside =
+      touched.current || container.current?.contains(document.activeElement);
+    if (!inside) return;
+    const key = event.key.toLowerCase();
+    const handled =
+      key === "z" && !event.shiftKey
+        ? undo()
+        : (key === "z" && event.shiftKey) || key === "y"
+          ? redo()
+          : false;
+    if (handled) event.preventDefault();
+  });
+  useEffect(() => {
+    const onPointerDown = (event: globalThis.PointerEvent) => {
+      touched.current = Boolean(
+        container.current?.contains(event.target as Node),
+      );
+    };
+    const onKeyDown = (event: globalThis.KeyboardEvent) => onHistoryKey(event);
+    window.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
   const region = config?.regions.find((r) => r.id === selection.id);
   const selectedShape = region?.shapes[selection.shape];
   let error = "";
@@ -100,7 +218,7 @@ export function ImageHotspotEditor({
             ...config.regions,
             { id, label: `Zona ${config.regions.length + 1}`, shapes: [shape] },
           ];
-    onChange({ ...config, regions }, answerKey);
+    change({ ...config, regions }, answerKey);
     setSelection({ id, shape: index });
     setDrawing(null);
     setPoints([]);
@@ -121,7 +239,16 @@ export function ImageHotspotEditor({
     event.preventDefault();
     event.stopPropagation();
     setSelection({ id, shape: index });
-    drag.current = { id, index, shape, point: position(event), vertex, radius };
+    drag.current = {
+      id,
+      index,
+      shape,
+      point: position(event),
+      vertex,
+      radius,
+      before: snapshot(),
+      moved: false,
+    };
     svg.current?.setPointerCapture(event.pointerId);
   };
   const moveShape = (
@@ -157,6 +284,10 @@ export function ImageHotspotEditor({
     if (delta[event.key] && region) {
       event.preventDefault();
       event.stopPropagation();
+      remember(
+        `mover:${region.id}:${selection.shape}:${vertex ?? "todo"}`,
+        event.timeStamp,
+      );
       updateShape(
         region.id,
         selection.shape,
@@ -171,6 +302,7 @@ export function ImageHotspotEditor({
       const loaded = new Image();
       loaded.src = image.url;
       await loaded.decode();
+      remember();
       onChange(
         {
           version: 1,
@@ -193,7 +325,11 @@ export function ImageHotspotEditor({
   const accepted = (id: string) => answerKey.acceptedRegionIds.includes(id);
 
   return (
-    <div className="flex flex-col gap-3" aria-label="Editor de zonas activas">
+    <div
+      ref={container}
+      className="flex flex-col gap-3"
+      aria-label="Editor de zonas activas"
+    >
       <input
         ref={fileInput}
         type="file"
@@ -286,16 +422,30 @@ export function ImageHotspotEditor({
               )}
             </div>
             {!drawing && (
-              <Button
-                size="sm"
-                variant="ghost"
-                type="button"
-                className="text-muted-foreground"
-                onClick={pickImage}
-              >
-                <ImagePlusIcon data-icon="inline-start" />
-                Cambiar imagen
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  type="button"
+                  className="text-muted-foreground"
+                  disabled={!canUndo}
+                  title="Deshacer (Ctrl+Z)"
+                  onClick={() => undo()}
+                >
+                  <Undo2Icon data-icon="inline-start" />
+                  Deshacer
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  type="button"
+                  className="text-muted-foreground"
+                  onClick={pickImage}
+                >
+                  <ImagePlusIcon data-icon="inline-start" />
+                  Cambiar imagen
+                </Button>
+              </div>
             )}
           </div>
           <p className="text-sm text-muted-foreground" role="status">
@@ -353,12 +503,18 @@ export function ImageHotspotEditor({
                       p.y - d.point.y,
                       d.vertex,
                     );
+              d.moved = true;
               updateShape(d.id, d.index, shape);
             }}
             onPointerUp={() => {
+              if (drag.current?.moved) {
+                keyGroup.current = null;
+                pushPast(drag.current.before);
+              }
               drag.current = null;
             }}
             onPointerCancel={() => {
+              if (drag.current?.moved) pushPast(drag.current.before);
               drag.current = null;
             }}
           >
@@ -452,6 +608,10 @@ export function ImageHotspotEditor({
                       ].includes(e.key)
                     ) {
                       e.preventDefault();
+                      remember(
+                        `radio:${region.id}:${selection.shape}`,
+                        e.timeStamp,
+                      );
                       updateShape(region.id, selection.shape, {
                         ...selectedShape,
                         radius: Math.max(
@@ -535,7 +695,7 @@ export function ImageHotspotEditor({
                     type="button"
                     aria-pressed={accepted(region.id)}
                     onClick={() =>
-                      onChange(config, {
+                      change(config, {
                         version: 1,
                         acceptedRegionIds: accepted(region.id)
                           ? answerKey.acceptedRegionIds.filter(
@@ -568,7 +728,7 @@ export function ImageHotspotEditor({
                       size="sm"
                       variant="ghost"
                       onClick={() => {
-                        onChange(
+                        change(
                           {
                             ...config,
                             regions: config.regions.map((r) =>
@@ -595,7 +755,7 @@ export function ImageHotspotEditor({
                     aria-label="Quitar zona"
                     title="Quitar zona"
                     onClick={() => {
-                      onChange(
+                      change(
                         {
                           ...config,
                           regions: config.regions.filter(

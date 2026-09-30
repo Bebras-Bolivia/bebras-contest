@@ -28,24 +28,41 @@ const modules = {
     "drag-drop-solutions.spec.ts",
     "image-hotspot.spec.ts",
     "assignment-answers.spec.ts",
-    "authoring-refinement.spec.ts",
+    "drag-drop-editor.spec.ts",
     "drag-drop-player-refinement.spec.ts",
+    "task-visibility.spec.ts",
   ],
   desafios: [
     "contest-lifecycle.spec.ts",
     "results-publication.spec.ts",
     "scoring.spec.ts",
+    "contest-operations.spec.ts",
+    "scale-limits.spec.ts",
   ],
-  grupos: ["groups-validation.spec.ts", "join-validation.spec.ts"],
+  grupos: [
+    "groups-validation.spec.ts",
+    "join-validation.spec.ts",
+    "group-management.spec.ts",
+  ],
   juego: ["play-flow.spec.ts"],
-  practica: ["practice-api.spec.ts", "practice-player.spec.ts"],
+  practica: [
+    "practice-api.spec.ts",
+    "practice-player.spec.ts",
+    "teacher-practices.spec.ts",
+  ],
   cuentas: [
     "email-action.spec.ts",
     "login-validation.spec.ts",
     "registration.spec.ts",
     "registration-validation.spec.ts",
+    "admin-panel.spec.ts",
+    "teacher-review.spec.ts",
   ],
-  interfaz: ["navigation-layout.spec.ts", "responsive-cards.spec.ts"],
+  interfaz: [
+    "navigation-layout.spec.ts",
+    "responsive-cards.spec.ts",
+    "public-site.spec.ts",
+  ],
 };
 
 export default defineConfig({

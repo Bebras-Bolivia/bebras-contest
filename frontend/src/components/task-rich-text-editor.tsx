@@ -37,9 +37,11 @@ import {
 import { legacyTextToDocument } from "@/lib/rich-text-document";
 import { hasTaskBlanks } from "@/lib/task-blank";
 import { TaskBlank, TaskParagraphIndent } from "@/lib/task-blank-extension";
+import { TaskInlineImage, hasInlineImages } from "@/lib/task-inline-image";
 
 const extensions = [
   TaskBlank,
+  TaskInlineImage,
   TaskParagraphIndent,
   StarterKit.configure({
     heading: false,
@@ -218,7 +220,8 @@ export function TaskRichTextEditor({
           !event.metaKey &&
           !event.altKey &&
           !view.state.doc.textContent.trim() &&
-          !hasTaskBlanks(view.state.doc.toJSON())
+          !hasTaskBlanks(view.state.doc.toJSON()) &&
+          !hasInlineImages(view.state.doc.toJSON())
         ) {
           return onRemoveEmpty?.() ?? false;
         }

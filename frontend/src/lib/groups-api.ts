@@ -113,6 +113,24 @@ export async function downloadRosterTemplate(groupId: string, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
+export async function downloadGroupResults(groupId: string, name: string) {
+  const response = await fetch(
+    `${API_BASE_URL}/api/groups/${groupId}/results.xlsx`,
+    { headers: await authorizationHeaders() },
+  );
+
+  if (!response.ok) {
+    throw new Error("No se pudieron descargar los resultados.");
+  }
+
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `resultados-${name}.xlsx`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 export async function importRoster(groupId: string, file: File) {
   const form = new FormData();
   form.append("file", file);

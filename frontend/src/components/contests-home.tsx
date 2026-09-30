@@ -350,7 +350,7 @@ export function ContestsHome() {
                 </div>
               </div>
 
-              <div className="grid w-full shrink-0 grid-cols-[1fr_1fr_1fr_auto] gap-1.5 lg:w-72 lg:grid-cols-2 lg:gap-2">
+              <div className="grid w-full shrink-0 grid-cols-2 gap-1.5 min-[400px]:grid-cols-[1fr_1fr_1fr_auto] lg:w-72 lg:grid-cols-2 lg:gap-2">
                 <Button
                   asChild
                   size="sm"
@@ -396,7 +396,7 @@ export function ContestsHome() {
                   onClick={() => setConfirming({ action: "delete", contest })}
                 >
                   <XIcon data-icon="inline-start" />
-                  <span className="max-lg:sr-only">Eliminar</span>
+                  <span className="max-lg:min-[400px]:sr-only">Eliminar</span>
                 </Button>
               </div>
             </li>

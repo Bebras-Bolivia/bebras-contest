@@ -31,6 +31,7 @@ import {
 } from "@/lib/contest-schema";
 import { formatDateTime } from "@/lib/countdown";
 import {
+  downloadGroupResults,
   downloadRosterTemplate,
   enrollTeam,
   getGroup,
@@ -47,7 +48,7 @@ import {
   type RosterImportResult,
   type StoredGroup,
 } from "@/lib/groups-api";
-import { Reveal } from "@/components/reveal";
+import { Reveal, Unfold } from "@/components/reveal";
 import { enter } from "@/lib/surface";
 import { cn } from "@/lib/utils";
 import { DifficultyTag } from "@/components/contest-task-parts";
@@ -216,7 +217,7 @@ export function GroupPage() {
           <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
             Código del grupo
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-3xl font-bold tracking-[0.2em]">
               {group.accessCode}
             </span>
@@ -497,12 +498,18 @@ function studentErrors(values: StudentValues): StudentErrors {
 
 function apiErrors(error: unknown, fallback: string): StudentErrors {
   const message = error instanceof Error ? error.message : fallback;
-  if (
-    error instanceof ApiError &&
-    error.field &&
-    error.field in EMPTY_STUDENT
-  ) {
-    return { [error.field]: message };
+  // El servidor dice qué campos fallan (uno en `field` o varios en `fields`):
+  // se marcan todos y el mensaje sale una vez, en el primero.
+  const fields =
+    error instanceof ApiError
+      ? [...(error.field ? [error.field] : []), ...(error.fields ?? [])].filter(
+          (field): field is keyof StudentValues => field in EMPTY_STUDENT,
+        )
+      : [];
+  if (fields.length > 0) {
+    return Object.fromEntries(
+      fields.map((field, index) => [field, index === 0 ? message : " "]),
+    );
   }
   return { form: message };
 }
@@ -532,7 +539,30 @@ function StudentForm({
   const [errors, setErrors] = useState<StudentErrors>({});
   const [saving, setSaving] = useState(false);
   const firstRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const pair = values.participationMode === "pareja";
+
+  // El foco va al primer campo con error (o, tras inscribir, a «Nombres»),
+  // así el teclado y el lector de pantalla llegan directo a lo que sigue. Se
+  // mueve después de que React dibujó: antes el campo puede seguir
+  // deshabilitado por el guardado o sin su marca de error.
+  const pendingFocus = useRef<"error" | "first" | null>(null);
+  useEffect(() => {
+    if (saving || !pendingFocus.current) return;
+    const form = formRef.current;
+    const target =
+      pendingFocus.current === "first"
+        ? firstRef.current
+        : (form?.querySelector<HTMLElement>('input[aria-invalid="true"]') ??
+          form?.querySelector<HTMLElement>(
+            '[role="radiogroup"][aria-invalid="true"] [role="radio"]',
+          ));
+    pendingFocus.current = null;
+    target?.focus();
+  });
+  const focusFirstError = () => {
+    pendingFocus.current = "error";
+  };
 
   const set = (key: keyof StudentValues, value: string) => {
     setValues((current) => ({ ...current, [key]: value }));
@@ -550,6 +580,7 @@ function StudentForm({
     const found = studentErrors(values);
     if (Object.keys(found).length > 0) {
       setErrors(found);
+      focusFirstError();
       return;
     }
     setSaving(true);
@@ -557,6 +588,7 @@ function StudentForm({
     setSaving(false);
     if (failed) {
       setErrors(failed);
+      focusFirstError();
       return;
     }
     // Queda listo para el siguiente: mismo curso y modalidad, nombres vacíos.
@@ -566,7 +598,7 @@ function StudentForm({
       grade: current.grade,
     }));
     setErrors({});
-    firstRef.current?.focus();
+    pendingFocus.current = "first";
   };
 
   const nameField = (
@@ -599,10 +631,11 @@ function StudentForm({
     ] as const
   )
     .map((key) => errors[key])
-    .find(Boolean);
+    .find((message) => message?.trim());
 
   return (
     <form
+      ref={formRef}
       noValidate
       onSubmit={submit}
       className={cn(
@@ -637,18 +670,22 @@ function StudentForm({
           pair ? "Nombres del primero" : "Nombres",
           firstRef,
         )}
-        {nameField("memberOneLastName", "Apellidos")}
+        {nameField(
+          "memberOneLastName",
+          pair ? "Apellidos del primero" : "Apellidos",
+        )}
       </div>
       {pair && (
         <div className="flex flex-col gap-2 sm:flex-row">
           {nameField("memberTwoFirstName", "Nombres del segundo")}
-          {nameField("memberTwoLastName", "Apellidos")}
+          {nameField("memberTwoLastName", "Apellidos del segundo")}
         </div>
       )}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div
           role="radiogroup"
           aria-label="Curso"
+          aria-invalid={Boolean(errors.grade)}
           className="flex flex-wrap gap-1.5"
         >
           {grades.map((grade) => {
@@ -940,23 +977,9 @@ function StudentsTab({
           </p>
         ) : (
           <ul className="divide-y border-y">
-            {results.teams.map((team, index) =>
-              editingId === team.id ? (
-                <li
-                  key={`${team.id}-editar`}
-                  className="py-3 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
-                >
-                  <StudentForm
-                    compact
-                    grades={grades}
-                    allowPairs={team.participationMode === "pareja"}
-                    initial={toValues(team)}
-                    submitLabel="Guardar"
-                    onSubmit={save(team.id)}
-                    onCancel={() => setEditingId(null)}
-                  />
-                </li>
-              ) : (
+            {results.teams.map((team, index) => {
+              const editing = editingId === team.id;
+              return (
                 <li
                   key={team.id}
                   style={
@@ -966,72 +989,90 @@ function StudentsTab({
                   }
                   className={cn(
                     initialIds.has(team.id) ? enter : "row-flash",
-                    "flex flex-wrap items-center gap-x-4 gap-y-1 py-3",
+                    "flex flex-col",
                   )}
                 >
-                  <div className="flex min-w-0 flex-1 basis-56 flex-col">
-                    <span className="font-medium break-words">
-                      {teamName(team)}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      {gradeLabel(team.grade)}
-                      {progressLabel(team) && (
-                        <>
-                          {" · "}
-                          <span
-                            className={cn(
-                              team.progress === "in_progress" &&
-                                "font-medium text-primary",
-                              team.progress === "finished" &&
-                                "font-medium text-foreground",
-                            )}
-                          >
-                            {progressLabel(team)}
-                          </span>
-                        </>
-                      )}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    title="Copiar código personal"
-                    aria-label={`Copiar el código de ${teamName(team)}`}
-                    onClick={() =>
-                      copy(
-                        team.personalCode,
-                        `Código de ${team.memberOneFirstName} copiado.`,
-                      )
-                    }
-                    className="group/code flex items-center gap-1.5 px-1.5 py-1 font-mono text-lg font-bold tracking-[0.15em] text-foreground transition-colors hover:bg-muted"
-                  >
-                    {team.personalCode}
-                    <CopyIcon className="size-3.5 text-muted-foreground group-hover/code:text-foreground" />
-                  </button>
-                  <div className="flex gap-1">
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant="ghost"
-                      aria-label={`Editar a ${teamName(team)}`}
-                      onClick={() => setEditingId(team.id)}
-                    >
-                      <PencilIcon />
-                    </Button>
-                    {registrationOpen && team.progress === "not_started" && (
-                      <Button
+                  <Unfold open={!editing}>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 py-3">
+                      <div className="flex min-w-0 flex-1 basis-56 flex-col">
+                        <span className="font-medium break-words">
+                          {teamName(team)}
+                        </span>
+                        <span className="text-sm text-muted-foreground">
+                          {gradeLabel(team.grade)}
+                          {progressLabel(team) && (
+                            <>
+                              {" · "}
+                              <span
+                                className={cn(
+                                  team.progress === "in_progress" &&
+                                    "font-medium text-primary",
+                                  team.progress === "finished" &&
+                                    "font-medium text-foreground",
+                                )}
+                              >
+                                {progressLabel(team)}
+                              </span>
+                            </>
+                          )}
+                        </span>
+                      </div>
+                      <button
                         type="button"
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label={`Quitar a ${teamName(team)}`}
-                        onClick={() => setRemoving(team)}
+                        title="Copiar código personal"
+                        aria-label={`Copiar el código de ${teamName(team)}`}
+                        onClick={() =>
+                          copy(
+                            team.personalCode,
+                            `Código de ${team.memberOneFirstName} copiado.`,
+                          )
+                        }
+                        className="group/code flex items-center gap-1.5 px-1.5 py-1 font-mono text-lg font-bold tracking-[0.15em] text-foreground transition-colors hover:bg-muted"
                       >
-                        <XIcon />
-                      </Button>
-                    )}
-                  </div>
+                        {team.personalCode}
+                        <CopyIcon className="size-3.5 text-muted-foreground group-hover/code:text-foreground" />
+                      </button>
+                      <div className="flex gap-1">
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label={`Editar a ${teamName(team)}`}
+                          onClick={() => setEditingId(team.id)}
+                        >
+                          <PencilIcon />
+                        </Button>
+                        {registrationOpen &&
+                          team.progress === "not_started" && (
+                            <Button
+                              type="button"
+                              size="icon-sm"
+                              variant="ghost"
+                              aria-label={`Quitar a ${teamName(team)}`}
+                              onClick={() => setRemoving(team)}
+                            >
+                              <XIcon />
+                            </Button>
+                          )}
+                      </div>
+                    </div>
+                  </Unfold>
+                  <Unfold open={editing}>
+                    <div className="py-3">
+                      <StudentForm
+                        compact
+                        grades={grades}
+                        allowPairs={team.participationMode === "pareja"}
+                        initial={toValues(team)}
+                        submitLabel="Guardar"
+                        onSubmit={save(team.id)}
+                        onCancel={() => setEditingId(null)}
+                      />
+                    </div>
+                  </Unfold>
                 </li>
-              ),
-            )}
+              );
+            })}
           </ul>
         )}
       </section>
@@ -1102,48 +1143,23 @@ const ANSWER_LABELS = {
   blank: "sin responder",
 } as const;
 
-function downloadCsv(results: GroupResults, rows: GroupResultTeam[]) {
-  const header = [
-    "Estudiante",
-    "Curso",
-    "Categoría",
-    "Estado",
-    "Puntaje",
-    "Correctas",
-    "Respondidas",
-    "Lugar",
-  ];
-  const status = {
-    not_started: "No empezó",
-    in_progress: "Rindiendo",
-    finished: "Terminó",
-  };
-  const lines = rows.map((team) => [
-    teamName(team),
-    gradeLabel(team.grade),
-    team.category ?? "",
-    status[team.progress],
-    team.score ?? "",
-    team.correctCount ?? "",
-    team.answeredCount,
-    team.rank ?? "",
-  ]);
-  const csv = [header, ...lines]
-    .map((line) =>
-      line.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(","),
-    )
-    .join("\n");
-  const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `resultados-${results.group.name}.csv`;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-}
-
 function ResultsTab({ results }: { results: GroupResults }) {
   const { teams, contest, showScores } = results;
   const [category, setCategory] = useState(results.categories[0] ?? "");
+  const [downloading, setDownloading] = useState(false);
+
+  const download = () => {
+    setDownloading(true);
+    downloadGroupResults(results.group.id, results.group.name)
+      .catch((error: unknown) =>
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "No se pudieron descargar los resultados.",
+        ),
+      )
+      .finally(() => setDownloading(false));
+  };
   const state = contest.state;
   const live = LIVE_STATES.includes(state);
   const ended = ENDED_STATES.includes(state);
@@ -1250,10 +1266,11 @@ function ResultsTab({ results }: { results: GroupResults }) {
             type="button"
             size="sm"
             variant="outline"
-            onClick={() => downloadCsv(results, rows)}
+            disabled={downloading}
+            onClick={download}
           >
             <DownloadIcon data-icon="inline-start" />
-            Descargar
+            {downloading ? "Descargando…" : "Descargar Excel"}
           </Button>
         </div>
         <ol className="divide-y border-y">

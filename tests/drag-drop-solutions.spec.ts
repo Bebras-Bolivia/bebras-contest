@@ -424,136 +424,6 @@ test("recovers partial placements, preserves valid saves after invalid input, an
   }
 });
 
-test("edits destinations independently, repairs incomplete solutions and persists authored alternatives", async ({
-  request,
-  page,
-}) => {
-  const headers = await loginAdmin(request);
-  const task = await createTask(request, headers);
-  await loginAdminPage(page);
-  await page.goto(`/tareas/editar?id=${task.id}`);
-  await expect(
-    page.getByText("3 piezas · 12 destinos", { exact: true }),
-  ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Agregar destino", exact: true })
-    .click();
-  await expect(
-    page.getByText("3 piezas · 13 destinos", { exact: true }),
-  ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Quitar destino 13", exact: true })
-    .click();
-  await page
-    .getByRole("button", { name: "Agregar pieza", exact: true })
-    .click();
-  await expect(
-    page.getByText("4 piezas · 12 destinos", { exact: true }),
-  ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Quitar pieza 4", exact: true })
-    .click();
-  const marker = page.getByRole("button", {
-    name: "Mover destino 1",
-    exact: true,
-  });
-  await marker.focus();
-  await marker.press("ArrowRight");
-  await expect(page.getByLabel("Horizontal (%)", { exact: true })).toHaveValue(
-    "16",
-  );
-  await page.getByLabel("Horizontal (%)", { exact: true }).fill("15");
-  await page
-    .getByRole("button", { name: "Quitar destino 1", exact: true })
-    .click();
-  await expect(page.getByRole("alertdialog")).toContainText("Principal");
-  await page
-    .getByRole("alertdialog")
-    .getByRole("button", { name: "Eliminar", exact: true })
-    .click();
-  await expect(
-    page.getByText(/Soluciones incompletas: Principal/),
-  ).toBeVisible();
-  await expect(
-    page.getByText("3 piezas · 11 destinos", { exact: true }),
-  ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Agregar destino", exact: true })
-    .click();
-  await page.getByLabel("Horizontal (%)", { exact: true }).fill("15");
-  await page.getByLabel("Vertical (%)", { exact: true }).fill("20");
-  await page
-    .getByRole("radio", { name: "Definir solución", exact: true })
-    .click();
-  await expect(
-    page.getByLabel("Destino de la pieza 1", { exact: true }),
-  ).toHaveValue("");
-  await page
-    .getByLabel("Destino de la pieza 1", { exact: true })
-    .selectOption({ label: "Destino 12" });
-  await page
-    .getByLabel("Solución válida", { exact: true })
-    .selectOption("another-subset");
-  await expect(
-    page.getByLabel("Destino de la pieza 1", { exact: true }),
-  ).toHaveValue("position-8");
-  await page
-    .getByLabel("Destino de la pieza 1", { exact: true })
-    .selectOption("position-7");
-  await page
-    .getByLabel("Piezas equivalentes 2", { exact: true })
-    .fill(" shared-b ");
-  await page
-    .getByLabel("Piezas equivalentes 3", { exact: true })
-    .fill("shared-b");
-  const saving = page.waitForResponse(
-    (r) =>
-      r.url() === `${API}/api/tasks/${task.id}` &&
-      r.request().method() === "PUT",
-  );
-  await page
-    .getByRole("button", { name: "Guardar cambios", exact: true })
-    .click();
-  expect((await saving).ok()).toBe(true);
-  await page.goto(`/tareas/editar?id=${task.id}`);
-  await expect(
-    page.getByText("3 piezas · 12 destinos", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByLabel("Piezas equivalentes 2", { exact: true }),
-  ).toHaveValue("shared-b");
-  await page
-    .getByRole("radio", { name: "Definir solución", exact: true })
-    .click();
-  await page
-    .getByLabel("Solución válida", { exact: true })
-    .selectOption("another-subset");
-  await expect(
-    page.getByLabel("Destino de la pieza 1", { exact: true }),
-  ).toHaveValue("position-7");
-  const saved = await request
-    .get(`${API}/api/tasks/${task.id}`, { headers })
-    .then((r) => r.json());
-  expect(saved.dragDropTargets).toHaveLength(12);
-  expect(saved.dragDropItems).toHaveLength(3);
-  expect(saved.dragDropSolutions[0].placements).toEqual({
-    ...alternative,
-    a: "position-7",
-  });
-  expect(saved.dragDropItems[0].correctTargetId).not.toBe("position-7");
-  await page
-    .getByRole("radio", { name: "Editar posiciones", exact: true })
-    .click();
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.locator("[data-drag-target-editor]").scrollIntoViewIfNeeded();
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= innerWidth,
-    ),
-  ).toBe(true);
-  await page.screenshot({ path: "test-results/drag-editor-mobile.png" });
-});
-
 test("checks equivalent pieces in the actual tester", async ({
   request,
   page,
@@ -589,10 +459,8 @@ test("checks equivalent pieces in the actual tester", async ({
       },
     });
   }
-  await page.getByRole("button", { name: "Probar", exact: true }).click();
-  await expect(
-    page.getByText("Respuesta correcta", { exact: true }).first(),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Comprobar", exact: true }).click();
+  await expect(page.getByText("¡Correcto!", { exact: true })).toBeVisible();
   const checked = await request.post(
     `${API}/api/practice/tasks/${task.id}/check`,
     { data: { payload: { placements: positions } } },

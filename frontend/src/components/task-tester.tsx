@@ -171,6 +171,13 @@ export function TaskTester() {
     }
   };
 
+  // Con un borrador se vuelve a ese borrador, no a lo guardado.
+  const editHref =
+    backHref ??
+    (selectedTask && draft === null
+      ? `/tareas/editar?id=${encodeURIComponent(selectedTask.id)}`
+      : null);
+
   const exitButton = (
     <Button
       asChild
@@ -235,12 +242,6 @@ export function TaskTester() {
                 difficultyStyles[
                   (selectedTask.difficulties[category.ageRange] ?? "").trim()
                 ];
-              // Con un borrador se vuelve a ese borrador, no a lo guardado.
-              const editor =
-                backHref ??
-                (draft === null
-                  ? `/tareas/editar?id=${encodeURIComponent(selectedTask.id)}`
-                  : null);
               return (
                 <Badge
                   key={category.name}
@@ -254,8 +255,8 @@ export function TaskTester() {
                 >
                   <a
                     href={
-                      editor
-                        ? `${editor}#${difficultyAnchor(category.ageRange)}`
+                      editHref
+                        ? `${editHref}#${difficultyAnchor(category.ageRange)}`
                         : undefined
                     }
                     aria-label={`${category.name}: ${level?.label ?? "sin dificultad"}. Cambiar en el editor.`}
@@ -284,18 +285,16 @@ export function TaskTester() {
             />
           )}
 
-          <div className="flex flex-col gap-4 border-t pt-5 md:flex-row md:items-center md:justify-between">
-            {backHref ? (
-              <Button asChild type="button" variant="ghost">
-                <a href={backHref}>
-                  <PencilIcon data-icon="inline-start" />
-                  Volver a la edición
-                </a>
-              </Button>
-            ) : (
-              <span />
-            )}
-            <div className="flex shrink-0 flex-wrap items-center gap-3 md:flex-nowrap">
+          <div className="flex justify-end border-t pt-5">
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 md:flex-nowrap">
+              {editHref && (
+                <Button asChild type="button" variant="outline">
+                  <a href={editHref}>
+                    <PencilIcon data-icon="inline-start" />
+                    Editar
+                  </a>
+                </Button>
+              )}
               <Button type="button" variant="outline" onClick={handleReset}>
                 <RotateCcwIcon data-icon="inline-start" />
                 Reiniciar

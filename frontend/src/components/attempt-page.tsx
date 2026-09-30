@@ -47,6 +47,7 @@ import {
   type AttemptState,
   type PlayTask,
 } from "@/lib/play-api";
+import { ApiError } from "@/lib/api-client";
 import { getContestPreview, scoreContestPreview } from "@/lib/contests-api";
 import { cn } from "@/lib/utils";
 
@@ -76,6 +77,14 @@ function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Errores que no se arreglan reintentando: la sesión o el intento cambiaron. */
+function isPlayStateError(error: unknown) {
+  return (
+    error instanceof ApiError &&
+    (error.status === 401 || error.status === 404 || error.status === 409)
+  );
+}
+
 async function saveAnswerWithRetry(
   taskId: string,
   payload: unknown,
@@ -94,6 +103,9 @@ async function saveAnswerWithRetry(
       return;
     } catch (error) {
       lastError = error;
+      if (isPlayStateError(error)) {
+        break;
+      }
       const retryDelay = SAVE_RETRY_DELAYS[attempt];
       if (retryDelay === undefined) {
         break;
@@ -144,6 +156,11 @@ export function AttemptPage({
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  // Diferencia entre el reloj del servidor y el del equipo: la cuenta
+  // regresiva no puede depender de una computadora con la hora mal puesta.
+  const [clockOffset, setClockOffset] = useState(0);
+  const [unsaved, setUnsaved] = useState(false);
+  const failedSaves = useRef(new Set<string>());
   const [currentIndex, setCurrentIndex] = useState(0);
 
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -151,6 +168,13 @@ export function AttemptPage({
   const answersRef = useRef<Record<string, unknown>>({});
   const submittedRef = useRef(false);
   const automaticFinishAttemptedRef = useRef(false);
+
+  const syncClock = useCallback((serverNow?: string) => {
+    const offset = serverNow ? new Date(serverNow).getTime() - Date.now() : NaN;
+    if (Number.isFinite(offset)) {
+      setClockOffset(offset);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     if (!sessionToken) {
@@ -165,6 +189,7 @@ export function AttemptPage({
           )) as AttemptState)
         : await getAttempt();
       setAttempt(data);
+      syncClock(data.serverNow);
       answersRef.current = data.answers ?? {};
       setAnswers(answersRef.current);
     } catch (error) {
@@ -180,7 +205,7 @@ export function AttemptPage({
     } finally {
       setLoading(false);
     }
-  }, [sessionToken, previewContestId, previewCategory]);
+  }, [sessionToken, previewContestId, previewCategory, syncClock]);
 
   useEffect(() => {
     void load();
@@ -206,7 +231,8 @@ export function AttemptPage({
   const contestEndsAtMs = attempt?.contestEndsAt
     ? new Date(attempt.contestEndsAt).getTime()
     : 0;
-  const startsIn = contestStartsAtMs - now;
+  const serverTime = now + clockOffset;
+  const startsIn = contestStartsAtMs - serverTime;
   const scheduledStartReached =
     waitingForStart && contestStartsAtMs > 0 && startsIn <= 0;
   const suspendedAtMs = attempt?.suspendedAt
@@ -214,8 +240,8 @@ export function AttemptPage({
     : 0;
   const endsAtMs = attempt?.endsAt ? new Date(attempt.endsAt).getTime() : 0;
   const remaining =
-    endsAtMs - (suspended && suspendedAtMs ? suspendedAtMs : now);
-  const availableStartTime = contestEndsAtMs - now;
+    endsAtMs - (suspended && suspendedAtMs ? suspendedAtMs : serverTime);
+  const availableStartTime = contestEndsAtMs - serverTime;
   const startsWithReducedTime = Boolean(
     !preview &&
     attempt?.status === "pending" &&
@@ -253,11 +279,45 @@ export function AttemptPage({
     return () => window.removeEventListener("beforeunload", confirmExit);
   }, [attemptActive, preview]);
 
+  /**
+   * Un error de sesión o de estado (otra sesión, pausa, plazo vencido) se
+   * resuelve recargando el intento; nunca se deja al estudiante respondiendo
+   * sin que se guarde. Devuelve si el error era de ese tipo.
+   */
+  const handlePlayError = (error: unknown) => {
+    if (!(error instanceof ApiError)) {
+      return false;
+    }
+    if (error.status === 401) {
+      forgetPlaySession();
+      setSessionLost(true);
+      return true;
+    }
+    if (error.status === 404 || error.status === 409) {
+      void load();
+      return true;
+    }
+    return false;
+  };
+
   const queueSave = (taskId: string, payload: unknown) => {
     const previousSave = saveQueues.current[taskId] ?? Promise.resolve();
     const nextSave = previousSave
       .catch(() => undefined)
-      .then(() => saveAnswerWithRetry(taskId, payload, preview));
+      .then(() => saveAnswerWithRetry(taskId, payload, preview))
+      .then(
+        () => {
+          failedSaves.current.delete(taskId);
+          setUnsaved(failedSaves.current.size > 0);
+        },
+        (error: unknown) => {
+          if (!handlePlayError(error)) {
+            failedSaves.current.add(taskId);
+            setUnsaved(true);
+          }
+          throw error;
+        },
+      );
 
     saveQueues.current[taskId] = nextSave;
     return nextSave;
@@ -345,15 +405,23 @@ export function AttemptPage({
         await submitAttempt();
         await load();
       }
-    } catch {
+    } catch (error) {
       submittedRef.current = false;
-      toast.error(
-        "No pudimos entregar el desafío. Revisa la conexión e inténtalo nuevamente.",
-      );
+      if (!handlePlayError(error)) {
+        toast.error(
+          "No pudimos entregar el desafío. Revisa la conexión e inténtalo nuevamente.",
+        );
+      }
     } finally {
       setSubmitting(false);
     }
   });
+
+  // Si el plazo cambió (se reanudó una pausa), la entrega automática vuelve
+  // a estar disponible para el plazo nuevo.
+  useEffect(() => {
+    automaticFinishAttemptedRef.current = false;
+  }, [attempt?.endsAt]);
 
   useEffect(() => {
     if (
@@ -370,34 +438,70 @@ export function AttemptPage({
     }
   }, [remaining, attempt?.status, endsAtMs, suspended]);
 
+  // Mientras se espera el inicio, se consulta poco y con un desfase al azar:
+  // con cientos de estudiantes esperando, consultar cada pocos segundos o
+  // todos en el mismo segundo satura la base. Las pausas las avisa el latido.
   useEffect(() => {
-    if ((!waitingForStart && !suspended) || preview || sessionLost) {
+    if (!waitingForStart || preview || sessionLost) {
       return;
     }
 
-    if (scheduledStartReached) {
-      void load();
-    }
+    const jitter = (ms: number) => Math.random() * ms;
+    const toStart = contestStartsAtMs
+      ? contestStartsAtMs - (Date.now() + clockOffset)
+      : Number.POSITIVE_INFINITY;
+    const delay = !contestStartsAtMs
+      ? 60_000 + jitter(15_000)
+      : toStart > 90_000
+        ? Math.min(toStart - 60_000, 5 * 60_000) + jitter(10_000)
+        : toStart > 0
+          ? toStart + 500 + jitter(5_000)
+          : 10_000 + jitter(5_000);
 
-    const id = window.setInterval(() => void load(), 5000);
-    return () => clearInterval(id);
+    const id = window.setTimeout(() => void load(), delay);
+    return () => clearTimeout(id);
   }, [
     waitingForStart,
-    suspended,
+    contestStartsAtMs,
+    clockOffset,
+    attempt,
     preview,
     sessionLost,
-    scheduledStartReached,
     load,
   ]);
+
+  // El latido además avisa si el desafío se pausó, si cambió el plazo o si
+  // el intento se cerró, y reintenta lo que no se pudo guardar.
+  const beat = useEffectEvent(async () => {
+    try {
+      const state = await sendPlayHeartbeat();
+      syncClock(state.serverNow);
+      if (
+        attempt &&
+        (state.suspended !== (attempt.state === "suspendida") ||
+          state.status !== attempt.status ||
+          (state.endsAt ?? null) !== (attempt.endsAt ?? null))
+      ) {
+        void load();
+      }
+      for (const taskId of failedSaves.current) {
+        if (taskId in answersRef.current) {
+          void queueSave(taskId, answersRef.current[taskId]).catch(
+            () => undefined,
+          );
+        }
+      }
+    } catch (error) {
+      handlePlayError(error);
+    }
+  });
 
   useEffect(() => {
     if (!sessionToken || sessionLost || preview) {
       return;
     }
 
-    const id = setInterval(() => {
-      void sendPlayHeartbeat().catch(() => undefined);
-    }, 10000);
+    const id = setInterval(() => void beat(), 10000);
     return () => clearInterval(id);
   }, [sessionToken, sessionLost, preview]);
 
@@ -456,11 +560,13 @@ export function AttemptPage({
       await submitAttempt();
       await load();
       toast.success("Entregaste el desafío.");
-    } catch {
+    } catch (error) {
       submittedRef.current = false;
-      toast.error(
-        "No pudimos entregar el desafío. Revisa la conexión e inténtalo nuevamente.",
-      );
+      if (!handlePlayError(error)) {
+        toast.error(
+          "No pudimos entregar el desafío. Revisa la conexión e inténtalo nuevamente.",
+        );
+      }
     } finally {
       setSubmitting(false);
     }
@@ -775,6 +881,13 @@ export function AttemptPage({
           </SubmitAttemptDialog>
         </div>
       </div>
+
+      {unsaved && !suspended && (
+        <p role="status" className="text-sm font-medium text-destructive">
+          Hay respuestas sin guardar. Revisa tu conexión: se guardan solas
+          apenas vuelva.
+        </p>
+      )}
 
       {suspended && (
         <Alert>

@@ -82,7 +82,7 @@ export function ContestIntro({
   onStart: () => void;
   onLeave?: () => void;
 }) {
-  const taskCount = attempt.tasks.length;
+  const taskCount = attempt.taskCount ?? attempt.tasks.length;
   // Unos segundos obligados en las reglas antes de poder empezar.
   const [readingLeft, setReadingLeft] = useState(READING_SECONDS);
 

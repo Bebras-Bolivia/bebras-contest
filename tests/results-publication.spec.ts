@@ -14,7 +14,7 @@ import {
 
 test.afterEach(async ({ request }) => resetE2EClock(request));
 
-test("results appear only after consolidating and publishing", async ({
+test("results are released when the contest closes and can be hidden and republished", async ({
   page,
 }) => {
   const api = await request.newContext();
@@ -97,70 +97,35 @@ test("results appear only after consolidating and publishing", async ({
   expect(consolidatedContest.state).toBe("consolidada");
   expect(consolidatedContest.closedAttempts).toBe(1);
 
+  // Consultar los resultados ya cerrados los publica solos (una sola vez).
   const adminResults = await api
     .get(`${API}/api/contests/${contest.id}/results`, { headers })
     .then((r) => r.json());
-  expect(adminResults.state).toBe("consolidada");
+  expect(adminResults.state).toBe("publicada");
   const expiredResult = adminResults.rows.find(
     (row: { elapsedSeconds: number | null }) => row.elapsedSeconds === 60,
   );
   expect(expiredResult?.elapsedSeconds).toBe(60);
 
-  await loginAdminPage(page);
-  await page.goto(`/desafios/resultados?id=${contest.id}`);
-  await expect(page.getByText("Resultados listos", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Publicar resultados" }).click();
-  await page
-    .getByRole("alertdialog")
-    .getByRole("button", { name: "Publicar resultados" })
-    .click();
-  await expect(
-    page.getByRole("button", { name: "Ocultar resultados" }),
-  ).toBeVisible();
-
-  const afterPublish = await api
+  const afterRelease = await api
     .get(`${API}/api/play/attempt`, { headers: studentHeaders })
     .then((r) => r.json());
-  expect(afterPublish.resultsPublished).toBe(true);
-  expect(afterPublish.result).not.toBeNull();
-  expect(afterPublish.result.rankPosition).toBe(1);
-  expect(afterPublish.result.totalScore).toBe(
+  expect(afterRelease.resultsPublished).toBe(true);
+  expect(afterRelease.result.rankPosition).toBe(1);
+  expect(afterRelease.result.totalScore).toBe(
     contest.initialScores[contest.categories[0]] +
       contest.tasks[0].maxScore +
       contest.tasks[1].minScore,
   );
-  expect(afterPublish.result.correctCount).toBe(1);
-  expect(afterPublish.result.answeredCount).toBe(2);
+  expect(afterRelease.result.correctCount).toBe(1);
+  expect(afterRelease.result.answeredCount).toBe(2);
   expect(
-    afterPublish.tasks.map((task: { correct: boolean | null }) => task.correct),
+    afterRelease.tasks.map((task: { correct: boolean | null }) => task.correct),
   ).toEqual([true, false, null]);
 
-  await page.evaluate((sessionToken) => {
-    window.localStorage.setItem("bebras_play_session", sessionToken);
-  }, participant.sessionToken);
-  await page.goto("/rendir");
-  await expect(
-    page.getByText("¡Terminaste!", { exact: true }),
-  ).toBeVisible();
-
-  const expectedStatuses = ["Correcta", "Incorrecta", "Sin responder"];
-  for (const [index, task] of afterPublish.tasks.entries()) {
-    const resultCard = page
-      .getByRole("heading", {
-        name: `${task.position}. ${task.title}`,
-        exact: true,
-      })
-      .locator('xpath=ancestor::*[@data-slot="card"][1]');
-    await expect(
-      resultCard.getByText(expectedStatuses[index], { exact: true }),
-    ).toBeVisible();
-  }
-
+  // El administrador los oculta desde la pantalla de resultados.
+  await loginAdminPage(page);
   await page.goto(`/desafios/resultados?id=${contest.id}`);
-  await expect(
-    page.getByRole("button", { name: "Ocultar resultados" }),
-  ).toBeVisible();
-
   await page.getByRole("button", { name: "Ocultar resultados" }).click();
   await page
     .getByRole("alertdialog")
@@ -175,6 +140,36 @@ test("results appear only after consolidating and publishing", async ({
     .then((r) => r.json());
   expect(afterUnpublish.resultsPublished).toBe(false);
   expect(afterUnpublish.result).toBeNull();
+
+  // Ocultados a mano, no vuelven a publicarse solos.
+  await api.get(`${API}/api/public-contests`);
+  const stillHidden = await api
+    .get(`${API}/api/contests/${contest.id}`, { headers })
+    .then((r) => r.json());
+  expect(stillHidden.state).toBe("consolidada");
+
+  await page.getByRole("button", { name: "Publicar resultados" }).click();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Publicar resultados" })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Ocultar resultados" }),
+  ).toBeVisible();
+
+  // El estudiante ve su resultado y el estado de cada respuesta.
+  await page.evaluate((sessionToken) => {
+    window.localStorage.setItem("bebras_play_session", sessionToken);
+  }, participant.sessionToken);
+  await page.goto("/rendir");
+  await expect(page.getByText("¡Terminaste!", { exact: true })).toBeVisible();
+  const expectedStatuses = ["Correcta", "Incorrecta", "Sin responder"];
+  for (const [index, task] of afterRelease.tasks.entries()) {
+    const row = page.locator("li").filter({ hasText: task.title });
+    await expect(
+      row.getByText(expectedStatuses[index], { exact: true }),
+    ).toBeVisible();
+  }
 
   await api.dispose();
 });

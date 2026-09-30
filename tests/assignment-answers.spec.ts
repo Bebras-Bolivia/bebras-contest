@@ -2,6 +2,7 @@ import {
   expect,
   test,
   type APIRequestContext,
+  type Locator,
   type Page,
 } from "@playwright/test";
 import {
@@ -30,9 +31,15 @@ const payload = (kind: Kind, values: Record<string, string>) => ({
   version: 1,
   [field(kind)]: values,
 });
+/** Nombre accesible de una casilla o un hueco que muestra esa opción. */
+const showing = (label: string) =>
+  new RegExp(
+    `: ${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\. Tocar para quitar)?$`,
+  );
+
 /**
- * La rejilla se resuelve tocando la casilla hasta llegar al estado; el hueco,
- * eligiendo primero la opción en la paleta.
+ * La casilla se toca y se elige su estado en el menú que se abre al lado; el
+ * hueco se toca para marcarlo y se elige la palabra en el banco de abajo.
  */
 async function assignSlot(
   page: Page,
@@ -42,21 +49,31 @@ async function assignSlot(
   tap = false,
 ) {
   const slot = page.locator(`[data-assignment-slot="${slotId}"]`);
-  if (grid) {
-    for (let step = 0; step < 8; step += 1) {
-      const current = (await slot.getAttribute("aria-label")) ?? "";
-      if (current.endsWith(`: ${label}`)) return;
-      await (tap ? slot.tap() : slot.click());
-      await expect(slot).not.toHaveAttribute("aria-label", current);
-    }
-    throw new Error(`La casilla ${slotId} nunca llegó a ${label}.`);
+  const press = (target: Locator) => (tap ? target.tap() : target.click());
+  const current = (await slot.getAttribute("aria-label")) ?? "";
+  if (showing(label).test(current)) {
+    return;
   }
-  const choice = page.getByRole("radio", {
-    name: `Elegir ${label}`,
-    exact: true,
-  });
-  await (tap ? choice.tap() : choice.click());
-  await (tap ? slot.tap() : slot.click());
+  await press(slot);
+  if (grid) {
+    // El menú de la casilla anterior puede seguir cerrándose, y varias
+    // casillas pueden llevar el mismo rótulo: se usa el menú que abrió esta.
+    await expect(slot).toHaveAttribute("aria-expanded", "true");
+    const menu = await slot.getAttribute("aria-controls");
+    await press(
+      page
+        .locator(`[id="${menu}"]`)
+        .getByRole("button", { name: label, exact: true }),
+    );
+  } else {
+    await expect(slot).toHaveAttribute("aria-pressed", "true");
+    await press(
+      page
+        .getByRole("group", { name: "Opciones para los huecos" })
+        .getByRole("button", { name: label, exact: true }),
+    );
+  }
+  await expect(slot).toHaveAttribute("aria-label", showing(label));
 }
 
 function fixture(kind: Kind) {
@@ -254,44 +271,36 @@ for (const kind of kinds) {
       const first = page.locator('[data-assignment-slot="first"]');
       const second = page.locator('[data-assignment-slot="second"]');
       await expect(first).toHaveAccessibleName(/vacío$/);
-      if (kind === "state_grid") {
-        await assignSlot(page, true, "first", "Blanca", width === 390);
-      } else if (width === 390) {
-        await page
-          .getByRole("radio", { name: "Elegir Blanca", exact: true })
-          .tap();
-        await first.tap();
-      } else {
-        const choice = page.getByRole("radio", {
-          name: "Elegir Blanca",
-          exact: true,
-        });
-        const start = await choice.boundingBox();
-        const end = await first.boundingBox();
-        expect(start).not.toBeNull();
-        expect(end).not.toBeNull();
-        await page.mouse.move(
-          start!.x + start!.width / 2,
-          start!.y + start!.height / 2,
-        );
-        await page.mouse.down();
-        await page.mouse.move(
-          end!.x + end!.width / 2,
-          end!.y + end!.height / 2,
-          { steps: 6 },
-        );
-        await page.mouse.up();
-      }
-      await expect(first).toHaveAccessibleName(/Blanca$/);
+      await assignSlot(
+        page,
+        kind === "state_grid",
+        "first",
+        "Blanca",
+        width === 390,
+      );
+      await expect(first).toHaveAccessibleName(showing("Blanca"));
       await first.focus();
       await page.keyboard.press("Delete");
       await expect(first).toHaveAccessibleName(/vacío$/);
-      await page.keyboard.press("ArrowRight");
-      await expect(first).toHaveAccessibleName(/Blanca$/);
-      await second.focus();
-      await page.keyboard.press("ArrowRight");
-      await page.keyboard.press("ArrowRight");
-      await expect(second).toHaveAccessibleName(/Negra$/);
+      if (kind === "state_grid") {
+        // En la rejilla las flechas recorren los estados.
+        await page.keyboard.press("ArrowRight");
+        await expect(first).toHaveAccessibleName(showing("Blanca"));
+        await second.focus();
+        await page.keyboard.press("ArrowRight");
+        await page.keyboard.press("ArrowRight");
+      } else {
+        // Vaciar deja marcado ese hueco; la palabra siguiente pasa sola al
+        // próximo hueco vacío.
+        const bank = page.getByRole("group", {
+          name: "Opciones para los huecos",
+        });
+        await bank.getByRole("button", { name: "Blanca", exact: true }).click();
+        await expect(first).toHaveAccessibleName(showing("Blanca"));
+        await expect(second).toHaveAttribute("aria-pressed", "true");
+        await bank.getByRole("button", { name: "Negra", exact: true }).click();
+      }
+      await expect(second).toHaveAccessibleName(showing("Negra"));
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth,
@@ -322,8 +331,13 @@ for (const kind of kinds) {
     await loginAdminPage(page);
     const authored = await createTask(page.request, headers, kind);
     await page.goto(`/tareas/editar?id=${authored.id}`);
+    // En la rejilla se edita el rótulo de una casilla; en los huecos, la
+    // respuesta del primero.
     const option = page.getByRole("textbox", {
-      name: kind === "state_grid" ? "Estado 1" : "Opción 1",
+      name:
+        kind === "state_grid"
+          ? "Rótulo de la casilla 1"
+          : "Respuesta del hueco 1",
       exact: true,
     });
     await option.fill("Blanca editada");
@@ -332,17 +346,25 @@ for (const kind of kinds) {
         r.url().endsWith(`/api/tasks/${authored.id}`) &&
         r.request().method() === "PUT",
     );
-    await page
-      .getByRole("button", { name: "Guardar cambios", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Guardar", exact: true }).click();
     // Guardar navega a la lista; leer el cuerpo después ya no es posible.
     expect((await saved).status()).toBe(200);
+    await expect(page).toHaveURL(/\/tareas\/?$/);
     await page.goto(`/tareas/editar?id=${authored.id}`);
     await expect(option).toHaveValue("Blanca editada");
     const stored = await page.request
       .get(`${API}/api/tasks/${authored.id}`, { headers })
       .then((r) => r.json());
     expect(stored.answerKey).toEqual(authored.answerKey);
+    if (kind === "state_grid") {
+      expect(stored.answerConfig.cells[0].label).toBe("Blanca editada");
+    } else {
+      expect(
+        stored.answerConfig.options.find(
+          (entry: { id: string }) => entry.id === "white",
+        ).label,
+      ).toBe("Blanca editada");
+    }
     if (kind === "text_cloze") {
       expect(stored.challengeBlocks[0].richText.content[0].attrs.indent).toBe(
         2,

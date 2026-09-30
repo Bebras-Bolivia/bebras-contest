@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ArrowUpRightIcon } from "lucide-react";
 
+import { Expand } from "@/components/reveal";
 import { Button } from "@/components/ui/button";
 import { getSiteSettings } from "@/lib/admin-api";
 import { enter, notice } from "@/lib/surface";
@@ -18,8 +19,14 @@ export function InfoSiteBanner() {
       .catch(() => undefined);
   }, []);
 
-  if (!url) return null;
+  return (
+    <Expand open={Boolean(url)} className="-mt-16">
+      {url && <Banner url={url} />}
+    </Expand>
+  );
+}
 
+function Banner({ url }: { url: string }) {
   return (
     <section
       className={cn(

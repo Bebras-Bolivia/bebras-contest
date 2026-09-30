@@ -3,8 +3,14 @@
 import { useEffect, useState } from "react";
 import { TrophyIcon } from "lucide-react";
 
+import { Expand } from "@/components/reveal";
+import { Skeleton } from "@/components/ui/skeleton";
 import { API_BASE_URL } from "@/lib/api-client";
+import { rememberCount, rememberedCount } from "@/lib/remembered-count";
+import { enter } from "@/lib/surface";
 import { cn } from "@/lib/utils";
+
+const SHOWN_KEY = "portada:ranking";
 
 type RankingRow = {
   rank: number;
@@ -31,6 +37,7 @@ const PODIUM = [
 export function PublicRanking() {
   const [ranking, setRanking] = useState<ContestRanking[] | null>(null);
   const [category, setCategory] = useState<string | null>(null);
+  const [expected] = useState(() => rememberedCount(SHOWN_KEY, 0) > 0);
 
   useEffect(() => {
     void fetch(`${API_BASE_URL}/api/public-ranking`)
@@ -39,12 +46,77 @@ export function PublicRanking() {
           ? (response.json() as Promise<ContestRanking[]>)
           : Promise.reject(new Error("no disponible")),
       )
-      .then(setRanking)
+      .then((data) => {
+        setRanking(data);
+        rememberCount(SHOWN_KEY, data.length > 0 ? 1 : 0);
+      })
       .catch(() => setRanking([]));
   }, []);
 
-  if (!ranking || ranking.length === 0) return null;
+  const open = ranking === null ? expected : ranking.length > 0;
 
+  return (
+    // Cerrado, el margen negativo descuenta el espacio entre secciones de la portada.
+    <Expand open={open} className="-mt-16">
+      {ranking && ranking.length > 0 ? (
+        <RankingBoard
+          ranking={ranking}
+          category={category}
+          onCategory={setCategory}
+        />
+      ) : (
+        <RankingSkeleton />
+      )}
+    </Expand>
+  );
+}
+
+function RankingSkeleton() {
+  return (
+    <div aria-busy className="flex flex-col gap-5">
+      <span className="sr-only">Cargando ranking...</span>
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-7 w-36 rounded-none" />
+        <Skeleton className="h-4 w-56 rounded-none" />
+      </div>
+      <div className="flex gap-1.5">
+        {[16, 12, 18, 14].map((width, index) => (
+          <Skeleton
+            key={index}
+            className="h-8 rounded-none"
+            style={{ width: `${width * 0.25}rem` }}
+          />
+        ))}
+      </div>
+      <div className="flex flex-col divide-y border-y">
+        {[48, 40, 56, 36, 44].map((width, index) => (
+          <div key={index} className="flex items-center gap-3 py-3 sm:gap-4">
+            <Skeleton className="size-9 shrink-0 rounded-none" />
+            <Skeleton className="size-10 shrink-0 rounded-none" />
+            <div className="flex flex-1 flex-col gap-1.5">
+              <Skeleton
+                className="h-4 rounded-none"
+                style={{ width: `${width}%` }}
+              />
+              <Skeleton className="h-3.5 w-1/3 rounded-none" />
+            </div>
+            <Skeleton className="h-6 w-14 shrink-0 rounded-none" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RankingBoard({
+  ranking,
+  category,
+  onCategory,
+}: {
+  ranking: ContestRanking[];
+  category: string | null;
+  onCategory: (category: string) => void;
+}) {
   // Normalmente hay un solo desafío con resultados: se muestra el más reciente.
   const contest = ranking[0];
   const current =
@@ -73,7 +145,7 @@ export function PublicRanking() {
               type="button"
               role="tab"
               aria-selected={item.name === current.name}
-              onClick={() => setCategory(item.name)}
+              onClick={() => onCategory(item.name)}
               className="px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground aria-selected:bg-primary/10 aria-selected:font-medium aria-selected:text-foreground"
             >
               {item.name}
@@ -84,12 +156,16 @@ export function PublicRanking() {
 
       <ol
         key={`${contest.id}-${current.name}`}
-        className="flex animate-in flex-col divide-y border-y duration-300 fade-in"
+        className="flex flex-col divide-y border-y"
       >
         {current.rows.map((row, index) => (
           <li
             key={`${row.rank}-${index}`}
-            className="group/row flex items-center gap-3 py-3 transition-colors hover:bg-muted/40 sm:gap-4"
+            style={{ animationDelay: `${Math.min(index, 9) * 45}ms` }}
+            className={cn(
+              enter,
+              "group/row flex items-center gap-3 py-3 transition-colors hover:bg-muted/40 sm:gap-4",
+            )}
           >
             <span
               className={cn(

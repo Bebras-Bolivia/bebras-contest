@@ -134,7 +134,7 @@ export function collectTaskBlankIds(blocks: unknown): string[] {
     const children: Record<string, string[]> = {
       root: ["doc"],
       doc: ["paragraph", "bulletList", "orderedList"],
-      paragraph: ["text", "hardBreak", "taskBlank"],
+      paragraph: ["text", "hardBreak", "taskBlank", "image"],
       bulletList: ["listItem"],
       orderedList: ["listItem"],
       listItem: ["paragraph", "bulletList", "orderedList"],

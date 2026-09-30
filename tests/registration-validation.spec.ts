@@ -5,6 +5,7 @@ import {
   ADMIN,
   createFirebaseUser,
   loginAdmin,
+  loginPage,
   loginUser,
   registerBebrasProfile,
   registrationFields,
@@ -14,6 +15,22 @@ import {
   VALID_PDF,
   VALID_PNG,
 } from "./support/helpers";
+
+/**
+ * Sin colegio del catálogo (a mano o en casa), el registro pide dónde está:
+ * departamento y ciudad.
+ */
+async function chooseLocation(page: import("@playwright/test").Page) {
+  await page
+    .getByRole("group", { name: "Departamento" })
+    .getByRole("button", { name: "Cochabamba" })
+    .click();
+  await page
+    .getByRole("group", { name: "Ciudad" })
+    .getByRole("button")
+    .first()
+    .click();
+}
 
 async function openRegistration(page: import("@playwright/test").Page) {
   await page.goto("/registro");
@@ -48,7 +65,7 @@ async function expectVerificationStep(
   email?: string,
 ) {
   await expect(
-    page.getByText("Verifica tu correo", { exact: true }),
+    page.getByRole("heading", { name: "Revisa tu correo" }),
   ).toBeVisible();
   if (email) {
     await expect(
@@ -143,6 +160,7 @@ for (const width of [390, 1280]) {
       .getByLabel("Correo", { exact: true })
       .fill(`guard-${width}-${Date.now()}@example.com`);
     await page.getByRole("button", { name: "Enseño en casa" }).click();
+    await chooseLocation(page);
     await page.getByRole("button", { name: "Continuar", exact: true }).click();
     await page
       .getByRole("button", { name: "Confirmar y crear cuenta" })
@@ -253,7 +271,7 @@ for (const width of [390, 1280]) {
         "reg-password-error",
       );
       await expect(password).toHaveValue(value);
-      await expect(confirmationError).toHaveCount(0);
+      await expect(confirmationError).toBeHidden();
     }
     await password.fill("123456");
     await expect(error).toHaveCount(0);
@@ -261,13 +279,13 @@ for (const width of [390, 1280]) {
     await confirmation.fill("12345x");
     await expect(confirmationError).toHaveText("Las contraseñas no coinciden.");
     await confirmation.fill("123456");
-    await expect(confirmationError).toHaveCount(0);
+    await expect(confirmationError).toBeHidden();
     await password.fill("1234567");
     await expect(confirmationError).toHaveText("Las contraseñas no coinciden.");
     await confirmation.fill("");
     await expect(confirmationError).toHaveText("Confirma tu contraseña.");
     await confirmation.fill("1234567");
-    await expect(confirmationError).toHaveCount(0);
+    await expect(confirmationError).toBeHidden();
 
     await password.focus();
     await page.keyboard.press("Tab");
@@ -310,6 +328,7 @@ for (const width of [390, 1280]) {
       `password-ui-${width}-${Date.now()}@example.com`,
     );
     await page.getByRole("button", { name: "Enseño en casa" }).click();
+    await chooseLocation(page);
     await password.fill("a".repeat(73));
     await expect(password).toHaveValue("a".repeat(72));
     await expect(password).toHaveAttribute("maxlength", "72");
@@ -429,6 +448,7 @@ for (const width of [390, 1280]) {
     await page
       .getByRole("button", { name: "Mi colegio no está en la lista" })
       .click();
+    await chooseLocation(page);
     const first = page.getByLabel("Nombres", { exact: true });
     const last = page.getByLabel("Apellidos", { exact: true });
     const school = page.getByPlaceholder("Nombre de tu unidad educativa");
@@ -567,6 +587,7 @@ for (const width of [390, 1280]) {
     await openRegistration(page);
     await fillAccountFields(page, "maestra@example.com");
     await page.getByRole("button", { name: "Enseño en casa" }).click();
+    await chooseLocation(page);
     const email = page.getByLabel("Correo", { exact: true });
     for (const invalid of [
       "maestra@colegio",
@@ -679,6 +700,7 @@ for (const width of [390, 1280]) {
     const email = `phone-ui-${width}-${Date.now()}@example.com`;
     await fillAccountFields(page, email);
     await page.getByRole("button", { name: "Enseño en casa" }).click();
+    await chooseLocation(page);
     const phone = page.getByLabel("Teléfono", { exact: true });
     await page
       .context()
@@ -789,6 +811,7 @@ test("shows field errors and associates an existing email with its input", async
   await page
     .getByRole("button", { name: "Mi colegio no está en la lista" })
     .click();
+  await chooseLocation(page);
   const manualSchool = page.getByLabel("¿Dónde enseñas?", { exact: true });
   await expect(manualSchool).toHaveAttribute("aria-invalid", "true");
   await expect(manualSchool).toHaveAttribute(
@@ -815,64 +838,80 @@ test("shows field errors and associates an existing email with its input", async
   await expectVerificationStep(page);
 });
 
-test("validates each homeschool document and maps backend errors to the file", async ({
+test("validates each homeschool document from the profile and keeps the preview on rejection", async ({
   page,
+  request,
 }) => {
-  await openRegistration(page);
-  await fillAccountFields(page, `casa-ui-${Date.now()}@example.com`);
-  await page.getByRole("button", { name: "Enseño en casa" }).click();
+  // Los documentos ya no se piden al registrarse: se suben desde el perfil.
+  const email = `casa-ui-${Date.now()}@example.com`;
+  const { response } = await registerBebrasProfile(request, {
+    email,
+    institutionType: "homeschool",
+    fields: { schoolName: "Educación en casa" },
+  });
+  expect(response.status(), await response.text()).toBe(201);
 
-  const front = page.getByLabel("Carnet — anverso");
-  const back = page.getByLabel("Carnet — reverso");
+  await loginPage(page, { email, password: "segura123" }, /\/perfil\/?$/);
+  const front = page.locator("#banner-idFront");
+  const back = page.locator("#banner-idBack");
+  await expect(
+    page.getByRole("button", { name: "Subir anverso del carnet" }),
+  ).toBeVisible({ timeout: 15000 });
+  const toast = (text: string) =>
+    page.locator("[data-sonner-toast]").filter({ hasText: text });
+  const review = page.getByRole("dialog", {
+    name: "Revisa el documento antes de continuar",
+  });
 
+  // Tipo y tamaño se revisan antes de mostrar nada.
   await front.setInputFiles({
     name: "carnet.txt",
     mimeType: "text/plain",
     buffer: Buffer.from("documento"),
   });
-  await expect(page.locator("#reg-id-front-error")).toHaveText(
-    "Elige un archivo PDF, JPG, JPEG o PNG.",
-  );
-  await expect(
-    page
-      .locator("[data-sonner-toast]")
-      .filter({ hasText: "Elige un archivo PDF, JPG, JPEG o PNG." }),
-  ).toBeVisible();
-
+  await expect(toast("Elige un archivo PDF, JPG o PNG.")).toBeVisible();
+  await expect(review).toHaveCount(0);
   await front.setInputFiles({
     name: "carnet.jpg",
     mimeType: "image/jpeg",
     buffer: Buffer.alloc(5 * 1024 * 1024 + 1, 0xff),
   });
-  await expect(page.locator("#reg-id-front-error")).toHaveText(
-    "El archivo no debe superar los 5 MB.",
-  );
+  await expect(
+    toast("El documento no debe estar vacío ni pesar más de 5 MB."),
+  ).toBeVisible();
+  await expect(review).toHaveCount(0);
 
+  // Uno bueno: se revisa y se envía.
   await front.setInputFiles(VALID_JPG);
+  await expect(review).toContainText(VALID_JPG.name);
+  await review.getByRole("button", { name: "Sí, enviar documento" }).click();
+  await expect(review).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Subir anverso del carnet" }),
+  ).toHaveCount(0);
+
+  // Un PNG que no es PNG: el servidor lo rechaza y la vista previa queda para
+  // cambiar el archivo.
   await back.setInputFiles({
     name: "reverso.png",
     mimeType: "image/png",
     buffer: Buffer.from("contenido inválido"),
   });
-  await expect(page.locator("#reg-id-front-error")).toHaveCount(0);
-  await expect(page.locator("#reg-id-back-error")).toHaveCount(0);
-  await page.getByRole("button", { name: "Continuar", exact: true }).click();
-  await page.getByRole("button", { name: "Confirmar y crear cuenta" }).click();
-
-  await expect(back).toBeFocused();
-  await expect(back).toHaveAttribute("aria-invalid", "true");
-  await expect(page.locator("#reg-id-back-error")).toContainText(
-    "El contenido del documento no coincide",
-  );
-  await expect(
-    page
-      .locator("[data-sonner-toast]")
-      .filter({ hasText: "El contenido del documento no coincide" }),
-  ).toBeVisible();
-
+  await review.getByRole("button", { name: "Sí, enviar documento" }).click();
+  await expect(toast("El contenido del documento no coincide")).toBeVisible();
+  await expect(review).toBeVisible();
   await back.setInputFiles(VALID_PNG);
-  await expect(page.locator("#reg-id-back-error")).toHaveCount(0);
-  await page.getByRole("button", { name: "Continuar", exact: true }).click();
-  await page.getByRole("button", { name: "Confirmar y crear cuenta" }).click();
-  await expectVerificationStep(page);
+  await expect(review).toContainText(VALID_PNG.name);
+  await review.getByRole("button", { name: "Sí, enviar documento" }).click();
+  await expect(review).toHaveCount(0);
+
+  const session = await loginUser(request, { email, password: "segura123" });
+  const me = await request
+    .get(`${API}/api/auth/me`, { headers: session.headers })
+    .then((r) => r.json());
+  expect(me.documents).toMatchObject({
+    idFront: true,
+    idBack: true,
+    complete: true,
+  });
 });

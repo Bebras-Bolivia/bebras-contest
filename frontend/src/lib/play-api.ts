@@ -53,10 +53,14 @@ export type ContestRules = {
 
 export type AttemptState = {
   contestTitle: string;
+  /** Hora del servidor al responder: la cuenta regresiva no usa el reloj del equipo. */
+  serverNow?: string;
   category?: string | null;
   /** Solo en la vista previa: las categorías que se pueden probar. */
   categories?: string[];
   rules?: ContestRules;
+  /** Cuántas preguntas tiene la prueba; antes de empezar no vienen sus enunciados. */
+  taskCount?: number;
   participationMode?: string;
   /** Código del grupo del equipo; no viene en la vista previa. */
   accessCode?: string;
@@ -161,8 +165,16 @@ export function closePlaySession() {
   return playRequest<null>("/api/play/session/close", { method: "POST" });
 }
 
+export type PlayHeartbeat = {
+  ok: boolean;
+  serverNow: string;
+  suspended: boolean;
+  endsAt: string | null;
+  status: AttemptState["status"] | null;
+};
+
 export function sendPlayHeartbeat() {
-  return playRequest<{ ok: boolean }>("/api/play/heartbeat", {
+  return playRequest<PlayHeartbeat>("/api/play/heartbeat", {
     method: "POST",
   });
 }

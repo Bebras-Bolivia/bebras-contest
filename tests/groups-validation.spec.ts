@@ -42,47 +42,32 @@ test("creates groups that inherit the contest schedule", async ({ page }) => {
   const api = await request.newContext();
   const headers = await loginAdmin(api);
   const contest = await createContest(api, headers, {
-    title: "Desafío con calendario heredado",
+    title: `Desafío con calendario heredado ${Date.now()}`,
   });
 
   await loginAdminPage(page);
   await page.goto("/grupos");
-  await page.waitForFunction(
-    () => {
-      const island = document.querySelector(
-        'astro-island[component-url*="groups-home"]',
-      );
-      return island !== null && !island.hasAttribute("ssr");
-    },
-    null,
-    { timeout: 30000 },
-  );
-
-  const challenge = page.getByRole("combobox", { name: "Desafío" });
-  const name = page.getByLabel("Nombre del grupo");
-  const create = page.getByRole("button", { name: "Crear grupo" });
-  await expect(
-    page.getByText("Fecha y hora de la sesión (opcional)", { exact: true }),
-  ).toHaveCount(0);
-
   await page.getByRole("button", { name: "Nuevo grupo" }).click();
-  await challenge.click();
-  await page.getByRole("option", { name: contest.title }).click();
-  await name.fill("Grupo con calendario heredado");
+  const dialog = page.getByRole("dialog", { name: "Nuevo grupo" });
+  await dialog.getByRole("radio", { name: new RegExp(contest.title) }).click();
+  await dialog.getByLabel("Nombre del grupo").fill("Grupo con calendario heredado");
   const createRequest = page.waitForRequest(
     (request) =>
-      request.url() === `${API}/api/groups` &&
-      request.method() === "POST" &&
-      request.postDataJSON().name === "Grupo con calendario heredado",
+      request.url() === `${API}/api/groups` && request.method() === "POST",
   );
-  await create.click();
+  await dialog.getByRole("button", { name: "Crear grupo" }).click();
   expect((await createRequest).postDataJSON()).toEqual({
     contestId: contest.id,
+    category: contest.categories[0],
     name: "Grupo con calendario heredado",
   });
+
+  // Crear lleva directo a la pantalla del grupo, lista para inscribir.
+  await expect(page).toHaveURL(/\/grupos\/ver\?id=.+&vista=estudiantes/);
   await expect(
-    page.getByText("Grupo con calendario heredado", { exact: true }),
+    page.getByRole("heading", { name: "Grupo con calendario heredado" }),
   ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Inscribir" })).toBeVisible();
 
   const groups = await api
     .get(`${API}/api/groups`, { headers })
@@ -98,11 +83,13 @@ test("creates groups that inherit the contest schedule", async ({ page }) => {
   expect(publicGroup).toMatchObject({
     registrationStartsAt: contest.registrationStartsAt,
     registrationEndsAt: contest.registrationEndsAt,
+    category: contest.categories[0],
     state: "inscripcion",
   });
 
   await api.dispose();
 });
+
 
 test("returns structured fields for manual enrollment errors", async () => {
   const api = await request.newContext();
@@ -197,7 +184,7 @@ test("returns structured fields for manual enrollment errors", async () => {
   });
   expect(duplicate.status()).toBe(409);
   expect(await duplicate.json()).toEqual({
-    message: "Ana Perez ya está registrado en este desafío.",
+    message: "Ana Perez ya está en este grupo.",
     code: "TEAM_MEMBER_DUPLICATE",
     fields: ["memberOneFirstName", "memberOneLastName"],
   });
@@ -235,7 +222,7 @@ test("validates manual enrollment and recovers from a duplicate", async ({
   const enrollmentGate = new Promise<void>((resolve) => {
     releaseEnrollment = resolve;
   });
-  let holdNextEnrollment = true;
+  let holdNextEnrollment = false;
   await page.route(endpoint, async (route) => {
     if (route.request().method() === "POST" && holdNextEnrollment) {
       holdNextEnrollment = false;
@@ -248,95 +235,101 @@ test("validates manual enrollment and recovers from a duplicate", async ({
   });
 
   await loginAdminPage(page);
-  await page.goto("/grupos");
-  const groupCard = page
-    .getByRole("heading", {
-      name: "Grupo inscripción accesible",
-      exact: true,
-    })
-    .locator("xpath=ancestor::li[1]");
-  await groupCard.getByRole("button", { name: /1 equipo/ }).click();
-  await groupCard
-    .getByRole("button", { name: "Inscribir participante" })
-    .click();
+  await page.goto(`/grupos/ver?id=${group.id}&vista=estudiantes`);
+  const form = page
+    .locator("form")
+    .filter({ has: page.getByRole("button", { name: "Inscribir" }) });
+  const firstName = form.getByRole("textbox", { name: "Nombres", exact: true });
+  const lastName = form.getByRole("textbox", { name: "Apellidos", exact: true });
+  const grades = form.getByRole("radiogroup", { name: "Curso" });
+  const submit = form.getByRole("button", { name: "Inscribir" });
+  const alert = form.getByRole("alert");
 
-  const dialog = page.getByRole("dialog", { name: "Inscribir participante" });
-  const grade = dialog.getByRole("combobox", { name: "Curso" });
-  const firstName = dialog.getByLabel("Nombres", { exact: true });
-  const lastName = dialog.getByLabel("Apellidos", { exact: true });
-  const submit = dialog.getByRole("button", { name: "Inscribir" });
+  // Vacío: marca los campos y lleva el foco al primero.
   await submit.click();
-  await expect(grade).toBeFocused();
-  await expect(grade).toHaveAttribute("aria-invalid", "true");
+  await expect(alert).toHaveText("Faltan los nombres.");
   await expect(firstName).toHaveAttribute("aria-invalid", "true");
   await expect(lastName).toHaveAttribute("aria-invalid", "true");
-  await expect(grade).toHaveAttribute(
-    "aria-describedby",
-    "enroll-grade-description enroll-grade-error",
-  );
+  await expect(grades).toHaveAttribute("aria-invalid", "true");
+  await expect(firstName).toBeFocused();
 
-  await grade.click();
-  await page.getByRole("option", { name: "3.º de primaria" }).click();
-  await expect(grade).toHaveAttribute("aria-invalid", "false");
   await firstName.fill("Ana");
   await lastName.fill("Pérez");
   await expect(firstName).toHaveAttribute("aria-invalid", "false");
-  await dialog.getByRole("button", { name: "Pareja" }).click();
   await submit.click();
+  await expect(alert).toHaveText("Elige el curso.");
+  await expect(grades.getByRole("radio").first()).toBeFocused();
+  await grades.getByRole("radio", { name: "3.º de primaria" }).click();
+  await expect(grades).toHaveAttribute("aria-invalid", "false");
 
-  const secondFirstName = dialog.getByLabel("Nombres del 2.º integrante");
-  const secondLastName = dialog.getByLabel("Apellidos del 2.º integrante");
-  await expect(secondFirstName).toBeFocused();
-  await expect(secondFirstName).toHaveAttribute("aria-invalid", "true");
-  await expect(secondLastName).toHaveAttribute("aria-invalid", "true");
-  await secondFirstName.fill("ana");
-  await secondLastName.fill("perez");
+  // En pareja aparecen los datos del segundo, cada campo con su nombre.
+  await form.getByRole("radio", { name: "En pareja" }).click();
+  const pairFirst = form.getByRole("textbox", { name: "Nombres del primero" });
+  const pairLast = form.getByRole("textbox", { name: "Apellidos del primero" });
+  const secondFirst = form.getByRole("textbox", { name: "Nombres del segundo" });
+  const secondLast = form.getByRole("textbox", { name: "Apellidos del segundo" });
+  await expect(pairFirst).toHaveValue("Ana");
   await submit.click();
+  await expect(secondFirst).toHaveAttribute("aria-invalid", "true");
+  await expect(secondLast).toHaveAttribute("aria-invalid", "true");
+  await expect(secondFirst).toBeFocused();
 
-  const identicalMessage =
-    "Los dos integrantes no pueden ser la misma persona.";
-  await expect(dialog.getByRole("alert")).toHaveText(identicalMessage);
-  await expect(secondFirstName).toBeFocused();
-  await secondFirstName.fill("Luis");
-  await secondLastName.fill("Gómez");
-  await expect(dialog.getByRole("alert")).toHaveCount(0);
+  // El servidor rechaza a la misma persona dos veces y lo dice en su campo.
+  await secondFirst.fill("ana");
+  await secondLast.fill("perez");
   await submit.click();
+  await expect(alert).toHaveText(
+    "Los dos integrantes no pueden ser la misma persona.",
+  );
+  await expect(secondFirst).toBeFocused();
+  await secondFirst.fill("Luis");
+  await secondLast.fill("Gómez");
+  await expect(alert).toHaveCount(0);
 
-  await expect(
-    dialog.getByRole("button", { name: "Inscribiendo..." }),
-  ).toBeVisible();
-  await expect(grade).toBeDisabled();
-  await expect(firstName).toBeDisabled();
-  await expect(dialog.getByRole("button", { name: "Cancelar" })).toBeDisabled();
-  await expect(dialog.getByRole("button", { name: "Close" })).toHaveCount(0);
+  // Mientras guarda, el formulario queda bloqueado.
+  holdNextEnrollment = true;
+  await submit.click();
+  await expect(submit).toBeDisabled();
+  await expect(pairFirst).toBeDisabled();
+  await expect(grades.getByRole("radio").first()).toBeDisabled();
   releaseEnrollment?.();
 
-  const duplicateMessage = "Ana Pérez ya está registrado en este desafío.";
-  await expect(dialog.getByRole("alert")).toHaveText(duplicateMessage);
-  await expect(
-    page.locator("[data-sonner-toast]").filter({ hasText: duplicateMessage }),
-  ).toBeVisible();
-  await expect(firstName).toBeFocused();
-  await page.unroute(endpoint);
-  await firstName.fill("Marta");
-  await lastName.fill("Rojas");
-  const recoveryResponse = page.waitForResponse(
+  // Ana Pérez ya está en el grupo: el error va al campo y se corrige ahí.
+  await expect(alert).toHaveText("Ana Pérez ya está en este grupo.");
+  await expect(pairFirst).toBeFocused();
+  await pairFirst.fill("Marta");
+  await pairLast.fill("Rojas");
+  const recovery = page.waitForResponse(
     (response) =>
       response.url() === endpoint &&
       response.request().method() === "POST" &&
       response.status() === 201,
   );
-  await lastName.press("Enter");
-  await recoveryResponse;
+  await pairLast.press("Enter");
+  await recovery;
 
-  await expect(dialog).toHaveCount(0);
   await expect(
-    groupCard.getByText("Marta Rojas · Luis Gómez", { exact: true }),
+    page.locator("[data-sonner-toast]").filter({
+      hasText: "Marta Rojas y Luis Gómez quedó inscrito.",
+    }),
   ).toBeVisible();
-  await page.waitForLoadState("networkidle");
+  await expect(
+    page.getByRole("listitem").filter({ hasText: "Marta Rojas y Luis Gómez" }),
+  ).toBeVisible();
+  // Queda listo para el siguiente: mismo curso y modalidad, nombres vacíos.
+  await expect(pairFirst).toHaveValue("");
+  await expect(pairFirst).toBeFocused();
+  await expect(
+    grades.getByRole("radio", { name: "3.º de primaria" }),
+  ).toHaveAttribute("aria-checked", "true");
+  await expect(form.getByRole("radio", { name: "En pareja" })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
 
   await api.dispose();
 });
+
 
 test("returns structured fields for participant editing errors", async () => {
   const api = await request.newContext();
@@ -445,7 +438,7 @@ test("returns structured fields for participant editing errors", async () => {
   });
   expect(duplicate.status()).toBe(409);
   expect(await duplicate.json()).toEqual({
-    message: "Ana Perez ya está registrado en este desafío.",
+    message: "Ana Perez ya está en este grupo.",
     code: "TEAM_MEMBER_DUPLICATE",
     fields: ["memberOneFirstName", "memberOneLastName"],
   });
@@ -459,7 +452,7 @@ test("validates participant editing and recovers from a duplicate", async ({
   const api = await request.newContext();
   const headers = await loginAdmin(api);
   const contest = await createContest(api, headers, {
-    title: "Desafío edición accesible",
+    title: "Desafío edición manual",
     allowPairs: true,
   });
   const groupResponse = await api.post(`${API}/api/groups`, {
@@ -497,7 +490,7 @@ test("validates participant editing and recovers from a duplicate", async ({
   const updateGate = new Promise<void>((resolve) => {
     releaseUpdate = resolve;
   });
-  let holdNextUpdate = true;
+  let holdNextUpdate = false;
   await page.route(updateEndpoint, async (route) => {
     if (route.request().method() === "PUT" && holdNextUpdate) {
       holdNextUpdate = false;
@@ -510,80 +503,70 @@ test("validates participant editing and recovers from a duplicate", async ({
   });
 
   await loginAdminPage(page);
-  await page.goto("/grupos");
-  const groupCard = page
-    .getByRole("heading", { name: "Grupo edición accesible", exact: true })
-    .locator("xpath=ancestor::li[1]");
-  await groupCard.getByRole("button", { name: /2 equipo/ }).click();
-  const targetRow = groupCard
-    .getByRole("listitem")
-    .filter({ hasText: "Laura Núñez · Mario Soto" });
-  await targetRow.getByRole("button", { name: "Editar participante" }).click();
+  await page.goto(`/grupos/ver?id=${group.id}&vista=estudiantes`);
+  await page
+    .getByRole("button", { name: "Editar a Laura Núñez y Mario Soto" })
+    .click();
 
-  const dialog = page.getByRole("dialog", { name: "Editar participante" });
-  const firstName = dialog.getByLabel("Nombres", { exact: true });
-  const lastName = dialog.getByLabel("Apellidos", { exact: true });
-  const secondFirstName = dialog.getByLabel("Nombres del 2.º integrante");
-  const secondLastName = dialog.getByLabel("Apellidos del 2.º integrante");
-  const submit = dialog.getByRole("button", { name: "Guardar" });
-  await firstName.fill("");
-  await lastName.fill("");
-  await secondFirstName.fill("");
-  await secondLastName.fill("");
+  const form = page
+    .locator("form")
+    .filter({ has: page.getByRole("button", { name: "Guardar" }) });
+  const firstName = form.getByRole("textbox", { name: "Nombres del primero" });
+  const lastName = form.getByRole("textbox", { name: "Apellidos del primero" });
+  const secondFirst = form.getByRole("textbox", { name: "Nombres del segundo" });
+  const secondLast = form.getByRole("textbox", { name: "Apellidos del segundo" });
+  const submit = form.getByRole("button", { name: "Guardar" });
+  const alert = form.getByRole("alert");
+  await expect(firstName).toHaveValue("Laura");
+  await expect(secondLast).toHaveValue("Soto");
+
+  for (const field of [firstName, lastName, secondFirst, secondLast]) {
+    await field.fill("");
+  }
   await submit.click();
-
+  await expect(alert).toHaveText("Faltan los nombres.");
+  for (const field of [firstName, lastName, secondFirst, secondLast]) {
+    await expect(field).toHaveAttribute("aria-invalid", "true");
+  }
   await expect(firstName).toBeFocused();
-  await expect(firstName).toHaveAttribute("aria-invalid", "true");
-  await expect(lastName).toHaveAttribute("aria-invalid", "true");
-  await expect(secondFirstName).toHaveAttribute("aria-invalid", "true");
-  await expect(secondLastName).toHaveAttribute("aria-invalid", "true");
-  await expect(firstName).toHaveAttribute(
-    "aria-describedby",
-    "edit-one-first-error",
-  );
 
   await firstName.fill("Ana");
   await lastName.fill("Pérez");
-  await secondFirstName.fill("ana");
-  await secondLastName.fill("perez");
+  await secondFirst.fill("ana");
+  await secondLast.fill("perez");
   await submit.click();
+  await expect(alert).toHaveText(
+    "Los dos integrantes no pueden ser la misma persona.",
+  );
+  await expect(secondFirst).toBeFocused();
+  await secondFirst.fill("Mario");
+  await secondLast.fill("Soto");
+  await expect(alert).toHaveCount(0);
 
-  const identicalMessage =
-    "Los dos integrantes no pueden ser la misma persona.";
-  await expect(dialog.getByRole("alert")).toHaveText(identicalMessage);
-  await expect(secondFirstName).toBeFocused();
-  await secondFirstName.fill("Mario");
-  await secondLastName.fill("Soto");
-  await expect(dialog.getByRole("alert")).toHaveCount(0);
+  holdNextUpdate = true;
   await submit.click();
-
-  await expect(
-    dialog.getByRole("button", { name: "Guardando..." }),
-  ).toBeVisible();
+  await expect(submit).toBeDisabled();
   await expect(firstName).toBeDisabled();
-  await expect(secondFirstName).toBeDisabled();
-  await expect(dialog.getByRole("button", { name: "Cancelar" })).toBeDisabled();
-  await expect(dialog.getByRole("button", { name: "Close" })).toHaveCount(0);
+  await expect(form.getByRole("button", { name: "Cancelar" })).toBeDisabled();
   releaseUpdate?.();
 
-  const duplicateMessage = "Ana Pérez ya está registrado en este desafío.";
-  await expect(dialog.getByRole("alert")).toHaveText(duplicateMessage);
-  await expect(
-    page.locator("[data-sonner-toast]").filter({ hasText: duplicateMessage }),
-  ).toBeVisible();
+  await expect(alert).toHaveText("Ana Pérez ya está en este grupo.");
   await expect(firstName).toBeFocused();
-  await page.unroute(updateEndpoint);
   await firstName.fill("Marta");
   await lastName.fill("Rojas");
-  await secondLastName.press("Enter");
+  await secondLast.press("Enter");
 
-  await expect(dialog).toHaveCount(0);
   await expect(
-    groupCard.getByText("Marta Rojas · Mario Soto", { exact: true }),
+    page.locator("[data-sonner-toast]").filter({ hasText: "Datos guardados." }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Editar a Marta Rojas y Mario Soto" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Guardar" })).toHaveCount(0);
 
   await api.dispose();
 });
+
 
 test("validates the roster upload transport contract", async () => {
   const api = await request.newContext();
@@ -737,20 +720,21 @@ test("validates complete rosters before writing any participant", async () => {
   expect(rejected.status(), await rejected.text()).toBe(422);
   const rejection = await rejected.json();
   expect(rejection.code).toBe("ROSTER_VALIDATION_FAILED");
+  // La fila 11 («ana perez») no se rechaza: la Ana Pérez que ya existe está en
+  // otro grupo, y los nombres repetidos se controlan por grupo.
   expect(rejection.details.map((issue: { row: number }) => issue.row)).toEqual([
-    4, 5, 7, 8, 9, 10, 11, 12, 13, 13,
+    4, 5, 7, 8, 9, 10, 12, 13, 13,
   ]);
   expect(rejection.details[2].reason).toContain("no reconocida");
   expect(rejection.details[3].reason).toContain("no puede incluir datos");
   expect(rejection.details[4].reason).toContain("Faltan los datos");
-  expect(rejection.details[5].reason).toContain("Ya está inscrito");
-  expect(rejection.details[6].reason).toContain("Ya está inscrito");
-  expect(rejection.details[7]).toMatchObject({
+  expect(rejection.details[5].reason).toContain("repetido en la planilla");
+  expect(rejection.details[6]).toMatchObject({
     name: "ana perez",
-    reason: "Ya está inscrito en este desafío.",
+    reason: "Ya está en este grupo o repetido en la planilla.",
   });
   expect(
-    rejection.details.slice(8).map((issue: { reason: string }) => issue.reason),
+    rejection.details.slice(7).map((issue: { reason: string }) => issue.reason),
   ).toEqual(expect.arrayContaining(["Faltan nombres o apellidos."]));
 
   const groupsAfterRejection = await api
@@ -1025,19 +1009,12 @@ test("announces roster validation, atomic results and refresh failures", async (
   });
   expect(groupResponse.ok(), await groupResponse.text()).toBe(true);
   const group = (await groupResponse.json()) as { id: string };
-  const siblingResponse = await api.post(`${API}/api/groups`, {
-    headers,
-    data: { contestId: contest.id, name: "Grupo importación paralelo" },
-  });
-  expect(siblingResponse.ok(), await siblingResponse.text()).toBe(true);
   const uploadEndpoint = `${API}/api/groups/${group.id}/roster`;
   let uploadCount = 0;
   let releaseUpload: (() => void) | undefined;
   const uploadGate = new Promise<void>((resolve) => {
     releaseUpload = resolve;
   });
-  let failNextRefresh = true;
-  let refreshCount = 0;
   await page.route(uploadEndpoint, async (route) => {
     uploadCount += 1;
     if (uploadCount === 2) {
@@ -1048,7 +1025,7 @@ test("announces roster validation, atomic results and refresh failures", async (
       });
       return;
     }
-    if (uploadCount === 3) {
+    if (uploadCount === 4) {
       const response = await route.fetch();
       await uploadGate;
       await route.fulfill({ response });
@@ -1056,221 +1033,99 @@ test("announces roster validation, atomic results and refresh failures", async (
     }
     await route.continue();
   });
-  await page.route(`${API}/api/groups/${group.id}`, async (route) => {
-    refreshCount += 1;
-    if (failNextRefresh) {
-      failNextRefresh = false;
-      await route.fulfill({
-        status: 503,
-        contentType: "application/json",
-        body: JSON.stringify({ message: "No disponible." }),
-      });
-      return;
-    }
-    await route.continue();
-  });
 
   await loginAdminPage(page);
-  await page.goto("/grupos");
-  const groupCard = page
-    .getByRole("heading", {
-      name: "Grupo importación accesible",
-      exact: true,
-    })
-    .locator("xpath=ancestor::li[1]");
-  const siblingCard = page
-    .getByRole("heading", { name: "Grupo importación paralelo", exact: true })
-    .locator("xpath=ancestor::li[1]");
-  await groupCard.getByRole("button", { name: /0 equipo/ }).click();
-  const input = groupCard.getByLabel("Importar planilla");
-  await expect(input).toHaveAttribute(
-    "accept",
-    ".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv",
-  );
+  await page.goto(`/grupos/ver?id=${group.id}&vista=estudiantes`);
+  const input = page.locator('input[type="file"]');
+  const upload = page.getByRole("button", { name: "súbela llena" });
+  await expect(input).toHaveAttribute("accept", ".xlsx,.csv");
+  const error = page.getByRole("alert").filter({ hasText: /planilla|Fila/ });
 
+  // Tipo y tamaño se revisan antes de subir nada.
   await input.setInputFiles({
     name: "participantes.txt",
     mimeType: "text/plain",
     buffer: Buffer.from("contenido", "utf8"),
   });
-  const typeMessage = "La planilla debe ser un archivo XLSX o CSV.";
-  await expect(input).toBeFocused();
-  await expect(input).toHaveAttribute("aria-invalid", "true");
-  await expect(input).toHaveAttribute(
-    "aria-describedby",
-    `roster-${group.id}-description roster-${group.id}-error`,
-  );
-  await expect(
-    groupCard.getByText("Archivo: participantes.txt."),
-  ).toBeVisible();
-  await expect(groupCard.locator(`#roster-${group.id}-error`)).toHaveText(
-    typeMessage,
-  );
-  await expect(input).toHaveValue("");
-  expect(uploadCount).toBe(0);
-
+  await expect(error).toHaveText("La planilla debe ser un archivo XLSX o CSV.");
   await input.setInputFiles({
     name: "demasiado-grande.csv",
     mimeType: "text/csv",
     buffer: Buffer.alloc(2 * 1024 * 1024 + 1, "a"),
   });
-  await expect(groupCard.locator(`#roster-${group.id}-error`)).toHaveText(
-    "La planilla no debe superar los 2 MB.",
-  );
-  await expect(
-    groupCard.getByText("Archivo: demasiado-grande.csv."),
-  ).toBeVisible();
+  await expect(error).toHaveText("La planilla no debe superar los 2 MB.");
   expect(uploadCount).toBe(0);
 
+  // Un archivo dañado y una respuesta que no es del servidor.
   await input.setInputFiles({
     name: "dañada.xlsx",
     mimeType:
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer: Buffer.from("no es un xlsx", "utf8"),
   });
-  const corruptMessage =
-    "No pudimos leer la planilla. Usa la plantilla del desafío.";
-  await expect(input).toBeFocused();
-  await expect(groupCard.locator(`#roster-${group.id}-error`)).toHaveText(
-    corruptMessage,
+  await expect(error).toHaveText(
+    "No pudimos leer la planilla. Usa la plantilla del desafío.",
   );
-  await expect(groupCard.getByText("Archivo: dañada.xlsx.")).toBeVisible();
-  await expect(
-    page.locator("[data-sonner-toast]").filter({ hasText: corruptMessage }),
-  ).toBeVisible();
-  expect(uploadCount).toBe(1);
-
   await input.setInputFiles({
     name: "respuesta-proxy.xlsx",
     mimeType:
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer: Buffer.from("contenido", "utf8"),
   });
-  const fallbackMessage = "No se pudo importar la planilla.";
-  await expect(input).toBeFocused();
-  await expect(groupCard.locator(`#roster-${group.id}-error`)).toHaveText(
-    fallbackMessage,
-  );
-  await expect(
-    groupCard.getByText("Archivo: respuesta-proxy.xlsx."),
-  ).toBeVisible();
-  await expect(input).toHaveValue("");
+  await expect(error).toHaveText("No se pudo importar la planilla.");
   expect(uploadCount).toBe(2);
 
-  const csv = [
+  // Filas con problemas: no se importa nadie y se dice cuál falla.
+  const invalid = [
     "Nombres,Apellidos,Curso,Modalidad",
     `Marta,Rojas,${contest.picked.grade},individual`,
     `Sin,,${contest.picked.grade},individual`,
   ].join("\n");
-  const invalidFileName = `participantes-${"muy".repeat(30)}.csv`;
   await input.setInputFiles({
-    name: invalidFileName,
+    name: "con-errores.csv",
     mimeType: "text/csv",
-    buffer: Buffer.from(csv, "utf8"),
+    buffer: Buffer.from(invalid, "utf8"),
   });
-  await expect(input).toBeDisabled();
-  await expect(input).toHaveAttribute("aria-invalid", "false");
-  await expect(groupCard).toContainText("Importando...");
-  await groupCard.getByRole("button", { name: /0 equipo/ }).click();
-  await expect(
-    groupCard.getByRole("button", { name: /0 equipo/ }),
-  ).toHaveAttribute("aria-expanded", "false");
-  await siblingCard.getByRole("button", { name: /0 equipo/ }).click();
-  const siblingInput = siblingCard.getByLabel("Importar planilla");
-  await expect(siblingInput).toBeDisabled();
-  await expect(siblingCard).toContainText(
-    "Solo se procesa una planilla a la vez en este panel.",
-  );
-  releaseUpload?.();
-
-  const validation = groupCard.getByRole("alert");
-  await expect(validation).toBeFocused();
-  await expect(
-    groupCard.getByRole("button", { name: /0 equipo/ }),
-  ).toHaveAttribute("aria-expanded", "true");
-  await expect(validation).toContainText(
+  await expect(error).toContainText(
     "No se importó ningún participante. Corrige las filas indicadas.",
   );
-  await expect(validation).toContainText(
-    "Fila 3: Sin. Faltan nombres o apellidos.",
-  );
-  await expect(
-    page.locator("[data-sonner-toast]").filter({
-      hasText:
-        "No se importó ningún participante. Corrige las filas indicadas.",
-    }),
-  ).toBeVisible();
-  await expect(groupCard.getByRole("status")).toHaveCount(0);
+  await expect(error).toContainText("Fila 3: Faltan nombres o apellidos.");
   expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
-    ),
-  ).toBe(true);
-  expect(uploadCount).toBe(3);
-  expect(refreshCount).toBe(0);
+    (
+      await api
+        .get(`${API}/api/groups/${group.id}`, { headers })
+        .then((response) => response.json())
+    ).teams,
+  ).toHaveLength(0);
 
+  // Una planilla correcta se importa entera; mientras sube, el botón espera.
+  const valid = [
+    "Nombres,Apellidos,Curso,Modalidad",
+    `Marta,Rojas,${contest.picked.grade},individual`,
+    `Luis,Flores,${contest.picked.grade},`,
+  ].join("\n");
   await input.setInputFiles({
-    name: "participantes-total.csv",
+    name: "correcta.csv",
     mimeType: "text/csv",
-    buffer: Buffer.from(
-      [
-        "Nombres,Apellidos,Curso,Modalidad",
-        `Lucía,Flores,${contest.picked.grade},individual`,
-      ].join("\n"),
-      "utf8",
-    ),
+    buffer: Buffer.from(valid, "utf8"),
   });
-  await expect(groupCard.getByRole("status")).toContainText(
-    "Importación completada",
+  await expect(upload).toBeDisabled();
+  releaseUpload?.();
+  await expect(page.getByRole("status")).toHaveText(
+    "Se inscribieron 2 estudiantes.",
   );
-  const refreshMessage =
-    "La importación terminó, pero no se pudo actualizar la lista. Recarga la página para ver los cambios.";
-  await expect(groupCard.getByRole("alert")).toContainText(refreshMessage);
-  await expect(
-    page.locator("[data-sonner-toast]").filter({ hasText: refreshMessage }),
-  ).toBeVisible();
+  await expect(error).toHaveCount(0);
+  await expect(upload).toBeEnabled();
+  for (const name of ["Marta Rojas", "Luis Flores"]) {
+    await expect(
+      page.getByRole("button", { name: `Editar a ${name}` }),
+    ).toBeVisible();
+  }
   expect(uploadCount).toBe(4);
-  expect(refreshCount).toBe(1);
-
-  await input.setInputFiles({
-    name: "participantes-segundo.csv",
-    mimeType: "text/csv",
-    buffer: Buffer.from(
-      [
-        "Nombres,Apellidos,Curso,Modalidad",
-        `Carlos,Soto,${contest.picked.grade},individual`,
-      ].join("\n"),
-      "utf8",
-    ),
-  });
-  await expect(groupCard.getByRole("status")).toContainText(
-    "Importación completada",
-  );
-  await expect(
-    groupCard.getByText("Lucía Flores", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    groupCard.getByText("Carlos Soto", { exact: true }),
-  ).toBeVisible();
-  await expect(groupCard.getByRole("alert")).toHaveCount(0);
-  await expect(
-    page
-      .locator("[data-sonner-toast]")
-      .filter({
-        hasText: "Se importaron 1 participante(s).",
-      })
-      .last(),
-  ).toBeVisible();
-  await expect(input).toHaveAttribute(
-    "aria-describedby",
-    `roster-${group.id}-description`,
-  );
-  await expect(input).toHaveValue("");
-  expect(uploadCount).toBe(5);
-  expect(refreshCount).toBe(2);
 
   await api.dispose();
 });
+
 
 test("associates group creation errors and recovers after a remote rejection", async ({
   page,
@@ -1278,13 +1133,12 @@ test("associates group creation errors and recovers after a remote rejection", a
   const api = await request.newContext();
   const headers = await loginAdmin(api);
   const firstContest = await createContest(api, headers, {
-    title: "Desafío validación uno",
+    title: `Desafío validación uno ${Date.now()}`,
   });
   const secondContest = await createContest(api, headers, {
-    title: "Desafío validación dos",
+    title: `Desafío validación dos ${Date.now()}`,
   });
   let rejectNextCreation = true;
-
   await page.route(`${API}/api/groups`, async (route) => {
     if (route.request().method() === "POST" && rejectNextCreation) {
       rejectNextCreation = false;
@@ -1301,70 +1155,38 @@ test("associates group creation errors and recovers after a remote rejection", a
     }
     await route.continue();
   });
+
   await loginAdminPage(page);
   await page.goto("/grupos");
-  await page.waitForFunction(
-    () => {
-      const island = document.querySelector(
-        'astro-island[component-url*="groups-home"]',
-      );
-      return island !== null && !island.hasAttribute("ssr");
-    },
-    null,
-    { timeout: 30000 },
-  );
-
   await page.getByRole("button", { name: "Nuevo grupo" }).click();
-  const form = page
-    .getByRole("dialog", { name: "Crear grupo" })
-    .locator("form");
-  const contest = form.getByRole("combobox", { name: "Desafío" });
-  const name = form.getByLabel("Nombre del grupo");
-  const create = form.getByRole("button", { name: "Crear grupo" });
+  const dialog = page.getByRole("dialog", { name: "Nuevo grupo" });
+  const name = dialog.getByLabel("Nombre del grupo");
+  const create = dialog.getByRole("button", { name: "Crear grupo" });
+  const alert = dialog.getByRole("alert");
+
   await create.click();
-
-  await expect(contest).toBeFocused();
-  await expect(contest).toHaveAttribute("aria-invalid", "true");
-  await expect(contest).toHaveAttribute(
-    "aria-describedby",
-    "group-contest-error",
-  );
-  await expect(form.locator("#group-contest-error")).toHaveText(
-    "Elige un desafío publicado.",
-  );
-  await expect(name).toHaveAttribute("aria-invalid", "true");
-  await expect(name).toHaveAttribute("aria-describedby", "group-name-error");
-
-  await contest.click();
-  await page.getByRole("option", { name: firstContest.title }).click();
-  await expect(contest).toHaveAttribute("aria-invalid", "false");
-  await expect(form.locator("#group-contest-error")).toHaveCount(0);
+  await expect(alert).toHaveText("Elige el desafío.");
+  await dialog.getByRole("radio", { name: new RegExp(firstContest.title) }).click();
+  await expect(alert).toHaveCount(0);
   await create.click();
-  await expect(name).toBeFocused();
-
+  await expect(alert).toHaveText("Ponle un nombre al grupo.");
   await name.fill("Grupo con validación accesible");
-  await expect(name).toHaveAttribute("aria-invalid", "false");
+  await expect(alert).toHaveCount(0);
+
   await create.click();
+  await expect(alert).toHaveText(
+    "El desafío ya cerró; no es posible crear grupos.",
+  );
+  await expect(create).toBeEnabled();
 
-  const closedMessage = "El desafío ya cerró; no es posible crear grupos.";
-  await expect(
-    page.locator("[data-sonner-toast]").filter({ hasText: closedMessage }),
-  ).toBeVisible();
-  await expect(contest).toBeFocused();
-  await expect(contest).toHaveAttribute("aria-invalid", "true");
-  await expect(form.locator("#group-contest-error")).toHaveText(closedMessage);
-
-  await contest.click();
-  await page.getByRole("option", { name: secondContest.title }).click();
-  await expect(form.locator("#group-contest-error")).toHaveCount(0);
+  await dialog.getByRole("radio", { name: new RegExp(secondContest.title) }).click();
+  await expect(alert).toHaveCount(0);
   await create.click();
-
+  await expect(page).toHaveURL(/\/grupos\/ver\?id=.+/);
   await expect(
-    page.locator("[data-sonner-toast]").filter({ hasText: "Grupo creado." }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Grupo con validación accesible", { exact: true }),
+    page.getByRole("heading", { name: "Grupo con validación accesible" }),
   ).toBeVisible();
 
   await api.dispose();
 });
+

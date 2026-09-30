@@ -976,6 +976,66 @@
   outline-offset: 1px;
 }
 
+/* Imagen dentro del texto, como los dibujos del cuadernillo. El margen de
+   arriba y abajo le da aire: las líneas con imágenes se separan un poco más, y
+   todas por igual. */
+.task-inline-image {
+  display: inline-block;
+  height: 1.8em;
+  width: auto;
+  max-width: 100%;
+  margin: 0.3em 0.15em;
+  object-fit: contain;
+  vertical-align: middle;
+}
+
+/* En el editor, la imagen va en un marco con la esquina para cambiar el tamaño. */
+.task-inline-image-view {
+  position: relative;
+  display: inline-block;
+  margin: 0.3em 0.15em;
+  line-height: 0;
+  vertical-align: middle;
+}
+
+.task-inline-image-view > .task-inline-image {
+  margin: 0;
+  vertical-align: top;
+}
+
+.task-inline-image-view.ProseMirror-selectednode {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.task-inline-image-handle {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--background);
+  background: var(--primary);
+  cursor: nwse-resize;
+  opacity: 0;
+  touch-action: none;
+  transition: opacity 150ms ease;
+}
+
+.task-inline-image-view:hover .task-inline-image-handle,
+.task-inline-image-view.ProseMirror-selectednode .task-inline-image-handle {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .task-inline-image-handle {
+    right: -9px;
+    bottom: -9px;
+    width: 18px;
+    height: 18px;
+  }
+}
+
 /* Castor de la portada: entra saltando cada vez que cambia de departamento. */
 @keyframes beaver-pop {
   0% {
@@ -1035,5 +1095,66 @@
   .beaver-name,
   .envelope-bob {
     animation: none;
+  }
+}
+
+/* Portada: lo de arriba entra escalonado al cargar; lo de abajo, al llegar a
+   la vista (`data-reveal`, lo marca un observador en `index.astro`). El
+   retraso de cada bloque va en `--delay`. */
+@keyframes home-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+.home-in {
+  animation: home-in 650ms cubic-bezier(0.22, 1, 0.36, 1) var(--delay, 0ms) both;
+}
+
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 600ms cubic-bezier(0.22, 1, 0.36, 1) var(--delay, 0ms),
+    transform 700ms cubic-bezier(0.22, 1, 0.36, 1) var(--delay, 0ms),
+    border-color 200ms ease;
+}
+
+[data-reveal].is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* Botones grandes de la portada: al presionar se hunden sobre su sombra. */
+.press-hard {
+  transition:
+    transform 150ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 150ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 150ms ease,
+    opacity 150ms ease;
+}
+.press-hard:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 5px 0 0 var(--shadow-color);
+}
+.press-hard:active {
+  transform: translate(3px, 4px);
+  box-shadow: 0 0 0 0 var(--shadow-color);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-in {
+    animation: none;
+  }
+  [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .press-hard,
+  .press-hard:hover,
+  .press-hard:active {
+    transform: none;
   }
 }

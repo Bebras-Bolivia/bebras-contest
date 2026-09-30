@@ -155,7 +155,9 @@ test("tester discards stale checks, clears feedback on changes/reset and retries
     name: "Tu respuesta",
     exact: true,
   });
-  const result = page.locator("main").getByRole("alert");
+  const result = page
+    .getByRole("status")
+    .filter({ hasText: /Correcto|incorrecta/ });
   await input.fill("Bebras");
   let release!: () => void;
   let intercepted!: () => void;
@@ -180,7 +182,7 @@ test("tester discards stale checks, clears feedback on changes/reset and retries
     },
     { times: 1 },
   );
-  await page.getByRole("button", { name: "Probar", exact: true }).click();
+  await page.getByRole("button", { name: "Comprobar", exact: true }).click();
   await started;
   await expect(
     page.getByRole("button", { name: "Comprobando…" }),
@@ -189,8 +191,8 @@ test("tester discards stale checks, clears feedback on changes/reset and retries
   release();
   await finished;
   await expect(result).toHaveCount(0);
-  await page.getByRole("button", { name: "Probar", exact: true }).click();
-  await expect(result.getByText("Incorrecto", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Comprobar", exact: true }).click();
+  await expect(result.getByText("Respuesta incorrecta", { exact: true })).toBeVisible();
   await input.fill("Bebras");
   await expect(result).toHaveCount(0);
   await page.route(
@@ -202,20 +204,20 @@ test("tester discards stale checks, clears feedback on changes/reset and retries
       }),
     { times: 1 },
   );
-  await page.getByRole("button", { name: "Probar", exact: true }).click();
+  await page.getByRole("button", { name: "Comprobar", exact: true }).click();
   await expect(
     page.getByText("Fallo temporal de prueba", { exact: true }),
   ).toBeVisible();
   await expect(result).toHaveCount(0);
-  await page.getByRole("button", { name: "Probar", exact: true }).click();
-  await expect(result.getByText("Correcto", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Comprobar", exact: true }).click();
+  await expect(result.getByText("¡Correcto!", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Reiniciar" }).click();
   await expect(input).toHaveValue("");
   await expect(result).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
   await input.fill("Bebras");
-  await page.getByRole("button", { name: "Probar", exact: true }).click();
-  await expect(result.getByText("Correcto", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Comprobar", exact: true }).click();
+  await expect(result.getByText("¡Correcto!", { exact: true })).toBeVisible();
   await page.screenshot({
     path: "test-results/task-contract-tester-mobile.png",
     fullPage: true,

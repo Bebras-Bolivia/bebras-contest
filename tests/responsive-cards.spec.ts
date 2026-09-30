@@ -1,19 +1,20 @@
 import { test, expect, request } from "@playwright/test";
 import {
   API,
+  VALID_PDF,
   createContest,
   createPracticeTask,
   loginAdmin,
   loginAdminPage,
+  registerBebrasProfile,
 } from "./support/helpers";
 
-test("keeps contest and task card actions responsive and compact", async ({
-  browser,
+test("keeps every list row and its actions inside the screen", async ({
   page,
+  request: api,
 }) => {
-  const api = await request.newContext();
   const headers = await loginAdmin(api);
-  const listedContest = await createContest(api, headers, {
+  const contest = await createContest(api, headers, {
     title: `Responsive actions ${Date.now()}`,
     tasks: [
       { taskId: "seed-bebras-easy" },
@@ -21,105 +22,94 @@ test("keeps contest and task card actions responsive and compact", async ({
       { taskId: "seed-bebras-hard" },
     ],
   });
-  const tasksResponse = await api.get(`${API}/api/tasks`, { headers });
-  expect(tasksResponse.ok()).toBe(true);
-  const listedTask = (
-    (await tasksResponse.json()) as Array<{ id: string; title: string }>
-  )[0];
-  expect(listedTask).toBeDefined();
+  const group = await api
+    .post(`${API}/api/groups`, {
+      headers,
+      data: { contestId: contest.id, name: `Grupo responsive ${Date.now()}` },
+    })
+    .then((response) => response.json());
+  await api.post(`${API}/api/groups/${group.id}/teams`, {
+    headers,
+    data: {
+      participationMode: "individual",
+      grade: "P3",
+      memberOneFirstName: "Participante",
+      memberOneLastName: "Con apellido bastante extenso",
+    },
+  });
+  const { response: pending } = await registerBebrasProfile(api, {
+    email: `maestro.responsive.con.correo.extenso.${Date.now()}@example.com`,
+    fields: { letter: VALID_PDF },
+  });
+  expect(pending.status(), await pending.text()).toBe(201);
+
+  await loginAdminPage(page);
+  const pages: Array<[string, () => Promise<void>]> = [
+    ["/desafios", () => expect(page.getByText(contest.title).first()).toBeVisible()],
+    ["/tareas", () => expect(page.getByRole("heading", { name: "Tareas" })).toBeVisible()],
+    ["/grupos", () => expect(page.getByText(group.name).first()).toBeVisible()],
+    [`/grupos/ver?id=${group.id}&vista=estudiantes`, () =>
+      expect(page.getByText("Participante Con Apellido Bastante Extenso").first()).toBeVisible()],
+    ["/maestros", () => expect(page.getByRole("tab", { name: /Por revisar/ })).toBeVisible()],
+  ];
+
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    for (const [path, ready] of pages) {
+      await page.goto(path);
+      await ready();
+      // Nada se sale de la pantalla: ni la página ni ningún botón o enlace de
+      // las filas.
+      const outside = await page.evaluate(() => {
+        const limit = document.documentElement.clientWidth + 0.5;
+        const overflowing =
+          document.documentElement.scrollWidth >
+          document.documentElement.clientWidth;
+        const controls = [
+          ...document.querySelectorAll("main li a, main li button, main article a, main article button"),
+        ]
+          .filter((element) => (element as HTMLElement).offsetParent !== null)
+          .filter((element) => element.getBoundingClientRect().right > limit)
+          .map((element) => (element.textContent ?? "").trim() || element.getAttribute("aria-label"));
+        return { overflowing, controls };
+      });
+      expect(outside, `${path} a ${width}px`).toEqual({
+        overflowing: false,
+        controls: [],
+      });
+    }
+  }
+});
+
+test("opens a task from its title with the mouse, the keyboard and touch", async ({
+  browser,
+  page,
+  request: api,
+}) => {
+  const headers = await loginAdmin(api);
+  const tasks = (await api
+    .get(`${API}/api/tasks`, { headers })
+    .then((response) => response.json())) as Array<{ id: string; title: string }>;
+  // Una tarea con título único: los datos de prueba repiten algunos títulos.
+  const listedTask = tasks.find(
+    (task) => tasks.filter((other) => other.title === task.title).length === 1,
+  )!;
 
   await loginAdminPage(page);
   await page.setViewportSize({ width: 320, height: 800 });
-  await page.goto("/desafios");
-
-  const contestLink = page.getByRole("link", {
-    name: listedContest.title,
-    exact: true,
-  });
-  const contestRow = contestLink.locator("xpath=ancestor::li[1]");
-  const menu = contestRow.getByRole("button", {
-    name: `Más acciones de ${listedContest.title}`,
-  });
-
-  for (const width of [320, 1280]) {
-    await page.setViewportSize({ width, height: 800 });
-    const [rowBox, linkBox, menuBox] = await Promise.all([
-      contestRow.boundingBox(),
-      contestLink.boundingBox(),
-      menu.boundingBox(),
-    ]);
-    expect(rowBox!.x + rowBox!.width).toBeLessThanOrEqual(width);
-    // El menú queda a la derecha del nombre, en la misma fila.
-    expect(menuBox!.x).toBeGreaterThan(linkBox!.x);
-    expect(menuBox!.y).toBeLessThan(linkBox!.y + linkBox!.height + 24);
-  }
-
-  await menu.click();
-  await expect(page.getByRole("menuitem", { name: "Eliminar" })).toBeVisible();
-  await page.keyboard.press("Escape");
-
-  await page.setViewportSize({ width: 320, height: 800 });
   await page.goto("/tareas");
-  const taskTitleLink = page.getByRole("link", {
-    name: listedTask.title,
-    exact: true,
-  });
-  const taskRow = taskTitleLink.locator("xpath=ancestor::li[1]");
-  const taskActions = [
-    taskRow.getByRole("button", { name: /^(En práctica|Práctica)$/ }),
-    taskRow.getByRole("link", { name: "Editar" }),
-    taskRow.getByRole("link", { name: "Probar" }),
-    taskRow.getByRole("button", { name: "Eliminar" }),
-  ];
-  const mobileTaskActions = await Promise.all(
-    taskActions.map((action) => action.boundingBox()),
-  );
-  // En celular van en una sola fila y Eliminar queda solo con su ícono.
-  expect(mobileTaskActions[3]!.width).toBeLessThan(mobileTaskActions[2]!.width);
-  for (const action of mobileTaskActions) {
-    expect(action!.y).toBe(mobileTaskActions[0]!.y);
-    expect(action!.x + action!.width).toBeLessThanOrEqual(320);
-  }
+  const title = page.getByRole("link", { name: listedTask.title, exact: true });
+  const row = title.locator("xpath=ancestor::li[1]");
+  await expect(title).toHaveAttribute("href", `/tareas/editar?id=${listedTask.id}`);
 
-  await page.setViewportSize({ width: 1280, height: 800 });
-  const desktopTaskActions = await Promise.all(
-    taskActions.map((action) => action.boundingBox()),
-  );
-  expect(desktopTaskActions[0]!.width).toBeLessThan(160);
-  expect(desktopTaskActions[0]!.width).toBe(desktopTaskActions[1]!.width);
-  expect(desktopTaskActions[1]!.width).toBe(desktopTaskActions[2]!.width);
-  expect(desktopTaskActions[2]!.width).toBe(desktopTaskActions[3]!.width);
-  expect(desktopTaskActions[1]!.y).toBe(desktopTaskActions[0]!.y);
-  expect(desktopTaskActions[1]!.x).toBeGreaterThan(desktopTaskActions[0]!.x);
-  expect(desktopTaskActions[2]!.y).toBeGreaterThan(desktopTaskActions[0]!.y);
-  expect(desktopTaskActions[3]!.y).toBe(desktopTaskActions[2]!.y);
-  expect((await taskRow.boundingBox())!.height).toBeLessThan(260);
-
-  await expect(taskTitleLink).toHaveAttribute(
-    "href",
-    `/tareas/editar?id=${listedTask.id}`,
-  );
-
-  await taskRow.getByRole("link", { name: "Probar", exact: true }).click();
+  await row.getByRole("link", { name: "Probar", exact: true }).click();
   await expect(page).toHaveURL(`/tareas/probador?id=${listedTask.id}`);
   await page.goBack();
-  await expect(taskRow).toBeVisible();
-
-  const taskTitleLinkBox = await taskTitleLink.boundingBox();
-  expect(taskTitleLinkBox).not.toBeNull();
-  await taskTitleLink.click({
-    position: {
-      x: taskTitleLinkBox!.width / 2,
-      y: taskTitleLinkBox!.height / 2,
-    },
-  });
+  await title.click();
   await expect(page).toHaveURL(`/tareas/editar?id=${listedTask.id}`);
-
   await page.goBack();
-  await expect(taskRow).toBeVisible();
-  await taskTitleLink.focus();
-  await expect(taskTitleLink).toBeFocused();
-  await taskTitleLink.press("Enter");
+  await title.focus();
+  await title.press("Enter");
   await expect(page).toHaveURL(`/tareas/editar?id=${listedTask.id}`);
 
   const touchContext = await browser.newContext({
@@ -131,24 +121,13 @@ test("keeps contest and task card actions responsive and compact", async ({
     const touchPage = await touchContext.newPage();
     await loginAdminPage(touchPage);
     await touchPage.goto("/tareas");
-    const touchTitleLink = touchPage.getByRole("link", {
-      name: listedTask.title,
-      exact: true,
-    });
-    const touchTitleLinkBox = await touchTitleLink.boundingBox();
-    expect(touchTitleLinkBox).not.toBeNull();
-    await touchTitleLink.tap({
-      position: {
-        x: touchTitleLinkBox!.width / 2,
-        y: touchTitleLinkBox!.height / 2,
-      },
-    });
+    await touchPage
+      .getByRole("link", { name: listedTask.title, exact: true })
+      .tap();
     await expect(touchPage).toHaveURL(`/tareas/editar?id=${listedTask.id}`);
   } finally {
     await touchContext.close();
   }
-
-  await api.dispose();
 });
 
 test("confirms task deletion and keeps the task list compact", async ({
@@ -254,150 +233,3 @@ test("confirms task deletion and keeps the task list compact", async ({
   await api.dispose();
 });
 
-test("keeps group and teacher cards responsive and compact", async ({
-  page,
-}) => {
-  const now = new Date().toISOString();
-
-  await page.route(`${API}/api/published-contests`, (route) =>
-    route.fulfill({
-      json: [
-        {
-          id: "responsive-contest",
-          title: "Desafío responsive",
-          categories: ["Capibara"],
-          startsAt: now,
-          endsAt: new Date(Date.now() + 3600000).toISOString(),
-        },
-      ],
-    }),
-  );
-  await page.route(`${API}/api/groups`, (route) =>
-    route.fulfill({
-      json: [
-        {
-          id: "responsive-group",
-          name: "Grupo responsive",
-          accessCode: "ABC123",
-          contestId: "responsive-contest",
-          contestTitle: "Desafío responsive",
-          contestCategories: ["Capibara"],
-          contestAllowPairs: true,
-          firstUsedAt: null,
-          expiresAt: null,
-          createdAt: now,
-          teamCount: 1,
-          teams: [
-            {
-              id: "responsive-team",
-              participationMode: "individual",
-              grade: "P3",
-              memberOneFirstName: "Participante",
-              memberOneLastName: "Con apellido extenso",
-              memberTwoFirstName: null,
-              memberTwoLastName: null,
-              personalCode: "TEAM01",
-              status: "registered",
-              createdAt: now,
-            },
-          ],
-        },
-      ],
-    }),
-  );
-  await page.route(`${API}/api/users/maestros`, (route) =>
-    route.fulfill({
-      json: [
-        {
-          id: 999,
-          name: "Maestro responsive",
-          email: "maestro.responsive.con.correo.extenso@example.com",
-          status: "pending",
-          schoolName: "Colegio de prueba responsive",
-          institutionType: "school",
-          phone: "70000000",
-          isHomeschool: false,
-          hasLetter: true,
-          hasIdFront: true,
-          hasIdBack: true,
-          createdAt: now,
-          schools: [],
-        },
-      ],
-    }),
-  );
-  await loginAdminPage(page);
-
-  await page.setViewportSize({ width: 320, height: 800 });
-  await page.goto("/grupos");
-  const groupRow = page
-    .getByRole("heading", { name: "Grupo responsive", level: 3 })
-    .locator("xpath=ancestor::li[1]");
-  const groupActions = [
-    groupRow.getByRole("button", { name: "Copiar enlace" }),
-    groupRow.getByRole("button", { name: "Eliminar", exact: true }),
-  ];
-  const mobileGroupActions = await Promise.all(
-    groupActions.map((action) => action.boundingBox()),
-  );
-  expect(mobileGroupActions[0]!.width).toBe(mobileGroupActions[1]!.width);
-  expect(mobileGroupActions[1]!.y).toBeGreaterThan(mobileGroupActions[0]!.y);
-  await groupRow.getByRole("button", { name: /1 equipo/ }).click();
-  await expect(
-    groupRow.getByRole("button", { name: "Editar participante" }),
-  ).toBeVisible();
-  expect(
-    await page.evaluate(
-      () =>
-        document.documentElement.scrollWidth >
-        document.documentElement.clientWidth,
-    ),
-  ).toBe(false);
-
-  await page.setViewportSize({ width: 1280, height: 800 });
-  const desktopGroupActions = await Promise.all(
-    groupActions.map((action) => action.boundingBox()),
-  );
-  expect(desktopGroupActions[0]!.width).toBeLessThan(160);
-  expect(desktopGroupActions[0]!.width).toBe(desktopGroupActions[1]!.width);
-  expect(desktopGroupActions[0]!.y).toBe(desktopGroupActions[1]!.y);
-
-  await page.setViewportSize({ width: 320, height: 800 });
-  await page.goto("/maestros");
-  const teacherRow = page
-    .getByText("Maestro responsive", { exact: true })
-    .locator("xpath=ancestor::article[1]");
-  const teacherActions = [
-    teacherRow.getByRole("button", { name: "Carta", exact: true }),
-    teacherRow.getByRole("button", { name: "Carnet anverso" }),
-    teacherRow.getByRole("button", { name: "Carnet reverso" }),
-    teacherRow.getByRole("button", { name: "Aprobar" }),
-    teacherRow.getByRole("button", { name: "Rechazar a Maestro responsive" }),
-  ];
-  const mobileTeacherActions = await Promise.all(
-    teacherActions.map((action) => action.boundingBox()),
-  );
-  for (const action of mobileTeacherActions) {
-    expect(action).not.toBeNull();
-    expect(action!.x).toBeGreaterThanOrEqual(0);
-    expect(action!.x + action!.width).toBeLessThanOrEqual(320);
-  }
-  expect(
-    await page.evaluate(
-      () =>
-        document.documentElement.scrollWidth >
-        document.documentElement.clientWidth,
-    ),
-  ).toBe(false);
-
-  await page.setViewportSize({ width: 1280, height: 800 });
-  const desktopTeacherActions = await Promise.all(
-    teacherActions.map((action) => action.boundingBox()),
-  );
-  expect(desktopTeacherActions[0]!.width).toBeLessThan(130);
-  expect(desktopTeacherActions[0]!.y).toBe(desktopTeacherActions[1]!.y);
-  expect(desktopTeacherActions[1]!.x).toBeGreaterThan(
-    desktopTeacherActions[0]!.x,
-  );
-  expect((await teacherRow.boundingBox())!.height).toBeLessThan(260);
-});

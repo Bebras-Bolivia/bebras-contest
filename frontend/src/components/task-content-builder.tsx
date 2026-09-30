@@ -13,7 +13,12 @@ import {
   TaskRichTextEditor,
   insertTaskBlank,
 } from "@/components/task-rich-text-editor";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import {
+  inlineImageFromFile,
+  insertInlineImage,
+} from "@/lib/task-inline-image";
 import { getTaskBlankIds, hasTaskBlanks } from "@/lib/task-blank";
 import { AuthoringDeleteDialog } from "@/components/authoring-delete-dialog";
 import { type ContentBlock, type ContentBlockType } from "@/lib/task-schema";
@@ -32,6 +37,7 @@ import {
   HelpCircleIcon,
   GripVerticalIcon,
   ImageIcon,
+  ImagePlusIcon,
   MessageSquareTextIcon,
   TypeIcon,
   XIcon,
@@ -182,6 +188,8 @@ export function TaskContentBuilder({
   };
 
   const lastTextBlockRef = useRef<string | null>(null);
+  const inlineImageInputRef = useRef<HTMLInputElement | null>(null);
+  const inlineImageEditorRef = useRef<Editor | null>(null);
   const textEditor = () => {
     const id =
       lastTextBlockRef.current ??
@@ -490,6 +498,52 @@ export function TaskContentBuilder({
               <TypeIcon data-icon="inline-start" />
               Agregar texto
             </Button>
+          )}
+          {blocks.some((block) => block.type !== "image") && (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="font-normal"
+                title="Pone una imagen chica dentro del texto, donde está el cursor. Sirve para dibujos como los ingredientes de una lista."
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  inlineImageEditorRef.current = textEditor();
+                  inlineImageInputRef.current?.click();
+                }}
+              >
+                <ImagePlusIcon data-icon="inline-start" />
+                Imagen en el texto
+              </Button>
+              <input
+                ref={inlineImageInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                tabIndex={-1}
+                aria-hidden="true"
+                className="sr-only"
+                onChange={async (event) => {
+                  const files = Array.from(event.target.files ?? []);
+                  event.target.value = "";
+                  const editor = inlineImageEditorRef.current;
+                  if (!editor || editor.isDestroyed) return;
+                  for (const file of files) {
+                    try {
+                      insertInlineImage(
+                        editor,
+                        await inlineImageFromFile(file),
+                      );
+                    } catch {
+                      toast.error(
+                        `No se pudo poner «${file.name}» en el texto.`,
+                      );
+                    }
+                  }
+                }}
+              />
+            </>
           )}
           {allowBlanks && (
             <Button

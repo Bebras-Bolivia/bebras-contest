@@ -495,6 +495,37 @@ export async function submitScoringAttempt(
   expect(submit.ok(), await submit.text()).toBe(true);
 }
 
+/**
+ * Un maestro registrado con su carta y aprobado por el administrador: el
+ * único que puede crear grupos y prácticas.
+ */
+export async function createApprovedTeacher(
+  api: APIRequestContext,
+  adminHeaders: Record<string, string>,
+  fields: Record<string, string> = {},
+) {
+  const { identity, response } = await registerBebrasProfile(api, {
+    fields: {
+      letter: VALID_PDF,
+      department: "COCHABAMBA",
+      city: "Quillacollo",
+      ...fields,
+    } as Record<string, string | Upload>,
+  });
+  expect(response.status(), await response.text()).toBe(201);
+  const maestros = (await api
+    .get(`${API}/api/users/maestros`, { headers: adminHeaders })
+    .then((r) => r.json())) as Array<{ id: number; email: string }>;
+  const created = maestros.find((maestro) => maestro.email === identity.email);
+  expect(created, `No aparece ${identity.email} en la lista`).toBeTruthy();
+  const approved = await api.post(`${API}/api/users/${created!.id}/approve`, {
+    headers: adminHeaders,
+  });
+  expect(approved.ok(), await approved.text()).toBe(true);
+  const session = await loginUser(api, identity);
+  return { id: created!.id, identity, headers: session.headers };
+}
+
 export function registrationFields(institutionType: "school" | "homeschool") {
   return {
     firstName: "Registro",
@@ -503,6 +534,9 @@ export function registrationFields(institutionType: "school" | "homeschool") {
       institutionType === "school" ? "Colegio manual" : "Educación en casa",
     institutionType,
     phone: "70000000",
+    // Sin colegio del catálogo, el registro pide dónde está.
+    department: "COCHABAMBA",
+    city: "Quillacollo",
   };
 }
 
@@ -623,4 +657,23 @@ export async function createPracticeTask(
     expect(task.dragDropTargets).toEqual(DRAG_DROP_TARGETS);
   }
   return task;
+}
+
+/**
+ * Guardar desde el editor navega a la lista y el cuerpo de la respuesta ya no
+ * se puede leer: la tarea recién creada se busca por su título.
+ */
+export async function findTaskByTitle(
+  api: APIRequestContext,
+  headers: Record<string, string>,
+  title: string,
+) {
+  const tasks = (await api
+    .get(`${API}/api/tasks`, { headers })
+    .then((response) => response.json())) as Array<{ id: string; title: string }>;
+  const found = tasks.find((task) => task.title === title);
+  expect(found, `No se encontró la tarea «${title}»`).toBeTruthy();
+  return api
+    .get(`${API}/api/tasks/${found!.id}`, { headers })
+    .then((response) => response.json());
 }

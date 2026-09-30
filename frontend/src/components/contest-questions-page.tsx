@@ -190,6 +190,11 @@ export function ContestQuestionsPage() {
             : value === "all" || taskVisibility(task) === value),
     ).length;
 
+  const publicChosen = usable.filter(
+    (task) =>
+      activeIds.includes(task.id) && taskVisibility(task) === "practica",
+  ).length;
+
   const backHref = `/desafios/editar?id=${contestId}&categoria=${encodeURIComponent(activeCategory)}`;
   const editHref = (taskId: string) =>
     `/tareas/editar?id=${encodeURIComponent(taskId)}&volver=${encodeURIComponent(
@@ -446,6 +451,14 @@ export function ContestQuestionsPage() {
         </div>
       </div>
 
+      {publicChosen > 0 && (
+        <p role="status" className="text-sm text-destructive">
+          {publicChosen === 1
+            ? "Una de las preguntas elegidas es pública en Práctica, con su solución: los estudiantes pueden haberla resuelto antes. Para un desafío oficial, pásala a «Solo admin» en Tareas."
+            : `${publicChosen} de las preguntas elegidas son públicas en Práctica, con su solución: los estudiantes pueden haberlas resuelto antes. Para un desafío oficial, pásalas a «Solo admin» en Tareas.`}
+        </p>
+      )}
+
       {visible.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
           {usable.length === 0
@@ -489,7 +502,12 @@ export function ContestQuestionsPage() {
                   >
                     {task.title}
                   </button>
-                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span
+                    className={cn(
+                      "flex items-center gap-1.5 text-xs text-muted-foreground",
+                      picked && seen.value === "practica" && "text-destructive",
+                    )}
+                  >
                     <seen.icon className="size-3" aria-hidden="true" />
                     {seen.label} · {answerTypeLabels[task.answerType]}
                   </span>

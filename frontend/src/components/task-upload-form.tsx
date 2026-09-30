@@ -763,7 +763,13 @@ export function TaskUploadForm({
       ? createStateFromTask(initialTask)
       : createInitialState(initialId),
   );
-  const [errors, setErrors] = useState<string[]>([]);
+  // Después del primer intento de guardar o probar, los problemas se
+  // recalculan con cada cambio: el aviso se actualiza mientras se corrige.
+  const [attempted, setAttempted] = useState(false);
+  const errors = useMemo(
+    () => (attempted ? validateForm(form) : []),
+    [attempted, form],
+  );
   // Ya no cambia en vivo: al guardar se sale de la pantalla.
   const loadedTask = initialTask;
 
@@ -862,7 +868,7 @@ export function TaskUploadForm({
     event.preventDefault();
 
     const nextErrors = validateForm(form);
-    setErrors(nextErrors);
+    setAttempted(true);
 
     if (nextErrors.length > 0) {
       return;
@@ -889,6 +895,13 @@ export function TaskUploadForm({
   // El probador vive en otra página: el borrador va por sessionStorage para
   // que se pruebe lo que hay en pantalla y no la última versión guardada.
   const handleTestDraft = () => {
+    // Si falta algo, se avisa aquí mismo en vez de abrir un probador que no
+    // puede mostrar la tarea.
+    if (validateForm(form).length > 0) {
+      setAttempted(true);
+      return;
+    }
+
     const draft = {
       taskId: loadedTask?.id ?? null,
       task: buildStoredTask(form, loadedTask?.id),
@@ -901,10 +914,16 @@ export function TaskUploadForm({
       return;
     }
 
+    // Volver con «atrás» del navegador también debe recuperar el borrador:
+    // esta página queda marcada con el mismo indicador que usa el probador.
+    const here = new URL(window.location.href);
+    here.searchParams.delete("borrador");
+    const back = here.pathname + here.search;
+    here.searchParams.set("borrador", "1");
+    window.history.replaceState(window.history.state, "", here);
+
     window.location.assign(
-      `/tareas/probador?borrador=1&volver=${encodeURIComponent(
-        window.location.pathname + window.location.search,
-      )}`,
+      `/tareas/probador?borrador=1&volver=${encodeURIComponent(back)}`,
     );
   };
 
@@ -1764,20 +1783,7 @@ export function TaskUploadForm({
 
       <div className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-2 border-t bg-background px-4 py-3 sm:mx-0 sm:px-0">
         <div className="flex items-center justify-end gap-3">
-          {errors.length > 0 && (
-            <p
-              role="alert"
-              className="mr-auto min-w-0 truncate text-sm font-medium text-destructive motion-safe:animate-in motion-safe:fade-in-0"
-            >
-              {errors[0]}
-              {errors.length > 1 && (
-                <span className="font-normal text-destructive/70">
-                  {" "}
-                  y {errors.length - 1} más
-                </span>
-              )}
-            </p>
-          )}
+          <FormProblem errors={errors} />
           {/* Probar lleva lo que hay en pantalla, guardado o no: el probador
               recibe el borrador entero y lo corrige sin tocar la base. */}
           <Button type="button" variant="outline" onClick={handleTestDraft}>
@@ -1791,5 +1797,48 @@ export function TaskUploadForm({
         </div>
       </div>
     </form>
+  );
+}
+
+/**
+ * El primer problema del formulario, junto a los botones. Aparece y se va
+ * con una transición, y conserva el texto mientras se desvanece.
+ */
+function FormProblem({ errors }: { errors: string[] }) {
+  const message = errors[0] ?? null;
+  const more = errors.length - 1;
+  const [shown, setShown] = useState<{ text: string; more: number } | null>(
+    null,
+  );
+  if (message && (shown?.text !== message || shown.more !== more)) {
+    setShown({ text: message, more });
+  }
+
+  return (
+    <p
+      role="alert"
+      onTransitionEnd={() => {
+        if (!message) setShown(null);
+      }}
+      className={cn(
+        "mr-auto min-w-0 truncate text-sm font-medium text-destructive transition-[opacity,translate] duration-300 ease-out motion-reduce:transition-none",
+        message ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0",
+      )}
+    >
+      {shown && (
+        <span
+          key={shown.text}
+          className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300"
+        >
+          {shown.text}
+          {shown.more > 0 && (
+            <span className="font-normal text-destructive/70">
+              {" "}
+              y {shown.more} más
+            </span>
+          )}
+        </span>
+      )}
+    </p>
   );
 }

@@ -76,6 +76,8 @@ export type DragDropAuthoring = {
   onStageTap?: (x: number, y: number, targetId: string | null) => void;
   /** Se arrastró un borde de la imagen: nuevo ancho en % de la columna. */
   onResize?: (widthPercent: number) => void;
+  /** Se arrastró la esquina de una pieza: nuevo ancho en % del escenario. */
+  onResizeItem?: (itemId: string, widthPercent: number) => void;
 };
 
 type DragDropPlayerProps = {
@@ -867,7 +869,7 @@ export function DragDropPlayer({
                 key={item.id}
                 {...itemButtonProps(item)}
                 className={cn(
-                  "absolute touch-none -translate-x-1/2 -translate-y-1/2 cursor-pointer overflow-hidden rounded-sm border-2 border-transparent bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default",
+                  "group/piece absolute touch-none -translate-x-1/2 -translate-y-1/2 cursor-pointer overflow-hidden rounded-sm border-2 border-transparent bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default",
                   selectedItemId === item.id && "ring-2 ring-primary",
                   dragPreview?.itemId === item.id && "opacity-50",
                 )}
@@ -893,6 +895,15 @@ export function DragDropPlayer({
                   <span className="block max-w-24 bg-background/90 px-2 py-1 text-sm font-medium">
                     {item.label || "Objeto"}
                   </span>
+                )}
+                {authoring?.onResizeItem && (
+                  <PieceResizeCorner
+                    centered
+                    stageRef={stageRef}
+                    onResize={(width) =>
+                      authoring.onResizeItem?.(item.id, width)
+                    }
+                  />
                 )}
               </button>
             );
@@ -1017,7 +1028,7 @@ export function DragDropPlayer({
                 key={item.id}
                 {...itemButtonProps(item)}
                 className={cn(
-                  "flex touch-none cursor-pointer items-center justify-center rounded-sm border-2 border-transparent transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-70",
+                  "group/piece relative flex touch-none cursor-pointer items-center justify-center rounded-sm border-2 border-transparent transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-70",
                   selectedItemId === item.id && "ring-2 ring-primary",
                   dragPreview?.itemId === item.id && "opacity-50",
                   hoverSlot === slotIndex &&
@@ -1034,6 +1045,15 @@ export function DragDropPlayer({
                 type="button"
               >
                 {itemVisual(item)}
+                {authoring?.onResizeItem && (
+                  <PieceResizeCorner
+                    centered={false}
+                    stageRef={stageRef}
+                    onResize={(width) =>
+                      authoring.onResizeItem?.(item.id, width)
+                    }
+                  />
+                )}
               </button>
             ),
           )}
@@ -1066,6 +1086,71 @@ export function DragDropPlayer({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Esquina para agrandar o achicar una pieza en el editor, con el mismo gesto
+ * que los dibujos del texto. Mientras se tira solo cambia el ancho en pantalla;
+ * el tamaño se guarda al soltar.
+ */
+function PieceResizeCorner({
+  centered,
+  stageRef,
+  onResize,
+}: {
+  /** La pieza colocada está centrada en su lugar y crece hacia los dos lados. */
+  centered: boolean;
+  stageRef: React.RefObject<HTMLDivElement | null>;
+  onResize: (widthPercent: number) => void;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      data-piece-resize=""
+      title="Arrastra para cambiar el tamaño"
+      className="absolute right-0 bottom-0 z-10 size-3 cursor-nwse-resize touch-none border-2 border-background bg-primary opacity-0 transition-opacity group-hover/piece:opacity-100 group-focus-visible/piece:opacity-100 [@media(hover:none)]:size-[18px] [@media(hover:none)]:opacity-100"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+      onPointerDown={(event) => {
+        const piece = event.currentTarget.parentElement;
+        const stage = stageRef.current?.clientWidth;
+        if (!piece || !stage || !event.isPrimary || event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const handle = event.currentTarget;
+        handle.setPointerCapture(event.pointerId);
+        const rect = piece.getBoundingClientRect();
+        const ratio = rect.width / Math.max(1, rect.height);
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const start = (rect.width / stage) * 100;
+        let next = start;
+        const move = (moveEvent: globalThis.PointerEvent) => {
+          const dx = moveEvent.clientX - startX;
+          const dy = (moveEvent.clientY - startY) * ratio;
+          const delta = Math.abs(dx) > Math.abs(dy) ? dx : dy;
+          const width = rect.width + delta * (centered ? 2 : 1);
+          next =
+            Math.round(Math.min(50, Math.max(3, (width / stage) * 100)) * 2) /
+            2;
+          piece.style.width = centered
+            ? `${next}%`
+            : `${Math.max(40, (next / 100) * stage)}px`;
+        };
+        const finish = () => {
+          handle.removeEventListener("pointermove", move);
+          handle.removeEventListener("pointerup", finish);
+          handle.removeEventListener("pointercancel", finish);
+          if (next !== start) onResize(next);
+        };
+        handle.addEventListener("pointermove", move);
+        handle.addEventListener("pointerup", finish);
+        handle.addEventListener("pointercancel", finish);
+      }}
+    />
   );
 }
 

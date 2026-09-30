@@ -44,7 +44,7 @@ test("associates code errors with the code field", async ({ page }) => {
     "Escribe el código que te dio tu maestro.",
   );
 
-  // Ocho caracteres: se intenta como codigo personal y no existe.
+  // Ocho caracteres: se intenta como código personal y no existe.
   await code.fill("ZZZZZZZZ");
   await expect(code).toHaveAttribute("aria-invalid", "false");
   await expect(page.locator("#access-code-error")).toHaveCount(0);
@@ -56,13 +56,14 @@ test("associates code errors with the code field", async ({ page }) => {
     "Código no encontrado.",
   );
 
-  // El codigo del grupo lleva a inscribirse, nunca a rendir.
+  // El código del grupo lleva a inscribirse, nunca a rendir.
   await code.fill(group.accessCode);
   await expect(page.locator("#access-code-error")).toHaveCount(0);
   await page.getByRole("button", { name: "Continuar" }).click();
 
+  await expect(page.getByRole("heading", { name: "Inscríbete" })).toBeVisible();
   await expect(
-    page.getByRole("combobox", { name: "¿En qué curso estás?" }),
+    page.getByRole("radiogroup", { name: "¿En qué curso estás?" }),
   ).toBeVisible();
 });
 
@@ -75,29 +76,29 @@ test("validates pair registration and preserves general step errors", async ({
   await page.getByLabel("Tu código").fill(group.accessCode);
   await page.getByRole("button", { name: "Continuar" }).click();
 
-  const grade = page.getByRole("combobox", {
-    name: "¿En qué curso estás?",
-  });
+  const grades = page.getByRole("radiogroup", { name: "¿En qué curso estás?" });
+  const firstGrade = grades.getByRole("radio").first();
   const firstName = page.getByLabel("Nombres", { exact: true });
   const lastName = page.getByLabel("Apellidos", { exact: true });
   await page.getByRole("button", { name: "Continuar" }).click();
 
-  await expect(grade).toBeFocused();
-  await expect(grade).toHaveAttribute("aria-invalid", "true");
-  await expect(grade).toHaveAttribute("aria-describedby", "grade-error");
+  // Vacío: el foco va al curso y cada campo queda marcado con su error.
+  await expect(firstGrade).toBeFocused();
+  await expect(grades).toHaveAttribute("aria-describedby", "grade-error");
+  await expect(page.locator("#grade-error")).toHaveText("Elige tu curso.");
   await expect(firstName).toHaveAttribute("aria-invalid", "true");
   await expect(lastName).toHaveAttribute("aria-invalid", "true");
 
-  await grade.click();
-  await page.getByRole("option").first().click();
-  await expect(grade).toHaveAttribute("aria-invalid", "false");
+  await firstGrade.click();
+  await expect(firstGrade).toHaveAttribute("aria-checked", "true");
+  await expect(page.locator("#grade-error")).toHaveCount(0);
   await firstName.fill("Ana");
   await lastName.fill("Quispe");
-  await page.getByRole("button", { name: "Pareja" }).click();
+  await page.getByRole("radio", { name: "En pareja" }).click();
   await page.getByRole("button", { name: "Continuar" }).click();
 
-  const secondFirst = page.getByLabel("Nombres del 2.º integrante");
-  const secondLast = page.getByLabel("Apellidos del 2.º integrante");
+  const secondFirst = page.getByLabel("Nombres de tu compañero");
+  const secondLast = page.getByLabel("Apellidos de tu compañero");
   await expect(secondFirst).toBeFocused();
   await expect(secondFirst).toHaveAttribute("aria-invalid", "true");
   await expect(secondLast).toHaveAttribute("aria-invalid", "true");
@@ -113,8 +114,13 @@ test("validates pair registration and preserves general step errors", async ({
   await secondFirst.fill("Bea");
   await expect(page.locator("#two-first-error")).toHaveCount(0);
   await page.getByRole("button", { name: "Continuar" }).click();
-  await expect(page.getByText("Confirma tus datos")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "¿Está todo bien?" }),
+  ).toBeVisible();
+  await expect(page.getByText("Ana Quispe")).toBeVisible();
+  await expect(page.getByText("Bea Quispe")).toBeVisible();
 
+  // Un error del servidor vuelve al formulario con el mensaje enfocado.
   await page.route("**/api/play/join", async (route) => {
     await route.fulfill({
       status: 409,
@@ -122,19 +128,31 @@ test("validates pair registration and preserves general step errors", async ({
       body: JSON.stringify({ message: "No se pudo completar el registro." }),
     });
   });
-  await page.getByRole("button", { name: "Confirmar y entrar" }).click();
+  await page.getByRole("button", { name: "Sí, inscribirme" }).click();
 
   const formError = page
     .getByRole("alert")
     .filter({ hasText: "No se pudo completar el registro." });
   await expect(formError).toBeVisible();
   await expect(formError).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Inscríbete" })).toBeVisible();
 
   await page.unroute("**/api/play/join");
-  await firstName.fill("Ana María");
+  await page.getByLabel("Tus nombres").fill("Ana María");
   await expect(formError).toHaveCount(0);
   await page.getByRole("button", { name: "Continuar" }).click();
-  await page.getByRole("button", { name: "Confirmar y entrar" }).click();
+  await page.getByRole("button", { name: "Sí, inscribirme" }).click();
 
-  await expect(page.getByText("¡Listo, te registraste!")).toBeVisible();
+  await expect(page.getByText("¡Listo, ya estás inscrito!")).toBeVisible();
+  // Un segundo intento con el mismo nombre no revela el código de nadie.
+  const repeated = await page.request.post(`${API}/api/play/join`, {
+    data: {
+      accessCode: group.accessCode,
+      participationMode: "individual",
+      grade: group.grade,
+      memberOneFirstName: "Ana María",
+      memberOneLastName: "Quispe",
+    },
+  });
+  expect(repeated.status()).toBe(409);
 });

@@ -54,7 +54,7 @@ test("checks unsaved hotspot drafts and locks the public practice after checking
     exact: true,
   });
   const top = svg.getByRole("button", {
-    name: "Punta de la vela",
+    name: "Zona 1",
     exact: true,
   });
   await top.focus();
@@ -73,6 +73,33 @@ test("checks unsaved hotspot drafts and locks the public practice after checking
   await expect(svg.locator('[aria-pressed="true"]')).toHaveCount(0);
   await expect(top).toHaveAttribute("aria-disabled", "false");
 });
+/** Puntos que caen dentro de un polígono, en % de la imagen. */
+function insidePoints(polygon: Array<{ x: number; y: number }>, count: number) {
+  const inside = (x: number, y: number) => {
+    let hit = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const a = polygon[i];
+      const b = polygon[j];
+      if (a.y > y !== b.y > y && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) {
+        hit = !hit;
+      }
+    }
+    return hit;
+  };
+  const found: Array<[number, number]> = [];
+  for (let y = 1; y < 100 && found.length < 400; y += 0.5) {
+    for (let x = 1; x < 100; x += 0.5) {
+      // Lejos del borde, para que el toque no caiga en la zona de al lado.
+      if ([[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].every(([dx, dy]) => inside(x + dx, y + dy))) {
+        found.push([x, y]);
+      }
+    }
+  }
+  expect(found.length).toBeGreaterThanOrEqual(count);
+  return Array.from({ length: count }, (_, i) =>
+    found[Math.floor(((i + 0.5) * found.length) / count)],
+  );
+}
 async function screenPoint(svg: Locator, x: number, y: number) {
   return svg.evaluate(
     (element, p) => {
@@ -169,44 +196,34 @@ test("selects actual paths and boat points by pointer, keyboard and touch at dif
       exact: true,
     });
     await expect(svg).toBeVisible();
-    for (const [x, y] of [
-      [1080, 586],
-      [967, 631],
-      [881, 655],
-    ]) {
-      await clickPoint(
-        page,
-        svg,
-        ((x - 574) / 536) * 100,
-        ((y - 520) / 255) * 100,
-        width === 390,
-      );
+    const path = await page.request
+      .get(`${API}/api/tasks/${ids[0]}`, { headers })
+      .then((r) => r.json());
+    const pathB = path.answerConfig.regions.find(
+      (r: { id: string }) => r.id === "camino-b",
+    );
+    for (const [x, y] of insidePoints(pathB.shapes[0].points, 3)) {
+      await clickPoint(page, svg, x, y, width === 390);
       await expect(
-        svg.getByRole("button", { name: "Camino B", exact: true }),
+        svg.getByRole("button", { name: "Zona 2", exact: true }),
       ).toHaveAttribute("aria-pressed", "true");
     }
     await clickPoint(page, svg, 99, 3, width === 390);
     await expect(
-      svg.getByRole("button", { name: "Camino B", exact: true }),
+      svg.getByRole("button", { name: "Zona 2", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
-    await page.getByRole("button", { name: "Probar", exact: true }).click();
+    await page.getByRole("button", { name: "Comprobar", exact: true }).click();
     await expect(
-      page
-        .locator("main")
-        .getByRole("alert")
-        .getByText("Correcto", { exact: true }),
+      page.getByText("¡Correcto!", { exact: true }),
     ).toBeVisible();
-    await svg.getByRole("button", { name: "Camino A", exact: true }).focus();
+    await svg.getByRole("button", { name: "Zona 1", exact: true }).focus();
     await page.keyboard.press("Enter");
     await expect(
-      svg.getByRole("button", { name: "Camino A", exact: true }),
+      svg.getByRole("button", { name: "Zona 1", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
-    await page.getByRole("button", { name: "Probar", exact: true }).click();
+    await page.getByRole("button", { name: "Comprobar", exact: true }).click();
     await expect(
-      page
-        .locator("main")
-        .getByRole("alert")
-        .getByText("Incorrecto", { exact: true }),
+      page.getByText("Respuesta incorrecta", { exact: true }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Borrar", exact: true }).click();
     await expect(svg.locator('[aria-pressed="true"]')).toHaveCount(0);
@@ -230,14 +247,12 @@ test("selects actual paths and boat points by pointer, keyboard and touch at dif
       await expect(
         svg.getByRole("button", { name: region.label, exact: true }),
       ).toHaveAttribute("aria-pressed", "true");
-      await page.getByRole("button", { name: "Probar", exact: true }).click();
+      await page.getByRole("button", { name: "Comprobar", exact: true }).click();
       await expect(
-        page
-          .locator("main")
-          .getByRole("alert")
-          .getByText(id === "punto-3" ? "Incorrecto" : "Correcto", {
-            exact: true,
-          }),
+        page.getByText(
+          id === "punto-3" ? "Respuesta incorrecta" : "¡Correcto!",
+          { exact: true },
+        ),
       ).toBeVisible();
     }
     expect(
@@ -297,15 +312,16 @@ test("edits points and polygon vertices on one canvas and saves/reopens both con
   });
   await expect(svg).toBeVisible();
   await editor
-    .getByRole("button", { name: "Añadir punto", exact: true })
+    .getByRole("button", { name: "Marcar punto", exact: true })
     .click();
   await clickPoint(page, svg, 60, 30);
-  await editor
-    .getByRole("textbox", { name: "Nombre de la zona", exact: true })
-    .fill("Segundo inicio");
-  await editor
-    .getByRole("checkbox", { name: "Respuesta válida", exact: true })
-    .check();
+  const correct = editor.getByRole("button", {
+    name: "Es correcta",
+    exact: true,
+  });
+  await expect(correct).toHaveAttribute("aria-pressed", "false");
+  await correct.click();
+  await expect(correct).toHaveAttribute("aria-pressed", "true");
   const initialX =
     (Number(
       await editor
@@ -323,7 +339,7 @@ test("edits points and polygon vertices on one canvas and saves/reopens both con
     .focus();
   await page.keyboard.press("ArrowUp");
   await editor
-    .getByRole("button", { name: "Dibujar camino", exact: true })
+    .getByRole("button", { name: "Dibujar zona", exact: true })
     .click();
   for (const [x, y] of [
     [10, 65],
@@ -333,11 +349,16 @@ test("edits points and polygon vertices on one canvas and saves/reopens both con
   ])
     await clickPoint(page, svg, x, y);
   await editor
-    .getByRole("button", { name: "Cerrar camino", exact: true })
+    .getByRole("button", { name: "Cerrar zona", exact: true })
     .click();
-  await editor
-    .getByRole("textbox", { name: "Nombre de la zona", exact: true })
-    .fill("Camino inferior");
+  const zones = editor.getByRole("group", { name: "Zonas", exact: true });
+  await expect(zones.getByRole("button")).toHaveCount(3);
+  // Deshacer quita la zona recién dibujada y Ctrl+Shift+Z la devuelve.
+  await editor.getByRole("button", { name: "Deshacer", exact: true }).click();
+  await expect(zones.getByRole("button")).toHaveCount(2);
+  await page.keyboard.press("Control+Shift+Z");
+  await expect(zones.getByRole("button")).toHaveCount(3);
+  await zones.getByRole("button", { name: "Zona 3", exact: true }).click();
   const vertex = editor.getByRole("button", { name: "Vértice 1", exact: true });
   await vertex.focus();
   await page.keyboard.press("ArrowRight");
@@ -356,10 +377,9 @@ test("edits points and polygon vertices on one canvas and saves/reopens both con
       r.url().endsWith(`/api/tasks/${task.id}`) &&
       r.request().method() === "PUT",
   );
-  await page
-    .getByRole("button", { name: "Guardar cambios", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Guardar", exact: true }).click();
   expect((await saved).ok()).toBe(true);
+  await expect(page).toHaveURL(/\/tareas\/?$/);
   await page.goto(`/tareas/editar?id=${task.id}`);
   await expect(svg).toBeVisible();
   const stored = await page.request
@@ -376,12 +396,10 @@ test("edits points and polygon vertices on one canvas and saves/reopens both con
     12,
     0,
   );
-  await editor
-    .getByRole("combobox", { name: "Zona seleccionada" })
-    .selectOption(stored.answerConfig.regions[1].id);
-  await expect(
-    editor.getByRole("checkbox", { name: "Respuesta válida" }),
-  ).toBeChecked();
+  await zones.getByRole("button", { name: "Zona 2", exact: true }).click();
+  await expect(correct).toHaveAttribute("aria-pressed", "true");
+  await zones.getByRole("button", { name: "Zona 3", exact: true }).click();
+  await expect(correct).toHaveAttribute("aria-pressed", "false");
   await page.setViewportSize({ width: 390, height: 844 });
   await editor.scrollIntoViewIfNeeded();
   expect((await editor.boundingBox())!.height).toBeLessThan(844);
@@ -449,7 +467,7 @@ test("persists and clears hotspot answers, rejects invalid saves and matches con
     exact: true,
   });
   await expect(
-    svg.getByRole("button", { name: "Camino B", exact: true }),
+    svg.getByRole("button", { name: "Zona 2", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
   const cleared = page.waitForResponse(
     (r) => r.url().endsWith("/api/play/answer") && r.status() === 204,
@@ -462,7 +480,7 @@ test("persists and clears hotspot answers, rejects invalid saves and matches con
   const saved = page.waitForResponse(
     (r) => r.url().endsWith("/api/play/answer") && r.status() === 204,
   );
-  await svg.getByRole("button", { name: "Camino B", exact: true }).focus();
+  await svg.getByRole("button", { name: "Zona 2", exact: true }).focus();
   await page.keyboard.press("Space");
   await saved;
   expect(

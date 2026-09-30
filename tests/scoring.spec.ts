@@ -7,7 +7,11 @@ import {
   joinContest,
   createScoringTask,
   submitScoringAttempt,
+  resetE2EClock,
+  setE2EClock,
 } from "./support/helpers";
+
+test.afterEach(async ({ request }) => resetE2EClock(request));
 
 test("applies the easy, medium and hard Bebras scoring scales", async () => {
   const api = await request.newContext();
@@ -214,26 +218,34 @@ test("breaks equal-score ties by elapsed time", async () => {
     "Rapido",
   );
 
+  // El reloj de pruebas está fijo: se avanza a mano para que los tiempos
+  // usados sean distintos (el lento, 30 s; el rápido, 10 s).
+  const t0 = new Date(contest.startsAt).getTime() + 60000;
+  await setE2EClock(api, new Date(t0));
   const slowerStart = await api.post(`${API}/api/play/start`, {
     data: { personalCode: slowerCode },
   });
   expect(slowerStart.ok(), await slowerStart.text()).toBe(true);
-  await new Promise((resolve) => setTimeout(resolve, 250));
+  await setE2EClock(api, new Date(t0 + 10000));
 
   const fasterStart = await api.post(`${API}/api/play/start`, {
     data: { personalCode: fasterCode },
   });
   expect(fasterStart.ok(), await fasterStart.text()).toBe(true);
+  await setE2EClock(api, new Date(t0 + 20000));
   const fasterSubmit = await api.post(`${API}/api/play/submit`, {
     data: { personalCode: fasterCode },
   });
   expect(fasterSubmit.ok(), await fasterSubmit.text()).toBe(true);
+  await setE2EClock(api, new Date(t0 + 30000));
 
   const slowerSubmit = await api.post(`${API}/api/play/submit`, {
     data: { personalCode: slowerCode },
   });
   expect(slowerSubmit.ok(), await slowerSubmit.text()).toBe(true);
 
+  // El ranking se arma al cerrar el desafío, no en cada entrega.
+  await setE2EClock(api, new Date(new Date(contest.endsAt).getTime() + 60000));
   const resultsResponse = await api.get(
     `${API}/api/contests/${contest.id}/results`,
     { headers },
@@ -249,7 +261,8 @@ test("breaks equal-score ties by elapsed time", async () => {
   );
 
   expect(faster.totalScore).toBe(slower.totalScore);
-  expect(faster.elapsedSeconds).toBeLessThanOrEqual(slower.elapsedSeconds);
+  expect(faster.elapsedSeconds).toBe(10);
+  expect(slower.elapsedSeconds).toBe(30);
   expect(faster.rankPosition).toBe(1);
   expect(slower.rankPosition).toBe(2);
 

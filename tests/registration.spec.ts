@@ -12,6 +12,22 @@ import {
   VALID_PNG,
 } from "./support/helpers";
 
+/**
+ * Sin colegio del catálogo (a mano o en casa), el registro pide dónde está:
+ * departamento y ciudad.
+ */
+async function chooseLocation(page: import("@playwright/test").Page) {
+  await page
+    .getByRole("group", { name: "Departamento" })
+    .getByRole("button", { name: "Cochabamba" })
+    .click();
+  await page
+    .getByRole("group", { name: "Ciudad" })
+    .getByRole("button")
+    .first()
+    .click();
+}
+
 test("rejects documents whose content does not match the extension", async () => {
   const api = await request.newContext();
   const identity = await createFirebaseUser(api, {
@@ -179,42 +195,46 @@ test("separates the manual school from teaching at home", async ({ page }) => {
     name: "Mi colegio no está en la lista",
   });
   const homeOption = page.getByRole("button", { name: "Enseño en casa" });
+  const departments = page.getByRole("group", { name: "Departamento" });
+  // Un bloque plegado queda «inert»: fuera del teclado y del lector de pantalla.
+  const isOpen = (locator: typeof departments) =>
+    expect
+      .poll(() => locator.evaluate((element) => !element.closest("[inert]")));
 
   await expect(manualOption).toBeVisible();
   await expect(homeOption).toBeVisible();
-  await expect(
-    page.getByText(
-      "Con un colegio te pediremos la carta del director; si enseñas en casa, tu carnet de identidad.",
-    ),
-  ).toBeVisible();
-
-  const documentBlock = (input: string) =>
-    page
-      .locator(input)
-      .locator(
-        'xpath=ancestor::div[contains(@class,"transition-[grid-template-rows]")][1]',
-      );
-  const blockHeight = async (input: string) =>
-    (await documentBlock(input).boundingBox())?.height ?? 0;
+  // Los documentos ya no se piden al registrarse: se suben desde el perfil.
+  await expect(page.locator('input[type="file"]')).toHaveCount(0);
+  // Con un colegio del catálogo no hace falta decir dónde está.
+  await isOpen(departments).toBe(false);
 
   await manualOption.click();
-  await page
-    .getByPlaceholder("Nombre de tu unidad educativa")
-    .fill("Colegio de Prueba");
-  await expect(async () => {
-    expect(await blockHeight("#reg-letter")).toBeGreaterThan(0);
-    expect(await blockHeight("#reg-id-front")).toBe(0);
-  }).toPass({ timeout: 10000 });
+  const manualName = page.getByPlaceholder("Nombre de tu unidad educativa");
+  await expect(manualName).toBeVisible();
+  await isOpen(departments).toBe(true);
+  await expect(departments.getByRole("button")).toHaveCount(9);
+  await manualName.fill("Colegio de Prueba");
+
+  // La ciudad aparece al elegir el departamento, con «Otra» para escribirla.
+  const cities = page.getByRole("group", { name: "Ciudad" });
+  await isOpen(cities).toBe(false);
+  await departments.getByRole("button", { name: "Tarija" }).click();
+  await isOpen(cities).toBe(true);
+  await cities.getByRole("button", { name: "Otra" }).click();
+  await expect(page.getByPlaceholder("Escribe tu ciudad")).toBeFocused();
 
   await page
     .getByRole("button", { name: "Buscar mi colegio en la lista" })
     .click();
+  await expect(manualName).toHaveCount(0);
+  await isOpen(departments).toBe(false);
+
   await homeOption.click();
   await expect(page.getByText("Educación en casa")).toBeVisible();
-  await expect(async () => {
-    expect(await blockHeight("#reg-id-front")).toBeGreaterThan(0);
-    expect(await blockHeight("#reg-letter")).toBe(0);
-  }).toPass({ timeout: 10000 });
+  await isOpen(departments).toBe(true);
+  await page.getByRole("button", { name: "Buscar un colegio" }).click();
+  await expect(page.getByText("Educación en casa")).toHaveCount(0);
+  await isOpen(departments).toBe(false);
 });
 
 test("lets a teacher sign in first and upload the documents later", async () => {
@@ -332,46 +352,50 @@ test("sorts teachers by status and confirms rejecting or suspending", async ({
   await loginAdminPage(page);
   await page.goto("/maestros");
 
-  const filterBy = (name: RegExp) => page.getByRole("button", { name });
-
-  await expect(page.getByText(approvedEmail)).toBeVisible({
-    timeout: 15000,
-  });
-
   const rowFor = (email: string) =>
     page.locator("article").filter({ hasText: email });
+  const showAll = async (filter: RegExp, email: string) => {
+    await page.getByRole("tab", { name: /Todos los maestros/ }).click();
+    await page.getByRole("button", { name: filter }).click();
+    await page.getByRole("textbox", { name: "Buscar maestros" }).fill(email);
+  };
 
+  // «Por revisar»: cada cuenta nueva con sus documentos, para aprobarla.
+  await expect(rowFor(approvedEmail)).toBeVisible({ timeout: 15000 });
   await rowFor(approvedEmail).getByRole("button", { name: "Aprobar" }).click();
-  await filterBy(/^Aprobados/).click();
-  await expect(page.getByText(approvedEmail)).toBeVisible();
+  await expect(rowFor(approvedEmail)).toHaveCount(0);
 
+  await showAll(/^Aprobados/, approvedEmail);
+  await expect(rowFor(approvedEmail)).toBeVisible();
   await rowFor(approvedEmail)
     .getByRole("button", { name: "Suspender" })
     .click();
   const suspendDialog = page.getByRole("alertdialog");
   await expect(suspendDialog).toContainText("¿Suspender a este maestro?");
   await suspendDialog.getByRole("button", { name: "Suspender" }).click();
-  await filterBy(/^Suspendidos/).click();
-  await expect(page.getByText(approvedEmail)).toBeVisible();
+  await page.getByRole("button", { name: /^Suspendidos/ }).click();
+  await expect(rowFor(approvedEmail)).toBeVisible();
 
-  await filterBy(/^Pendientes/).click();
+  // Rechazar pide confirmación; cancelar no cambia nada.
+  await page.getByRole("tab", { name: /Por revisar/ }).click();
   await rowFor(rejectedEmail)
-    .getByRole("button", { name: /^Rechazar a/ })
+    .getByRole("button", { name: "Rechazar", exact: true })
     .click();
   const rejectDialog = page.getByRole("alertdialog");
-  await expect(rejectDialog).toContainText("¿Rechazar a este maestro?");
+  await expect(rejectDialog).toContainText("¿Rechazar");
   await rejectDialog.getByRole("button", { name: "Cancelar" }).click();
-  await expect(page.getByText(rejectedEmail)).toBeVisible();
+  await expect(rowFor(rejectedEmail)).toBeVisible();
 
   await rowFor(rejectedEmail)
-    .getByRole("button", { name: /^Rechazar a/ })
+    .getByRole("button", { name: "Rechazar", exact: true })
     .click();
   await page
     .getByRole("alertdialog")
     .getByRole("button", { name: "Rechazar" })
     .click();
-  await filterBy(/^Rechazados/).click();
-  await expect(page.getByText(rejectedEmail)).toBeVisible();
+  await expect(rowFor(rejectedEmail)).toHaveCount(0);
+  await showAll(/^Rechazados/, rejectedEmail);
+  await expect(rowFor(rejectedEmail)).toBeVisible();
 
   const suspendedApi = await request.newContext();
   const suspendedLogin = await loginUser(suspendedApi, {
@@ -460,7 +484,7 @@ test("asks for another school that the admin approves on its own", async ({
   await loginPage(page, { email, password: "segura123" }, /\/perfil\/?$/);
 
   await expect(page.getByText(email).first()).toBeVisible({ timeout: 15000 });
-  await expect(page.getByText("70000004").first()).toBeVisible();
+  await expect(page.getByText("7000 0004").first()).toBeVisible();
   await expect(page.getByText("Colegio Principal").first()).toBeVisible();
   await expect(page.getByText("Colegio Segundo").first()).toBeVisible();
   await expect(
@@ -517,6 +541,9 @@ test("enables group navigation after the teacher is approved", async ({
     page.getByRole("heading", { name: "Mis colegios", exact: true }),
   ).toBeVisible({ timeout: 15000 });
   await expect(page.getByRole("link", { name: "Grupos" })).toBeHidden();
+  // Sin aprobar, «Mis grupos» está bloqueada: no es un enlace.
+  await expect(page.getByText("Mis grupos").first()).toBeVisible();
+  await expect(page.getByRole("link", { name: /Mis grupos/ })).toHaveCount(0);
   await expect(
     page.getByRole("link", { name: "Práctica", exact: true }),
   ).toBeVisible();
@@ -532,7 +559,7 @@ test("enables group navigation after the teacher is approved", async ({
   await api.dispose();
 
   await page.reload();
-  const groupsLink = page.getByRole("link", { name: "Ir a mis grupos" });
+  const groupsLink = page.getByRole("link", { name: /Mis grupos/ });
   await expect(groupsLink).toBeVisible({ timeout: 15000 });
   await groupsLink.click();
   await expect(page).toHaveURL(/\/grupos$/);

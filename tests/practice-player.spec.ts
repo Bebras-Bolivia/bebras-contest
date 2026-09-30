@@ -69,15 +69,19 @@ test("solves a v2 drag-drop practice task with pointer and touch input", async (
     activeStage = stage,
     activeItemButton = itemButton(label),
   ) => {
-    const [buttonBox, stageBox] = await Promise.all([
-      activeItemButton.boundingBox(),
-      activeStage.boundingBox(),
-    ]);
-    expect(buttonBox).not.toBeNull();
-    expect(stageBox).not.toBeNull();
-    expect(
-      Math.abs(buttonBox!.width - (stageBox!.width * widthPercent) / 100),
-    ).toBeLessThanOrEqual(1);
+    // Al colocarse, la pieza se asienta con una animación que empieza con
+    // una escala de 1,06: se mide cuando termina.
+    await expect
+      .poll(async () => {
+        const [buttonBox, stageBox] = await Promise.all([
+          activeItemButton.boundingBox(),
+          activeStage.boundingBox(),
+        ]);
+        return Math.abs(
+          buttonBox!.width - (stageBox!.width * widthPercent) / 100,
+        );
+      })
+      .toBeLessThanOrEqual(1);
   };
 
   await expect(stage).toHaveText("");
@@ -115,8 +119,15 @@ test("solves a v2 drag-drop practice task with pointer and touch input", async (
   const betaLeft = await trayLeft(DRAG_DROP_ITEMS[1].label);
   // Las piezas se deslizan a su lugar nuevo: se mide cuando terminan.
   await dragOnto(DRAG_DROP_ITEMS[0].label, DRAG_DROP_ITEMS[1].label);
-  await expect.poll(() => trayLeft(DRAG_DROP_ITEMS[0].label)).toBe(betaLeft);
+  // Las piezas tienen anchos distintos: tras el intercambio cambia el orden,
+  // y la que queda primera ocupa el lugar de la primera.
   await expect.poll(() => trayLeft(DRAG_DROP_ITEMS[1].label)).toBe(alphaLeft);
+  await expect
+    .poll(async () =>
+      (await trayLeft(DRAG_DROP_ITEMS[0].label)) >
+      (await trayLeft(DRAG_DROP_ITEMS[1].label)),
+    )
+    .toBe(true);
   await dragOnto(DRAG_DROP_ITEMS[1].label, DRAG_DROP_ITEMS[0].label);
   await expect.poll(() => trayLeft(DRAG_DROP_ITEMS[0].label)).toBe(alphaLeft);
   await expect.poll(() => trayLeft(DRAG_DROP_ITEMS[1].label)).toBe(betaLeft);
@@ -140,11 +151,11 @@ test("solves a v2 drag-drop practice task with pointer and touch input", async (
   const stageBox = await stage.boundingBox();
   expect(stageBox).not.toBeNull();
   expect(stageBox!.width).toBeLessThanOrEqual(769);
-  const outsideCircleOffset =
-    Math.min(stageBox!.width, stageBox!.height) * 0.08;
+  // Un toque lejos de todo lugar no coloca la pieza. (Cerca de un lugar sí:
+  // se acepta a menos de 0,6 veces el ancho de la pieza.)
   await page.mouse.click(
-    targetTwoPoint.x + outsideCircleOffset,
-    targetTwoPoint.y + outsideCircleOffset,
+    stageBox!.x + stageBox!.width * 0.5,
+    stageBox!.y + stageBox!.height * 0.95,
   );
   await expect(stage.getByRole("button")).toHaveCount(0);
   await expect(alpha).toHaveAttribute("aria-pressed", "true");

@@ -33,24 +33,30 @@ test("student starts, answers and submits without seeing the score", async ({
   await page.goto("/");
   await page.goto("/rendir");
 
+  // En /rendir la pantalla es solo del desafío: sin cabecera ni pie del sitio.
   const siteHeader = page.locator('[data-site-chrome="header"]');
   const siteFooter = page.locator('[data-site-chrome="footer"]');
-  const startButton = page.getByRole("button", { name: /Empezar/i });
-  await expect(startButton).toBeVisible();
-  await expect(siteHeader).toBeVisible();
-  await expect(siteFooter).toBeVisible();
-  await startButton.click();
+  await expect(
+    page.getByRole("heading", { name: "Antes de empezar" }),
+  ).toBeVisible();
   await expect(siteHeader).toBeHidden();
   await expect(siteFooter).toBeHidden();
 
-  await expect(page.getByText("Tarea 1", { exact: true })).toBeVisible({
+  // Empezar se habilita después de unos segundos para leer las reglas.
+  const reading = page.getByRole("button", { name: /Lee las reglas/ });
+  await expect(reading).toBeDisabled();
+  const startButton = page.getByRole("button", { name: "Empezar el desafío" });
+  await expect(startButton).toBeEnabled({ timeout: 10000 });
+  await startButton.click();
+
+  await expect(page.getByRole("button", { name: "Entregar" })).toBeVisible({
     timeout: 15000,
   });
   await expect(siteHeader).toBeHidden();
   await expect(siteFooter).toBeHidden();
-  await expect(page.getByText(/\d{2}:\d{2}/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Entregar" })).toBeVisible();
+  await expect(page.getByText(/\d{2}:\d{2}/).first()).toBeVisible();
 
+  // Salir con la prueba en curso pide confirmación.
   const exitDialogPromise = page.waitForEvent("dialog");
   await page.close({ runBeforeUnload: true });
   const exitDialog = await exitDialogPromise;
@@ -58,7 +64,7 @@ test("student starts, answers and submits without seeing the score", async ({
   await exitDialog.dismiss();
   expect(page.isClosed()).toBe(false);
   await expect(page).toHaveURL(/\/rendir$/);
-  await expect(page.getByText("Tarea 1", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Entregar" })).toBeVisible();
 
   const firstOption = page.locator("button[aria-pressed]").first();
   if (await firstOption.count()) {
@@ -73,11 +79,11 @@ test("student starts, answers and submits without seeing the score", async ({
   await expect(page.getByText("¡Terminaste!", { exact: true })).toBeVisible({
     timeout: 15000,
   });
-
-  await expect(page.getByText(/Puntaje:/i)).toBeHidden();
-  await expect(page.getByText(/se publicarán/i)).toBeVisible();
-  await expect(siteHeader).toBeVisible();
-  await expect(siteFooter).toBeVisible();
+  // El desafío muestra el puntaje recién al publicar los resultados.
+  await expect(page.getByText("puntos", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Tus resultados se publican en")).toBeVisible();
+  await expect(siteHeader).toBeHidden();
+  await expect(page.getByRole("link", { name: /Ir al inicio/ })).toBeVisible();
 });
 
 test("finishes the attempt and says so when the time runs out", async ({

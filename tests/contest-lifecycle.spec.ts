@@ -343,13 +343,13 @@ test("protects tasks and played contest records from deletion", async () => {
     headers,
   });
   expect(removeTeam.status()).toBe(409);
-  expect((await removeTeam.json()).message).toContain("ya rindió");
+  expect((await removeTeam.json()).message).toContain("La inscripción ya cerró");
 
   const removeGroup = await api.delete(`${API}/api/groups/${group.id}`, {
     headers,
   });
   expect(removeGroup.status()).toBe(409);
-  expect((await removeGroup.json()).message).toContain("ya rindieron");
+  expect((await removeGroup.json()).message).toContain("La inscripción ya cerró");
 
   const removeContest = await api.delete(`${API}/api/contests/${contest.id}`, {
     headers,
@@ -780,17 +780,27 @@ test("runs one contest with its own questions for each category", async () => {
   expect(published.ok(), await published.text()).toBe(true);
   expect((await published.json()).state).toBe("inscripcion");
 
-  const group = await api
-    .post(`${API}/api/groups`, {
-      headers,
-      data: { contestId: contest.id, name: "PW Categorías" },
-    })
-    .then((response) => response.json());
+  const groupFor = async (category: string) =>
+    api
+      .post(`${API}/api/groups`, {
+        headers,
+        data: { contestId: contest.id, name: `PW ${category}`, category },
+      })
+      .then((response) => response.json());
+  const noCategory = await api.post(`${API}/api/groups`, {
+    headers,
+    data: { contestId: contest.id, name: "PW sin categoría" },
+  });
+  expect(noCategory.status()).toBe(400);
+  const groups = {
+    Capibara: await groupFor("Capibara"),
+    Titi: await groupFor("Titi"),
+  };
 
-  const join = async (grade: string, firstName: string) =>
+  const join = async (grade: string, firstName: string, category = firstName) =>
     api.post(`${API}/api/play/join`, {
       data: {
-        accessCode: group.accessCode,
+        accessCode: groups[category as keyof typeof groups].accessCode,
         participationMode: "individual",
         grade,
         memberOneFirstName: firstName,
@@ -802,7 +812,7 @@ test("runs one contest with its own questions for each category", async () => {
   expect(capibara.ok(), await capibara.text()).toBe(true);
   const titi = await join("P5", "Titi");
   expect(titi.ok(), await titi.text()).toBe(true);
-  const kuntur = await join("S5", "Kuntur");
+  const kuntur = await join("S5", "Kuntur", "Titi");
   expect(kuntur.status()).toBe(400);
   expect((await kuntur.json()).message).toContain("Kuntur");
   const capibaraCode = (await capibara.json()).personalCode;
@@ -865,6 +875,7 @@ test("runs one contest with its own questions for each category", async () => {
     expect(submit.ok(), await submit.text()).toBe(true);
   }
 
+  await setE2EClock(api, new Date(now + 3660000));
   const results = await api
     .get(`${API}/api/contests/${contest.id}/results`, { headers })
     .then((response) => response.json());

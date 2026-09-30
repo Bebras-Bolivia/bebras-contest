@@ -237,7 +237,9 @@ export function PracticesHome() {
       tasks: picked.length > 0 ? undefined : "Elige al menos una pregunta.",
     };
 
-    if (startsAt && endsAt && new Date(endsAt) <= new Date(startsAt)) {
+    if (!startsAt || !endsAt) {
+      next.window = "Elige cuándo empieza y cuándo termina.";
+    } else if (new Date(endsAt) <= new Date(startsAt)) {
       next.window = "El cierre debe ser posterior al inicio.";
     }
 
@@ -268,7 +270,7 @@ export function PracticesHome() {
       setPractices((current) => [created, ...current]);
       setCreateOpen(false);
       toast.success(
-        "Práctica creada. Ahora créale un grupo para que entren tus estudiantes.",
+        "Práctica creada. Comparte su código: tus estudiantes entran con él y su nombre.",
       );
     } catch (error) {
       setErrors({
@@ -327,8 +329,8 @@ export function PracticesHome() {
           </h1>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
             Arma un desafío de práctica con las preguntas que el organizador
-            liberó. Solo tú lo ves, y tus estudiantes entran con su código
-            personal como en cualquier desafío.
+            liberó. Solo tú lo ves, y tus estudiantes entran con el código de
+            la práctica y su nombre.
           </p>
         </div>
         <Dialog

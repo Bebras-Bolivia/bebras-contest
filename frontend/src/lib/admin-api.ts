@@ -1,4 +1,8 @@
-import { apiRequest as request, publicRequest } from "@/lib/api-client";
+import {
+  API_BASE_URL,
+  apiRequest as request,
+  publicRequest,
+} from "@/lib/api-client";
 
 export type AdminAccount = {
   id: number;
@@ -29,4 +33,30 @@ export function saveSiteSettings(settings: SiteSettings) {
     method: "PUT",
     body: JSON.stringify(settings),
   });
+}
+
+export type CertificatesLink = {
+  key: string | null;
+  contests: number;
+  certificates: number;
+};
+
+export function getCertificatesLink() {
+  return request<CertificatesLink>("/api/admin/certificates");
+}
+
+export function renewCertificatesKey() {
+  return request<CertificatesLink>("/api/admin/certificates/key", {
+    method: "POST",
+  });
+}
+
+export function certificatesExportUrl(key: string) {
+  const base = new URL(API_BASE_URL, window.location.origin);
+  const url = new URL(
+    `${base.pathname.replace(/\/$/, "")}/api/certificates/export`,
+    base,
+  );
+  url.searchParams.set("key", key);
+  return url.toString();
 }

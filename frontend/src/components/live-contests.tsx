@@ -10,12 +10,18 @@ import {
   UsersIcon,
 } from "lucide-react";
 
+import { Expand } from "@/components/reveal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { API_BASE_URL } from "@/lib/api-client";
 import { getToken, getUser, isApproved } from "@/lib/auth";
 import type { ContestState } from "@/lib/contest-schema";
+import { rememberCount, rememberedCount } from "@/lib/remembered-count";
+import { enter } from "@/lib/surface";
 import { cn } from "@/lib/utils";
+
+const COUNT_KEY = "portada:desafios";
 
 type PublicContest = {
   id: string;
@@ -167,6 +173,7 @@ export function LiveContests() {
     number
   > | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [expected] = useState(() => Math.min(rememberedCount(COUNT_KEY, 1), 4));
 
   const refreshContests = useCallback(() => {
     return fetch(`${API_BASE_URL}/api/public-contests`)
@@ -313,9 +320,12 @@ export function LiveContests() {
       });
   }, [contests, now]);
 
-  if (failed || contests === null || visible.length === 0) {
-    return null;
-  }
+  useEffect(() => {
+    if (contests) rememberCount(COUNT_KEY, visible.length);
+  }, [contests, visible.length]);
+
+  const loading = contests === null && !failed;
+  const open = loading ? expected > 0 : !failed && visible.length > 0;
 
   // El ranking de la portada es el del desafío con resultados más reciente.
   const rankedId = visible
@@ -326,19 +336,68 @@ export function LiveContests() {
         new Date(left.contest.endsAt ?? 0).getTime(),
     )[0]?.contest.id;
 
+  // El margen negativo deja lugar a la sombra y al salto de las tarjetas,
+  // que el recorte del despliegue cortaría.
   return (
-    <div className={cn("grid gap-4", visible.length > 1 && "md:grid-cols-2")}>
-      {visible.map(({ contest, phase }) => (
-        <ContestCard
-          key={contest.id}
-          contest={contest}
-          phase={phase}
-          now={now}
-          groupCount={
-            groupsByContest ? (groupsByContest[contest.id] ?? 0) : null
-          }
-          showRankingLink={contest.id === rankedId}
-        />
+    <div className="-m-2">
+      <Expand open={open}>
+        <div className="p-2">
+          {visible.length > 0 ? (
+            <div
+              className={cn(
+                "grid gap-4",
+                visible.length > 1 && "md:grid-cols-2",
+              )}
+            >
+              {visible.map(({ contest, phase }, index) => (
+                <ContestCard
+                  key={contest.id}
+                  contest={contest}
+                  phase={phase}
+                  now={now}
+                  groupCount={
+                    groupsByContest ? (groupsByContest[contest.id] ?? 0) : null
+                  }
+                  showRankingLink={contest.id === rankedId}
+                  delay={index * 90}
+                />
+              ))}
+            </div>
+          ) : (
+            <ContestCardsSkeleton count={Math.max(expected, 1)} />
+          )}
+        </div>
+      </Expand>
+    </div>
+  );
+}
+
+function ContestCardsSkeleton({ count }: { count: number }) {
+  return (
+    <div aria-busy className={cn("grid gap-4", count > 1 && "md:grid-cols-2")}>
+      <span className="sr-only">Cargando desafíos...</span>
+      {Array.from({ length: count }, (_, index) => (
+        <div
+          key={index}
+          className="flex flex-col gap-4 border-2 border-border/10 px-5 py-5"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-1 flex-col gap-2.5">
+              <Skeleton className="h-3.5 w-32 rounded-none" />
+              <Skeleton className="h-6 w-3/4 rounded-none" />
+            </div>
+            <Skeleton className="h-12 w-24 shrink-0 rounded-none" />
+          </div>
+          <div className="flex gap-1.5">
+            <Skeleton className="h-6 w-36 rounded-none" />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-4 w-2/3 rounded-none" />
+            <Skeleton className="h-4 w-1/2 rounded-none" />
+            <Skeleton className="h-4 w-2/5 rounded-none" />
+          </div>
+          <Skeleton className="mt-1 h-9 w-32 rounded-none" />
+        </div>
       ))}
     </div>
   );
@@ -358,12 +417,14 @@ function ContestCard({
   now,
   groupCount,
   showRankingLink,
+  delay,
 }: {
   contest: PublicContest;
   phase: Phase;
   now: number;
   groupCount: number | null;
   showRankingLink: boolean;
+  delay: number;
 }) {
   const staff = groupCount !== null;
   const target = countdownTarget(contest, phase);
@@ -400,7 +461,9 @@ function ContestCard({
 
   return (
     <article
+      style={{ animationDelay: `${delay}ms` }}
       className={cn(
+        enter,
         "group flex flex-col gap-4 border-2 bg-background px-5 py-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-hard)]",
         highlighted
           ? "border-primary bg-primary/5"

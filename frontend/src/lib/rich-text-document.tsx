@@ -2,6 +2,7 @@ import { Fragment, isValidElement, type ReactNode } from "react";
 import type { JSONContent } from "@tiptap/core";
 import { renderInlineText } from "@/lib/rich-text";
 import { clampTaskIndent } from "@/lib/task-blank";
+import { inlineImageHeight, isInlineImageSrc } from "@/lib/task-inline-image";
 
 const legacyMarks: Record<string, string> = {
   strong: "bold",
@@ -73,6 +74,21 @@ export function renderRichTextDocument(
       return <Fragment key={key}>{result}</Fragment>;
     }
     if (node.type === "hardBreak") return <br key={key} />;
+    if (node.type === "image") {
+      const src = node.attrs?.src;
+      if (!isInlineImageSrc(src)) return null;
+      const alt = typeof node.attrs?.alt === "string" ? node.attrs.alt : "";
+      return (
+        <img
+          key={key}
+          src={src}
+          alt={alt}
+          draggable={false}
+          className="task-inline-image"
+          style={{ height: `${inlineImageHeight(node.attrs?.height)}em` }}
+        />
+      );
+    }
     if (node.type === "taskBlank") {
       const id = node.attrs?.blankId;
       if (typeof id !== "string") return null;

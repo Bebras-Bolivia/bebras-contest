@@ -3,19 +3,27 @@
 import { useEffect, useState, type FormEvent } from "react";
 import {
   CheckIcon,
+  CopyIcon,
   ExternalLinkIcon,
+  KeyRoundIcon,
   LoaderCircleIcon,
+  RefreshCwIcon,
   ShieldPlusIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   addAdmin,
+  certificatesExportUrl,
+  getCertificatesLink,
   getSiteSettings,
   listAdmins,
+  renewCertificatesKey,
   saveSiteSettings,
   type AdminAccount,
+  type CertificatesLink,
 } from "@/lib/admin-api";
+import { copyToClipboard } from "@/lib/clipboard";
 import { useAuthUser } from "@/lib/use-auth-user";
 import {
   AlertDialog,
@@ -51,6 +59,7 @@ export function AdminPanel() {
       </div>
       <AdminsSection />
       <InfoSiteSection />
+      <CertificatesSection />
     </div>
   );
 }
@@ -290,6 +299,148 @@ function InfoSiteSection() {
           </a>
         )}
       </form>
+    </section>
+  );
+}
+
+function CertificatesSection() {
+  const [link, setLink] = useState<CertificatesLink | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [renewing, setRenewing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  useEffect(() => {
+    void getCertificatesLink()
+      .then(setLink)
+      .catch((caught: unknown) =>
+        setError(errorText(caught, "No se pudo cargar el enlace.")),
+      );
+  }, []);
+
+  const renew = async () => {
+    setRenewing(true);
+    try {
+      const next = await renewCertificatesKey();
+      setLink(next);
+      setError(null);
+      if (
+        next.key &&
+        (await copyToClipboard(certificatesExportUrl(next.key)))
+      ) {
+        toast.success("Enlace nuevo copiado. Pégalo en el CMS del sitio.");
+      }
+    } catch (caught) {
+      setError(errorText(caught, "No se pudo crear el enlace."));
+    } finally {
+      setRenewing(false);
+    }
+  };
+
+  const url = link?.key ? certificatesExportUrl(link.key) : null;
+
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <h2 className="font-heading text-xl font-semibold">Certificados</h2>
+        <p className="text-sm text-muted-foreground">
+          Pega este enlace en el CMS del sitio informativo y toca «Actualizar»
+          para llevar los certificados. Es secreto: con él se descargan los
+          nombres de los estudiantes.
+        </p>
+      </div>
+
+      {link === null ? (
+        !error && (
+          <LoaderCircleIcon className="size-5 animate-spin text-muted-foreground" />
+        )
+      ) : (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm">
+            {link.certificates === 0
+              ? "Todavía no hay certificados: aparecen cuando un desafío publica sus resultados."
+              : `${link.certificates} ${link.certificates === 1 ? "certificado" : "certificados"} de ${link.contests} ${link.contests === 1 ? "desafío" : "desafíos"} con resultados publicados.`}
+          </p>
+          {url ? (
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                readOnly
+                value={url}
+                aria-label="Enlace de certificados"
+                className="font-mono text-xs sm:flex-1"
+                onFocus={(event) => event.currentTarget.select()}
+              />
+              <Button
+                type="button"
+                onClick={async () => {
+                  if (await copyToClipboard(url))
+                    toast.success("Enlace copiado.");
+                }}
+              >
+                <CopyIcon data-icon="inline-start" />
+                Copiar enlace
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={renewing}
+                onClick={() => setConfirming(true)}
+              >
+                {renewing ? (
+                  <LoaderCircleIcon
+                    data-icon="inline-start"
+                    className="animate-spin"
+                  />
+                ) : (
+                  <RefreshCwIcon data-icon="inline-start" />
+                )}
+                Cambiar enlace
+              </Button>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              className="w-fit"
+              disabled={renewing}
+              onClick={() => void renew()}
+            >
+              {renewing ? (
+                <LoaderCircleIcon
+                  data-icon="inline-start"
+                  className="animate-spin"
+                />
+              ) : (
+                <KeyRoundIcon data-icon="inline-start" />
+              )}
+              Crear enlace
+            </Button>
+          )}
+        </div>
+      )}
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
+
+      <AlertDialog open={confirming} onOpenChange={setConfirming}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              ¿Cambiar el enlace de certificados?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              El enlace actual dejará de funcionar y tendrás que pegar el nuevo
+              en el CMS del sitio. Úsalo si alguien más lo vio.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void renew()}>
+              Cambiar enlace
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

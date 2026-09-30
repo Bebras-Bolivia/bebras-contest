@@ -13,9 +13,11 @@ export function assertIgnored(file: string): void {
 
 export function protectPath(path: string, directory = false): void {
   if (process.platform === "win32") {
-    const who = spawnSync("whoami", ["/user", "/fo", "csv", "/nh"], { encoding: "utf8" });
+    // Por su ruta: desde Git Bash, «whoami» es el de Git y no devuelve el SID.
+    const system32 = join(process.env.SystemRoot ?? "C:\\Windows", "System32");
+    const who = spawnSync(join(system32, "whoami.exe"), ["/user", "/fo", "csv", "/nh"], { encoding: "utf8" });
     const sid = who.stdout?.match(/S-1-[0-9-]+/)?.[0];
-    if (!sid || spawnSync("icacls", [path, "/inheritance:r", "/grant:r", `*${sid}:${directory ? "(OI)(CI)" : ""}F`], { stdio: "ignore" }).status !== 0) throw new Error("No se pudo proteger el SQL.");
+    if (!sid || spawnSync(join(system32, "icacls.exe"), [path, "/inheritance:r", "/grant:r", `*${sid}:${directory ? "(OI)(CI)" : ""}F`], { stdio: "ignore" }).status !== 0) throw new Error("No se pudo proteger el SQL.");
   } else chmodSync(path, directory ? 0o700 : 0o600);
 }
 

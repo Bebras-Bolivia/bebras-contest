@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   ImagePlusIcon,
   MapPinPlusIcon,
@@ -12,13 +12,11 @@ import { dragRemovalImpact, editingSolutions } from "@/lib/authoring";
 import { useAuthoringImageSizes } from "@/lib/authoring-image-sizes";
 import { useCutoutImages } from "@/lib/cutout-images";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Slider } from "@/components/ui/slider";
 import type {
   StoredTaskDragDropItem,
   StoredTaskDragDropSolution,
@@ -110,24 +108,6 @@ export function DragDropEditor(p: Props) {
   const { backgroundUrl, items, targets, solutions } = p;
   const [solutionId, setSolutionId] = useState("primary");
   const [addingSpots, setAddingSpots] = useState(false);
-  // Tamaño que se está eligiendo con la barra: se ve en el escenario al
-  // instante y llega al formulario una vez, al soltar (guardarlo en cada
-  // movimiento redibujaba todo el formulario y se sentía lento).
-  const [sizeDraft, setSizeDraft] = useState<{
-    itemId: string;
-    widthPercent: number;
-  } | null>(null);
-  const shownItems = useMemo(
-    () =>
-      sizeDraft
-        ? items.map((item) =>
-            item.id === sizeDraft.itemId
-              ? { ...item, widthPercent: sizeDraft.widthPercent }
-              : item,
-          )
-        : items,
-    [items, sizeDraft],
-  );
   const [pendingDelete, setPendingDelete] = useState<{
     description: string;
     confirm: () => void;
@@ -261,18 +241,6 @@ export function DragDropEditor(p: Props) {
               key={item.id}
               item={item}
               src={item.image && (cutouts[item.image.url] ?? item.image.url)}
-              widthPercent={
-                sizeDraft?.itemId === item.id
-                  ? sizeDraft.widthPercent
-                  : item.widthPercent
-              }
-              onPreviewWidth={(widthPercent) =>
-                setSizeDraft({ itemId: item.id, widthPercent })
-              }
-              onCommitWidth={(widthPercent) => {
-                p.onUpdateItem(item.id, { widthPercent });
-                setSizeDraft(null);
-              }}
               onReplaceImage={(files) => p.onReplaceItemImage(item.id, files)}
               onRemove={() => removeItem(item)}
             />
@@ -373,13 +341,17 @@ export function DragDropEditor(p: Props) {
         <DragDropPlayer
           key={current.id}
           backgroundUrl={backgroundUrl}
-          items={shownItems}
+          items={items}
           targets={targets}
           placements={placements}
           onChange={commit}
           widthPercent={p.backgroundWidthPercent}
           authoring={{
             onResize: p.onResizeBackground,
+            // El tamaño de cada pieza se cambia tirando de su esquina, ahí
+            // mismo, donde se ve cómo queda sobre la imagen.
+            onResizeItem: (itemId, widthPercent) =>
+              p.onUpdateItem(itemId, { widthPercent }),
             onPlaceAt: (itemId, x, y) => {
               const item = items.find((candidate) => candidate.id === itemId);
               const id = addTarget(x, y, item?.widthPercent ?? averageWidth);
@@ -404,22 +376,16 @@ export function DragDropEditor(p: Props) {
   );
 }
 
-/** Miniatura de una pieza; al tocarla se ajustan su tamaño e imagen. */
+/** Miniatura de una pieza; al tocarla se cambia su imagen o se quita. */
 function PieceButton({
   item,
   src,
-  widthPercent,
-  onPreviewWidth,
-  onCommitWidth,
   onReplaceImage,
   onRemove,
 }: {
   item: StoredTaskDragDropItem;
   /** Imagen de la pieza sin su fondo blanco, si lo tenía. */
   src: string | null;
-  widthPercent: number;
-  onPreviewWidth: (widthPercent: number) => void;
-  onCommitWidth: (widthPercent: number) => void;
   onReplaceImage: (files: FileList | null) => void;
   onRemove: () => void;
 }) {
@@ -444,18 +410,6 @@ function PieceButton({
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="flex w-72 flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <Label htmlFor={`drag-width-${item.id}`}>Tamaño</Label>
-          <Slider
-            id={`drag-width-${item.id}`}
-            value={[widthPercent]}
-            min={3}
-            max={50}
-            step={0.5}
-            onValueChange={([next]) => onPreviewWidth(next)}
-            onValueCommit={([next]) => onCommitWidth(next)}
-          />
-        </div>
         <div className="flex items-center justify-between gap-2">
           <PickImage onPick={onReplaceImage} label="Nueva imagen de la pieza">
             <ImagePlusIcon data-icon="inline-start" />

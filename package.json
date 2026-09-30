@@ -29,7 +29,8 @@
     "db:setup": "bun run db:generate && bun run db:push && bun scripts/cloudflare-seed.ts --target local --config wrangler.jsonc && bun scripts/cloudflare-seed-tasks.ts --target local --config wrangler.jsonc",
     "db:bootstrap:staging": "bun scripts/cloudflare-seed.ts --target staging --config wrangler.jsonc",
     "db:bootstrap:production": "bun scripts/cloudflare-seed.ts --target production --config wrangler.jsonc",
-    "test:unidad": "bun x tsx --test tests/*.unit.ts tests/*.test.ts scripts/cloudflare-migrations-check.test.ts scripts/firebase-email-config-options.test.ts scripts/firebase-migrate-users-options.test.ts backend/prisma/*.test.ts backend/src/lib/*.test.ts backend/src/lib/task-answers/*.test.ts",
+    "test:unidad": "bun x tsx --tsconfig \"$PWD/frontend/tsconfig.json\" --test tests/*.unit.ts tests/*.test.ts scripts/cloudflare-migrations-check.test.ts scripts/firebase-email-config-options.test.ts scripts/firebase-migrate-users-options.test.ts backend/prisma/*.test.ts backend/src/lib/*.test.ts backend/src/lib/task-answers/*.test.ts",
+    "test:unidad:cobertura": "bun x tsx --tsconfig \"$PWD/frontend/tsconfig.json\" --test --experimental-test-coverage tests/*.unit.ts tests/*.test.ts scripts/cloudflare-migrations-check.test.ts scripts/firebase-email-config-options.test.ts scripts/firebase-migrate-users-options.test.ts backend/prisma/*.test.ts backend/src/lib/*.test.ts backend/src/lib/task-answers/*.test.ts",
     "test:e2e": "bun ./tests/run-e2e.ts",
     "test:e2e:rapido": "bun ./tests/run-e2e.ts --rapido",
     "test:e2e:servidores": "bun ./tests/run-e2e.ts --servidores",
@@ -40,7 +41,9 @@
     "test:e2e:practica": "bun ./tests/run-e2e.ts --project=practica",
     "test:e2e:cuentas": "bun ./tests/run-e2e.ts --project=cuentas",
     "test:e2e:interfaz": "bun ./tests/run-e2e.ts --project=interfaz",
-    "test:e2e:list": "bun x playwright test --list"
+    "test:e2e:list": "bun x playwright test --list",
+    "test:estres": "node tests/estres/estres.mjs",
+    "test:estres:limpiar": "python tests/estres/limpiar.py"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
