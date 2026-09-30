@@ -324,7 +324,7 @@ export function TaskContentBuilder({
         <div
           key={block.id}
           className={cn(
-            "group/block relative flex items-center gap-3 transition-opacity",
+            "group/block relative flex items-center gap-3 transition-opacity max-sm:-mx-3 max-sm:gap-1",
             dragPreview?.blockId === block.id && "opacity-40",
           )}
           data-content-block-id={block.id}
@@ -335,7 +335,7 @@ export function TaskContentBuilder({
           {allowReorderingBlocks ? (
             <Button
               aria-label="Arrastrar para mover bloque"
-              className="cursor-grab touch-none opacity-0 transition-opacity select-none group-focus-within/block:opacity-100 group-hover/block:opacity-100 focus-visible:opacity-100 active:cursor-grabbing [@media(hover:none)]:opacity-100"
+              className="cursor-grab touch-none opacity-0 transition-opacity select-none group-focus-within/block:opacity-100 group-hover/block:opacity-100 focus-visible:opacity-100 active:cursor-grabbing max-sm:size-6 [@media(hover:none)]:opacity-100"
               size="icon-sm"
               type="button"
               variant="ghost"
@@ -347,7 +347,7 @@ export function TaskContentBuilder({
               <GripVerticalIcon />
             </Button>
           ) : (
-            <div className="size-8 shrink-0" />
+            <div className="size-8 shrink-0 max-sm:size-6" />
           )}
           <div className="min-w-0 flex-1">
             {block.type === "image" ? (
@@ -444,13 +444,13 @@ export function TaskContentBuilder({
               type="button"
               variant="ghost"
               aria-label="Quitar bloque"
-              className="opacity-0 transition-opacity group-focus-within/block:opacity-100 group-hover/block:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+              className="opacity-0 transition-opacity group-focus-within/block:opacity-100 group-hover/block:opacity-100 focus-visible:opacity-100 max-sm:size-6 [@media(hover:none)]:opacity-100"
               onClick={() => removeBlock(block.id)}
             >
               <XIcon />
             </Button>
           ) : (
-            <div className="size-8 shrink-0" />
+            <div className="size-8 shrink-0 max-sm:size-6" />
           )}
         </div>
       ))}
