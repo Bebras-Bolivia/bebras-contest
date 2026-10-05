@@ -265,6 +265,7 @@ export type ContestGroupWhereInput = {
   createdAt?: Prisma.DateTimeFilter<"ContestGroup"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"ContestGroup"> | Date | string
   contest?: Prisma.XOR<Prisma.ContestScalarRelationFilter, Prisma.ContestWhereInput>
+  createdBy?: Prisma.XOR<Prisma.UserNullableScalarRelationFilter, Prisma.UserWhereInput> | null
   teams?: Prisma.TeamListRelationFilter
 }
 
@@ -281,6 +282,7 @@ export type ContestGroupOrderByWithRelationInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   contest?: Prisma.ContestOrderByWithRelationInput
+  createdBy?: Prisma.UserOrderByWithRelationInput
   teams?: Prisma.TeamOrderByRelationAggregateInput
 }
 
@@ -300,6 +302,7 @@ export type ContestGroupWhereUniqueInput = Prisma.AtLeast<{
   createdAt?: Prisma.DateTimeFilter<"ContestGroup"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"ContestGroup"> | Date | string
   contest?: Prisma.XOR<Prisma.ContestScalarRelationFilter, Prisma.ContestWhereInput>
+  createdBy?: Prisma.XOR<Prisma.UserNullableScalarRelationFilter, Prisma.UserWhereInput> | null
   teams?: Prisma.TeamListRelationFilter
 }, "id" | "accessCode">
 
@@ -341,7 +344,6 @@ export type ContestGroupScalarWhereWithAggregatesInput = {
 
 export type ContestGroupCreateInput = {
   id?: string
-  createdById?: number | null
   name: string
   category?: string | null
   accessCode: string
@@ -351,6 +353,7 @@ export type ContestGroupCreateInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   contest: Prisma.ContestCreateNestedOneWithoutGroupsInput
+  createdBy?: Prisma.UserCreateNestedOneWithoutGroupsInput
   teams?: Prisma.TeamCreateNestedManyWithoutGroupInput
 }
 
@@ -371,7 +374,6 @@ export type ContestGroupUncheckedCreateInput = {
 
 export type ContestGroupUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  createdById?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
@@ -381,6 +383,7 @@ export type ContestGroupUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   contest?: Prisma.ContestUpdateOneRequiredWithoutGroupsNestedInput
+  createdBy?: Prisma.UserUpdateOneWithoutGroupsNestedInput
   teams?: Prisma.TeamUpdateManyWithoutGroupNestedInput
 }
 
@@ -415,7 +418,6 @@ export type ContestGroupCreateManyInput = {
 
 export type ContestGroupUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  createdById?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
@@ -505,6 +507,48 @@ export type ContestGroupScalarRelationFilter = {
   isNot?: Prisma.ContestGroupWhereInput
 }
 
+export type ContestGroupCreateNestedManyWithoutCreatedByInput = {
+  create?: Prisma.XOR<Prisma.ContestGroupCreateWithoutCreatedByInput, Prisma.ContestGroupUncheckedCreateWithoutCreatedByInput> | Prisma.ContestGroupCreateWithoutCreatedByInput[] | Prisma.ContestGroupUncheckedCreateWithoutCreatedByInput[]
+  connectOrCreate?: Prisma.ContestGroupCreateOrConnectWithoutCreatedByInput | Prisma.ContestGroupCreateOrConnectWithoutCreatedByInput[]
+  createMany?: Prisma.ContestGroupCreateManyCreatedByInputEnvelope
+  connect?: Prisma.ContestGroupWhereUniqueInput | Prisma.ContestGroupWhereUniqueInput[]
+}
+
+export type ContestGroupUncheckedCreateNestedManyWithoutCreatedByInput = {
+  create?: Prisma.XOR<Prisma.ContestGroupCreateWithoutCreatedByInput, Prisma.ContestGroupUncheckedCreateWithoutCreatedByInput> | Prisma.ContestGroupCreateWithoutCreatedByInput[] | Prisma.ContestGroupUncheckedCreateWithoutCreatedByInput[]
+  connectOrCreate?: Prisma.ContestGroupCreateOrConnectWithoutCreatedByInput | Prisma.ContestGroupCreateOrConnectWithoutCreatedByInput[]
+  createMany?: Prisma.ContestGroupCreateManyCreatedByInputEnvelope
+  connect?: Prisma.ContestGroupWhereUniqueInput | Prisma.ContestGroupWhereUniqueInput[]
+}
+
+export type ContestGroupUpdateManyWithoutCreatedByNestedInput = {
+  create?: Prisma.XOR<Prisma.ContestGroupCreateWithoutCreatedByInput, Prisma.ContestGroupUncheckedCreateWithoutCreatedByInput> | Prisma.ContestGroupCreateWithoutCreatedByInput[] | Prisma.ContestGroupUncheckedCreateWithoutCreatedByInput[]
+  connectOrCreate?: Prisma.ContestGroupCreateOrConnectWithoutCreatedByInput | Prisma.ContestGroupCreateOrConnectWithoutCreatedByInput[]
+  upsert?: Prisma.ContestGroupUpsertWithWhereUniqueWithoutCreatedByInput | Prisma.ContestGroupUpsertWithWhereUniqueWithoutCreatedByInput[]
+  createMany?: Prisma.ContestGroupCreateManyCreatedByInputEnvelope
+  set?: Prisma.ContestGroupWhereUniqueInput | Prisma.ContestGroupWhereUniqueInput[]
+  disconnect?: Prisma.ContestGroupWhereUniqueInput | Prisma.ContestGroupWhereUniqueInput[]
+  delete?: Prisma.ContestGroupWhereUniqueInput | Prisma.ContestGroupWhereUniqueInput[]
+  connect?: Prisma.ContestGroupWhereUniqueInput | Prisma.ContestGroupWhereUniqueInput[]
+  update?: Prisma.ContestGroupUpdateWithWhereUniqueWithoutCreatedByInput | Prisma.ContestGroupUpdateWithWhereUniqueWithoutCreatedByInput[]
+  updateMany?: Prisma.ContestGroupUpdateManyWithWhereWithoutCreatedByInput | Prisma.ContestGroupUpdateManyWithWhereWithoutCreatedByInput[]
+  deleteMany?: Prisma.ContestGroupScalarWhereInput | Prisma.ContestGroupScalarWhereInput[]
+}
+
+export type ContestGroupUncheckedUpdateManyWithoutCreatedByNestedInput = {
+  create?: Prisma.XOR<Prisma.ContestGroupCreateWithoutCreatedByInput, Prisma.ContestGroupUncheckedCreateWithoutCreatedByInput> | Prisma.ContestGroupCreateWithoutCreatedByInput[] | Prisma.ContestGroupUncheckedCreateWithoutCreatedByInput[]
+  connectOrCreate?: Prisma.ContestGroupCreateOrConnectWithoutCreatedByInput | Prisma.ContestGroupCreateOrConnectWithoutCreatedByInput[]
+  upsert?: Prisma.ContestGroupUpsertWithWhereUniqueWithoutCreatedByInput | Prisma.ContestGroupUpsertWithWhereUniqueWithoutCreatedByInput[]
+  createMany?: Prisma.ContestGroupCreateManyCreatedByInputEnvelope
+  set?: Prisma.ContestGroupWhereUniqueInput | Prisma.ContestGroupWhereUniqueInput[]
+  disconnect?: Prisma.ContestGroupWhereUniqueInput | Prisma.ContestGroupWhereUniqueInput[]
+  delete?: Prisma.ContestGroupWhereUniqueInput | Prisma.ContestGroupWhereUniqueInput[]
+  connect?: Prisma.ContestGroupWhereUniqueInput | Prisma.ContestGroupWhereUniqueInput[]
+  update?: Prisma.ContestGroupUpdateWithWhereUniqueWithoutCreatedByInput | Prisma.ContestGroupUpdateWithWhereUniqueWithoutCreatedByInput[]
+  updateMany?: Prisma.ContestGroupUpdateManyWithWhereWithoutCreatedByInput | Prisma.ContestGroupUpdateManyWithWhereWithoutCreatedByInput[]
+  deleteMany?: Prisma.ContestGroupScalarWhereInput | Prisma.ContestGroupScalarWhereInput[]
+}
+
 export type ContestGroupCreateNestedManyWithoutContestInput = {
   create?: Prisma.XOR<Prisma.ContestGroupCreateWithoutContestInput, Prisma.ContestGroupUncheckedCreateWithoutContestInput> | Prisma.ContestGroupCreateWithoutContestInput[] | Prisma.ContestGroupUncheckedCreateWithoutContestInput[]
   connectOrCreate?: Prisma.ContestGroupCreateOrConnectWithoutContestInput | Prisma.ContestGroupCreateOrConnectWithoutContestInput[]
@@ -561,9 +605,8 @@ export type ContestGroupUpdateOneRequiredWithoutTeamsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.ContestGroupUpdateToOneWithWhereWithoutTeamsInput, Prisma.ContestGroupUpdateWithoutTeamsInput>, Prisma.ContestGroupUncheckedUpdateWithoutTeamsInput>
 }
 
-export type ContestGroupCreateWithoutContestInput = {
+export type ContestGroupCreateWithoutCreatedByInput = {
   id?: string
-  createdById?: number | null
   name: string
   category?: string | null
   accessCode: string
@@ -572,6 +615,77 @@ export type ContestGroupCreateWithoutContestInput = {
   expiresAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  contest: Prisma.ContestCreateNestedOneWithoutGroupsInput
+  teams?: Prisma.TeamCreateNestedManyWithoutGroupInput
+}
+
+export type ContestGroupUncheckedCreateWithoutCreatedByInput = {
+  id?: string
+  contestId: string
+  name: string
+  category?: string | null
+  accessCode: string
+  recoveryCode: string
+  firstUsedAt?: Date | string | null
+  expiresAt?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  teams?: Prisma.TeamUncheckedCreateNestedManyWithoutGroupInput
+}
+
+export type ContestGroupCreateOrConnectWithoutCreatedByInput = {
+  where: Prisma.ContestGroupWhereUniqueInput
+  create: Prisma.XOR<Prisma.ContestGroupCreateWithoutCreatedByInput, Prisma.ContestGroupUncheckedCreateWithoutCreatedByInput>
+}
+
+export type ContestGroupCreateManyCreatedByInputEnvelope = {
+  data: Prisma.ContestGroupCreateManyCreatedByInput | Prisma.ContestGroupCreateManyCreatedByInput[]
+}
+
+export type ContestGroupUpsertWithWhereUniqueWithoutCreatedByInput = {
+  where: Prisma.ContestGroupWhereUniqueInput
+  update: Prisma.XOR<Prisma.ContestGroupUpdateWithoutCreatedByInput, Prisma.ContestGroupUncheckedUpdateWithoutCreatedByInput>
+  create: Prisma.XOR<Prisma.ContestGroupCreateWithoutCreatedByInput, Prisma.ContestGroupUncheckedCreateWithoutCreatedByInput>
+}
+
+export type ContestGroupUpdateWithWhereUniqueWithoutCreatedByInput = {
+  where: Prisma.ContestGroupWhereUniqueInput
+  data: Prisma.XOR<Prisma.ContestGroupUpdateWithoutCreatedByInput, Prisma.ContestGroupUncheckedUpdateWithoutCreatedByInput>
+}
+
+export type ContestGroupUpdateManyWithWhereWithoutCreatedByInput = {
+  where: Prisma.ContestGroupScalarWhereInput
+  data: Prisma.XOR<Prisma.ContestGroupUpdateManyMutationInput, Prisma.ContestGroupUncheckedUpdateManyWithoutCreatedByInput>
+}
+
+export type ContestGroupScalarWhereInput = {
+  AND?: Prisma.ContestGroupScalarWhereInput | Prisma.ContestGroupScalarWhereInput[]
+  OR?: Prisma.ContestGroupScalarWhereInput[]
+  NOT?: Prisma.ContestGroupScalarWhereInput | Prisma.ContestGroupScalarWhereInput[]
+  id?: Prisma.StringFilter<"ContestGroup"> | string
+  contestId?: Prisma.StringFilter<"ContestGroup"> | string
+  createdById?: Prisma.IntNullableFilter<"ContestGroup"> | number | null
+  name?: Prisma.StringFilter<"ContestGroup"> | string
+  category?: Prisma.StringNullableFilter<"ContestGroup"> | string | null
+  accessCode?: Prisma.StringFilter<"ContestGroup"> | string
+  recoveryCode?: Prisma.StringFilter<"ContestGroup"> | string
+  firstUsedAt?: Prisma.DateTimeNullableFilter<"ContestGroup"> | Date | string | null
+  expiresAt?: Prisma.DateTimeNullableFilter<"ContestGroup"> | Date | string | null
+  createdAt?: Prisma.DateTimeFilter<"ContestGroup"> | Date | string
+  updatedAt?: Prisma.DateTimeFilter<"ContestGroup"> | Date | string
+}
+
+export type ContestGroupCreateWithoutContestInput = {
+  id?: string
+  name: string
+  category?: string | null
+  accessCode: string
+  recoveryCode: string
+  firstUsedAt?: Date | string | null
+  expiresAt?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  createdBy?: Prisma.UserCreateNestedOneWithoutGroupsInput
   teams?: Prisma.TeamCreateNestedManyWithoutGroupInput
 }
 
@@ -614,26 +728,8 @@ export type ContestGroupUpdateManyWithWhereWithoutContestInput = {
   data: Prisma.XOR<Prisma.ContestGroupUpdateManyMutationInput, Prisma.ContestGroupUncheckedUpdateManyWithoutContestInput>
 }
 
-export type ContestGroupScalarWhereInput = {
-  AND?: Prisma.ContestGroupScalarWhereInput | Prisma.ContestGroupScalarWhereInput[]
-  OR?: Prisma.ContestGroupScalarWhereInput[]
-  NOT?: Prisma.ContestGroupScalarWhereInput | Prisma.ContestGroupScalarWhereInput[]
-  id?: Prisma.StringFilter<"ContestGroup"> | string
-  contestId?: Prisma.StringFilter<"ContestGroup"> | string
-  createdById?: Prisma.IntNullableFilter<"ContestGroup"> | number | null
-  name?: Prisma.StringFilter<"ContestGroup"> | string
-  category?: Prisma.StringNullableFilter<"ContestGroup"> | string | null
-  accessCode?: Prisma.StringFilter<"ContestGroup"> | string
-  recoveryCode?: Prisma.StringFilter<"ContestGroup"> | string
-  firstUsedAt?: Prisma.DateTimeNullableFilter<"ContestGroup"> | Date | string | null
-  expiresAt?: Prisma.DateTimeNullableFilter<"ContestGroup"> | Date | string | null
-  createdAt?: Prisma.DateTimeFilter<"ContestGroup"> | Date | string
-  updatedAt?: Prisma.DateTimeFilter<"ContestGroup"> | Date | string
-}
-
 export type ContestGroupCreateWithoutTeamsInput = {
   id?: string
-  createdById?: number | null
   name: string
   category?: string | null
   accessCode: string
@@ -643,6 +739,7 @@ export type ContestGroupCreateWithoutTeamsInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   contest: Prisma.ContestCreateNestedOneWithoutGroupsInput
+  createdBy?: Prisma.UserCreateNestedOneWithoutGroupsInput
 }
 
 export type ContestGroupUncheckedCreateWithoutTeamsInput = {
@@ -677,7 +774,6 @@ export type ContestGroupUpdateToOneWithWhereWithoutTeamsInput = {
 
 export type ContestGroupUpdateWithoutTeamsInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  createdById?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
@@ -687,12 +783,67 @@ export type ContestGroupUpdateWithoutTeamsInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   contest?: Prisma.ContestUpdateOneRequiredWithoutGroupsNestedInput
+  createdBy?: Prisma.UserUpdateOneWithoutGroupsNestedInput
 }
 
 export type ContestGroupUncheckedUpdateWithoutTeamsInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   contestId?: Prisma.StringFieldUpdateOperationsInput | string
   createdById?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  accessCode?: Prisma.StringFieldUpdateOperationsInput | string
+  recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
+  firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
+export type ContestGroupCreateManyCreatedByInput = {
+  id?: string
+  contestId: string
+  name: string
+  category?: string | null
+  accessCode: string
+  recoveryCode: string
+  firstUsedAt?: Date | string | null
+  expiresAt?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+}
+
+export type ContestGroupUpdateWithoutCreatedByInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  accessCode?: Prisma.StringFieldUpdateOperationsInput | string
+  recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
+  firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  contest?: Prisma.ContestUpdateOneRequiredWithoutGroupsNestedInput
+  teams?: Prisma.TeamUpdateManyWithoutGroupNestedInput
+}
+
+export type ContestGroupUncheckedUpdateWithoutCreatedByInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  contestId?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  accessCode?: Prisma.StringFieldUpdateOperationsInput | string
+  recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
+  firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  teams?: Prisma.TeamUncheckedUpdateManyWithoutGroupNestedInput
+}
+
+export type ContestGroupUncheckedUpdateManyWithoutCreatedByInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  contestId?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
@@ -718,7 +869,6 @@ export type ContestGroupCreateManyContestInput = {
 
 export type ContestGroupUpdateWithoutContestInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
-  createdById?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
@@ -727,6 +877,7 @@ export type ContestGroupUpdateWithoutContestInput = {
   expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  createdBy?: Prisma.UserUpdateOneWithoutGroupsNestedInput
   teams?: Prisma.TeamUpdateManyWithoutGroupNestedInput
 }
 
@@ -801,6 +952,7 @@ export type ContestGroupSelect<ExtArgs extends runtime.Types.Extensions.Internal
   createdAt?: boolean
   updatedAt?: boolean
   contest?: boolean | Prisma.ContestDefaultArgs<ExtArgs>
+  createdBy?: boolean | Prisma.ContestGroup$createdByArgs<ExtArgs>
   teams?: boolean | Prisma.ContestGroup$teamsArgs<ExtArgs>
   _count?: boolean | Prisma.ContestGroupCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["contestGroup"]>
@@ -818,6 +970,7 @@ export type ContestGroupSelectCreateManyAndReturn<ExtArgs extends runtime.Types.
   createdAt?: boolean
   updatedAt?: boolean
   contest?: boolean | Prisma.ContestDefaultArgs<ExtArgs>
+  createdBy?: boolean | Prisma.ContestGroup$createdByArgs<ExtArgs>
 }, ExtArgs["result"]["contestGroup"]>
 
 export type ContestGroupSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -833,6 +986,7 @@ export type ContestGroupSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.
   createdAt?: boolean
   updatedAt?: boolean
   contest?: boolean | Prisma.ContestDefaultArgs<ExtArgs>
+  createdBy?: boolean | Prisma.ContestGroup$createdByArgs<ExtArgs>
 }, ExtArgs["result"]["contestGroup"]>
 
 export type ContestGroupSelectScalar = {
@@ -852,20 +1006,24 @@ export type ContestGroupSelectScalar = {
 export type ContestGroupOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "contestId" | "createdById" | "name" | "category" | "accessCode" | "recoveryCode" | "firstUsedAt" | "expiresAt" | "createdAt" | "updatedAt", ExtArgs["result"]["contestGroup"]>
 export type ContestGroupInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   contest?: boolean | Prisma.ContestDefaultArgs<ExtArgs>
+  createdBy?: boolean | Prisma.ContestGroup$createdByArgs<ExtArgs>
   teams?: boolean | Prisma.ContestGroup$teamsArgs<ExtArgs>
   _count?: boolean | Prisma.ContestGroupCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type ContestGroupIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   contest?: boolean | Prisma.ContestDefaultArgs<ExtArgs>
+  createdBy?: boolean | Prisma.ContestGroup$createdByArgs<ExtArgs>
 }
 export type ContestGroupIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   contest?: boolean | Prisma.ContestDefaultArgs<ExtArgs>
+  createdBy?: boolean | Prisma.ContestGroup$createdByArgs<ExtArgs>
 }
 
 export type $ContestGroupPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "ContestGroup"
   objects: {
     contest: Prisma.$ContestPayload<ExtArgs>
+    createdBy: Prisma.$UserPayload<ExtArgs> | null
     teams: Prisma.$TeamPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
@@ -1275,6 +1433,7 @@ readonly fields: ContestGroupFieldRefs;
 export interface Prisma__ContestGroupClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
   contest<T extends Prisma.ContestDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ContestDefaultArgs<ExtArgs>>): Prisma.Prisma__ContestClient<runtime.Types.Result.GetResult<Prisma.$ContestPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+  createdBy<T extends Prisma.ContestGroup$createdByArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ContestGroup$createdByArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   teams<T extends Prisma.ContestGroup$teamsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ContestGroup$teamsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TeamPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
@@ -1712,6 +1871,25 @@ export type ContestGroupDeleteManyArgs<ExtArgs extends runtime.Types.Extensions.
    * Limit how many ContestGroups to delete.
    */
   limit?: number
+}
+
+/**
+ * ContestGroup.createdBy
+ */
+export type ContestGroup$createdByArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the User
+   */
+  select?: Prisma.UserSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the User
+   */
+  omit?: Prisma.UserOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.UserInclude<ExtArgs> | null
+  where?: Prisma.UserWhereInput
 }
 
 /**

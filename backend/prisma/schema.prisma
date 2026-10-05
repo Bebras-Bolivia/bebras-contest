@@ -32,6 +32,7 @@ model User {
   updatedAt       DateTime        @updatedAt
   schools         TeacherSchool[]
   contests        Contest[]
+  groups          ContestGroup[]
 }
 
 model TeacherSchool {
@@ -173,9 +174,11 @@ model ContestGroup {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   contest      Contest   @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  createdBy    User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
   teams        Team[]
 
   @@index([contestId])
+  @@index([createdById])
 }
 
 model Team {
