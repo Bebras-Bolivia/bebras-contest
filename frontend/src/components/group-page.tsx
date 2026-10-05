@@ -10,11 +10,13 @@ import {
 } from "react";
 import {
   CheckIcon,
+  ClipboardPenIcon,
   CopyIcon,
   DownloadIcon,
   LinkIcon,
   LoaderCircleIcon,
   PencilIcon,
+  PrinterIcon,
   XIcon,
   UploadIcon,
   UserPlusIcon,
@@ -48,6 +50,7 @@ import {
   type RosterImportResult,
   type StoredGroup,
 } from "@/lib/groups-api";
+import { dateAtEnd } from "@/lib/paper";
 import { Reveal, Unfold } from "@/components/reveal";
 import { enter } from "@/lib/surface";
 import { cn } from "@/lib/utils";
@@ -759,6 +762,7 @@ function toValues(team: GroupTeam): StudentValues {
 }
 
 function progressLabel(team: GroupResultTeam) {
+  if (team.paper) return "En papel";
   if (team.progress === "finished") return "Terminó";
   if (team.progress === "in_progress") {
     return `Rindiendo · ${team.answeredCount} de ${team.taskCount}`;
@@ -1033,6 +1037,22 @@ function StudentsTab({
                         <CopyIcon className="size-3.5 text-muted-foreground group-hover/code:text-foreground" />
                       </button>
                       <div className="flex gap-1">
+                        {results.contest.paperEntryOpen &&
+                          (team.paper || team.progress === "not_started") && (
+                            <Button
+                              asChild
+                              size="icon-sm"
+                              variant="ghost"
+                              title="Cargar su hoja en papel"
+                            >
+                              <a
+                                href={`/grupos/papel?id=${group.id}&equipo=${team.id}`}
+                                aria-label={`Cargar la hoja en papel de ${teamName(team)}`}
+                              >
+                                <ClipboardPenIcon />
+                              </a>
+                            </Button>
+                          )}
                         <Button
                           type="button"
                           size="icon-sm"
@@ -1077,6 +1097,10 @@ function StudentsTab({
         )}
       </section>
 
+      {!results.contest.isPractice && (
+        <PaperSection group={group} results={results} />
+      )}
+
       <AlertDialog
         open={removing !== null}
         onOpenChange={(open) => {
@@ -1117,6 +1141,63 @@ function StudentsTab({
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function PaperSection({
+  group,
+  results,
+}: {
+  group: StoredGroup;
+  results: GroupResults;
+}) {
+  const { contest, teams } = results;
+  const loaded = teams.filter((team) => team.paper).length;
+
+  return (
+    <section
+      className={cn(enter, "flex flex-col gap-3 border-t pt-6")}
+      style={{ animationDelay: "120ms" }}
+    >
+      <div className="flex flex-col gap-1">
+        <h2 className="font-heading text-lg font-semibold">
+          ¿Sin internet en el aula?
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Imprime la prueba: un cuadernillo para fotocopiar y una hoja de
+          respuestas con el nombre y el código de cada estudiante. Después
+          cargas lo que marcaron y se corrige igual que en línea.
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button asChild variant="outline">
+          <a href={`/grupos/imprimir?id=${group.id}`}>
+            <PrinterIcon data-icon="inline-start" />
+            Imprimir la prueba
+          </a>
+        </Button>
+        {contest.paperEntryOpen && teams.length > 0 && (
+          <Button asChild variant="outline">
+            <a href={`/grupos/papel?id=${group.id}`}>
+              <ClipboardPenIcon data-icon="inline-start" />
+              Cargar hojas
+            </a>
+          </Button>
+        )}
+      </div>
+      <p className="text-sm text-muted-foreground">
+        {!contest.canPrint && contest.printFrom
+          ? `Se puede imprimir desde el ${formatDateTime(contest.printFrom)}, dos días antes de que empiece. `
+          : ""}
+        {contest.paperEntryOpen
+          ? `${loaded} ${loaded === 1 ? "hoja cargada" : "hojas cargadas"}. Puedes cargarlas hasta el ${contest.paperEntryUntil ? dateAtEnd(contest.paperEntryUntil) : "cálculo de los resultados."}`
+          : contest.resultsPublished || ENDED_STATES.includes(contest.state)
+            ? loaded > 0
+              ? `${loaded} ${loaded === 1 ? "hoja cargada" : "hojas cargadas"}.`
+              : ""
+            : "Las hojas se cargan desde que empieza la prueba."}
+      </p>
+    </section>
   );
 }
 
@@ -1294,6 +1375,7 @@ function ResultsTab({ results }: { results: GroupResults }) {
                 </span>
                 <span className="text-sm text-muted-foreground">
                   {gradeLabel(team.grade)}
+                  {team.paper && " · en papel"}
                   {team.rank !== null && (
                     <>
                       {" "}

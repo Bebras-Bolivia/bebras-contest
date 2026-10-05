@@ -1,0 +1,16 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { PaperPrint } from "../../components/paper-print";
+---
+
+<Layout
+  title="Imprimir la prueba"
+  heading="Imprimir la prueba"
+  backHref="/grupos"
+  requireAuth
+  allowMaestro
+>
+  <main class="flex w-full flex-col">
+    <PaperPrint client:only="react" />
+  </main>
+</Layout>

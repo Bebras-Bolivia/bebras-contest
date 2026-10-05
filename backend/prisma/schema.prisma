@@ -206,6 +206,8 @@ model Attempt {
   endsAt     DateTime?
   finishedAt DateTime?
   status     String          @default("pending")
+  // "online", o "paper" cuando el maestro cargó las respuestas de la hoja.
+  mode       String          @default("online")
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
   team       Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)

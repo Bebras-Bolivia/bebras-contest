@@ -166,6 +166,8 @@ export function removeTeam(teamId: string) {
 export type GroupResultTeam = GroupTeam & {
   category: string | null;
   progress: "not_started" | "in_progress" | "finished";
+  /** Rindió en papel: el maestro cargó su hoja de respuestas. */
+  paper: boolean;
   startedAt: string | null;
   finishedAt: string | null;
   taskCount: number;
@@ -203,6 +205,10 @@ export type GroupResults = {
     endsAt: string | null;
     resultsPublished: boolean;
     registrationOpen: boolean;
+    paperEntryOpen: boolean;
+    paperEntryUntil: string | null;
+    printFrom: string | null;
+    canPrint: boolean;
   };
   categories: string[];
   showScores: boolean;

@@ -4387,6 +4387,7 @@ async function loadGroupResults(
   });
   const contest = group.contest;
   const { state } = computeContestState(contest);
+  const paper = paperWindow(contest, user);
   // Durante la rendición el maestro solo ve el avance; los aciertos, cuando cierra.
   const showScores = contest.isPractice || contestHasEnded(state);
   const categories = groupCategories(group);
@@ -4404,11 +4405,12 @@ async function loadGroupResults(
     return {
       ...serializeTeam(team),
       category,
-      progress: attempt?.startedAt
-        ? finished
-          ? "finished"
-          : "in_progress"
-        : "not_started",
+      progress: finished
+        ? "finished"
+        : attempt?.startedAt
+          ? "in_progress"
+          : "not_started",
+      paper: attempt?.mode === "paper",
       startedAt: attempt?.startedAt?.toISOString() ?? null,
       finishedAt: attempt?.finishedAt?.toISOString() ?? null,
       taskCount: tasks.length,
@@ -4479,6 +4481,10 @@ async function loadGroupResults(
       endsAt: contest.endsAt?.toISOString() ?? null,
       resultsPublished: Boolean(contest.resultsPublishedAt),
       registrationOpen: contestRegistrationIsOpen(contest),
+      paperEntryOpen: paper.entryOpen,
+      paperEntryUntil: paper.entryUntil?.toISOString() ?? null,
+      printFrom: paper.printFrom?.toISOString() ?? null,
+      canPrint: paper.canPrint,
     },
     categories,
     showScores,
@@ -4661,7 +4667,9 @@ app.get("/api/groups/:id/results.xlsx", async (req, res) => {
         name,
         team.personalCode ?? "",
         SCHOOL_GRADES.find((grade) => grade.value === team.grade)?.label ?? "",
-        PROGRESS_LABELS[team.progress as keyof typeof PROGRESS_LABELS],
+        team.paper
+          ? "En papel"
+          : PROGRESS_LABELS[team.progress as keyof typeof PROGRESS_LABELS],
         team.answeredCount,
         ...(showScores ? [team.score ?? "", team.correctCount ?? ""] : []),
         ...(withRank ? [team.rank ?? ""] : []),
@@ -5117,6 +5125,363 @@ app.put("/api/teams/:id", async (req, res) => {
   });
 
   res.json(serializeTeam(updated));
+});
+
+// ---- Prueba en papel: cuadernillo, hojas de respuestas y carga del maestro ----
+
+/** Con cuánta anticipación se imprime la prueba: hay que fotocopiarla. */
+const PAPER_PRINT_LEAD_MS = 48 * 60 * 60 * 1000;
+
+function paperWindow(
+  contest: {
+    isPractice: boolean;
+    startsAt: Date | null;
+    endsAt: Date | null;
+    resultsAt: Date | null;
+    resultsPublishedAt: Date | null;
+    resultsReleasedAt: Date | null;
+  },
+  user: AuthUser | undefined,
+) {
+  const now = currentDate();
+  const printFrom = contest.startsAt
+    ? new Date(contest.startsAt.getTime() - PAPER_PRINT_LEAD_MS)
+    : null;
+  // Se cargan hasta que se calculan los resultados (la misma hora que usa
+  // releaseDueResults).
+  const entryUntil =
+    contest.resultsAt && contest.endsAt && contest.resultsAt > contest.endsAt
+      ? contest.resultsAt
+      : contest.endsAt;
+  return {
+    printFrom,
+    canPrint:
+      contest.isPractice ||
+      user?.role === "admin" ||
+      Boolean(printFrom && now >= printFrom),
+    entryOpen:
+      !contest.isPractice &&
+      Boolean(contest.startsAt && now >= contest.startsAt) &&
+      !contest.resultsPublishedAt &&
+      !contest.resultsReleasedAt,
+    entryUntil,
+  };
+}
+
+/** El departamento del colegio del maestro, para el castor de la portada. */
+async function teacherDepartment(userId: number | null) {
+  if (!userId) return null;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      schoolCodUe: true,
+      department: true,
+      schools: { select: { schoolCodUe: true } },
+    },
+  });
+  if (!user) return null;
+  const codes = [
+    ...new Set(
+      [user.schoolCodUe, ...user.schools.map((school) => school.schoolCodUe)]
+        .filter((code): code is string => Boolean(code)),
+    ),
+  ].slice(0, 50);
+  const schools = codes.length
+    ? await prisma.school.findMany({
+        where: { codUe: { in: codes } },
+        select: { dep: true },
+      })
+    : [];
+  const departments = new Set(
+    [...schools.map((school) => school.dep), user.department ?? ""]
+      .map((name) =>
+        name
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .trim()
+          .toUpperCase(),
+      )
+      .filter(Boolean),
+  );
+  // Con colegios en varios departamentos no hay uno que elegir.
+  return departments.size === 1 ? [...departments][0] : null;
+}
+
+app.get("/api/groups/:id/paper", async (req, res) => {
+  const owner = await prisma.contestGroup.findUnique({
+    where: { id: req.params.id },
+    select: { createdById: true, contestId: true },
+  });
+
+  if (
+    !owner ||
+    (req.user?.role === "maestro" && owner.createdById !== req.user.id)
+  ) {
+    res.status(404).json({ message: "Grupo no encontrado." });
+    return;
+  }
+
+  await releaseDueResults(owner.contestId);
+
+  const group = await prisma.contestGroup.findUniqueOrThrow({
+    where: { id: req.params.id },
+    include: {
+      contest: true,
+      teams: { include: { attempt: { select: { status: true, mode: true } } } },
+    },
+  });
+  const contest = group.contest;
+  const window = paperWindow(contest, req.user);
+  const teams = [...group.teams].sort(
+    (left, right) =>
+      left.createdAt.getTime() - right.createdAt.getTime() ||
+      left.id.localeCompare(right.id),
+  );
+  const allCategories = contestCategories(contest);
+  const contestTasks = window.canPrint ? await contestTasksFor(contest) : [];
+
+  res.json({
+    group: { id: group.id, name: group.name, accessCode: group.accessCode },
+    contest: {
+      id: contest.id,
+      title: contest.title,
+      durationMinutes: contest.durationMinutes,
+      startsAt: contest.startsAt?.toISOString() ?? null,
+      endsAt: contest.endsAt?.toISOString() ?? null,
+    },
+    department: await teacherDepartment(group.createdById),
+    printFrom: window.printFrom?.toISOString() ?? null,
+    canPrint: window.canPrint,
+    entryOpen: window.entryOpen,
+    entryUntil: window.entryUntil?.toISOString() ?? null,
+    categories: groupCategories(group).map((category) => {
+      const tasks = tasksOfCategory(contestTasks, category);
+      return {
+        name: category,
+        rules: contestRules(tasks),
+        tasks: tasks.map((contestTask) => ({
+          ...renderSafeTask(contestTask, contestTask.play),
+          difficulty: contestTask.difficulty,
+          maxScore: contestTask.maxScore,
+          minScore: contestTask.minScore,
+        })),
+      };
+    }),
+    teams: teams.map((team) => ({
+      ...serializeTeam(team),
+      category: teamCategory(team.grade, allCategories),
+      status: team.attempt?.status ?? "pending",
+      mode: team.attempt?.mode ?? "online",
+    })),
+  });
+});
+
+async function loadPaperTeam(teamId: string, user: AuthUser | undefined) {
+  const find = () =>
+    prisma.team.findUnique({
+      where: { id: teamId },
+      include: { attempt: true, group: { include: { contest: true } } },
+    });
+  const team = await find();
+  if (
+    !team ||
+    (user?.role === "maestro" && team.group.createdById !== user.id)
+  ) {
+    return null;
+  }
+  return (await releaseDueResults(team.group.contestId)) ? find() : team;
+}
+
+function paperEntryClosedMessage(window: ReturnType<typeof paperWindow>) {
+  return window.entryUntil && window.entryUntil < currentDate()
+    ? "Los resultados ya se calcularon: ya no se pueden cargar respuestas."
+    : "Las respuestas en papel se cargan desde que empieza la prueba.";
+}
+
+app.get("/api/teams/:id/paper", async (req, res) => {
+  const team = await loadPaperTeam(req.params.id, req.user);
+
+  if (!team) {
+    res.status(404).json({ message: "Participante no encontrado." });
+    return;
+  }
+
+  const answers: Record<string, unknown> = {};
+  if (team.attempt?.mode === "paper") {
+    const saved = await prisma.attemptAnswer.findMany({
+      where: { attemptId: team.attempt.id },
+      select: { taskDraftId: true, responsePayload: true },
+    });
+    for (const answer of saved) {
+      answers[answer.taskDraftId] = parseJsonValue<unknown>(
+        answer.responsePayload,
+        null,
+      );
+    }
+  }
+
+  res.json({
+    status: team.attempt?.status ?? "pending",
+    mode: team.attempt?.mode ?? "online",
+    savedAt:
+      team.attempt?.mode === "paper"
+        ? (team.attempt.finishedAt?.toISOString() ?? null)
+        : null,
+    answers,
+  });
+});
+
+app.put("/api/teams/:id/paper", async (req, res) => {
+  const team = await loadPaperTeam(req.params.id, req.user);
+
+  if (!team || !team.attempt) {
+    res.status(404).json({ message: "Participante no encontrado." });
+    return;
+  }
+
+  const contest = team.group.contest;
+  const window = paperWindow(contest, req.user);
+  const attempt = team.attempt;
+
+  if (!window.entryOpen) {
+    res.status(409).json({ message: paperEntryClosedMessage(window) });
+    return;
+  }
+
+  if (attempt.mode !== "paper" && attempt.status !== "pending") {
+    res.status(409).json({
+      message:
+        "Este estudiante rindió en línea: sus respuestas ya están en el sistema.",
+    });
+    return;
+  }
+
+  const category = teamCategory(team.grade, contestCategories(contest));
+  const tasks = tasksOfCategory(await contestTasksFor(contest), category);
+
+  if (tasks.length === 0) {
+    res.status(409).json({
+      message: "El desafío no tiene preguntas para el curso de este estudiante.",
+    });
+    return;
+  }
+
+  const input = req.body?.answers;
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    res.status(400).json({ message: "Faltan las respuestas." });
+    return;
+  }
+
+  const rows = [];
+  for (const [index, task] of tasks.entries()) {
+    const payload = (input as Record<string, unknown>)[task.taskDraftId];
+    if (payload === undefined || payload === null) continue;
+    const error = validateTaskAnswer(task.play, payload);
+    if (error) {
+      res.status(400).json({
+        message: `Pregunta ${index + 1}: ${error}`,
+        field: task.taskDraftId,
+      });
+      return;
+    }
+    const graded = gradeAnswer(task, task.play, payload);
+    if (graded.answered) rows.push({ task, payload, graded });
+  }
+
+  const now = currentDate();
+  // Condicionado: si el estudiante acaba de empezar en línea, vale su intento.
+  const claimed = await prisma.attempt.updateMany({
+    where: {
+      id: attempt.id,
+      OR: [{ status: "pending" }, { mode: "paper" }],
+    },
+    data: {
+      status: "in_progress",
+      mode: "paper",
+      startedAt: now,
+      endsAt: null,
+      finishedAt: null,
+    },
+  });
+
+  if (!claimed.count) {
+    res.status(409).json({
+      message: "Este estudiante empezó a rendir en línea.",
+    });
+    return;
+  }
+
+  const stamp = now.toISOString();
+  await db().batch([
+    db()
+      .prepare('DELETE FROM "AttemptAnswer" WHERE "attemptId" = ?')
+      .bind(attempt.id),
+    ...rows.map(({ task, payload, graded }) =>
+      db()
+        .prepare(
+          `INSERT INTO "AttemptAnswer"
+            ("id", "attemptId", "taskDraftId", "responsePayload", "isCorrect", "score", "answeredAt", "createdAt", "updatedAt")
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(
+          randomUUID(),
+          attempt.id,
+          task.taskDraftId,
+          JSON.stringify(payload),
+          graded.isCorrect === null ? null : Number(graded.isCorrect),
+          graded.score,
+          stamp,
+          stamp,
+          stamp,
+        ),
+    ),
+  ]);
+  await finalizeAttempt(attempt.id);
+
+  res.json({ answeredCount: rows.length, taskCount: tasks.length });
+});
+
+app.delete("/api/teams/:id/paper", async (req, res) => {
+  const team = await loadPaperTeam(req.params.id, req.user);
+
+  if (!team || !team.attempt) {
+    res.status(404).json({ message: "Participante no encontrado." });
+    return;
+  }
+
+  const window = paperWindow(team.group.contest, req.user);
+
+  if (!window.entryOpen) {
+    res.status(409).json({ message: paperEntryClosedMessage(window) });
+    return;
+  }
+
+  if (team.attempt.mode !== "paper") {
+    res
+      .status(409)
+      .json({ message: "Este estudiante no tiene respuestas en papel." });
+    return;
+  }
+
+  const attemptId = team.attempt.id;
+  await db().batch([
+    db()
+      .prepare('DELETE FROM "AttemptAnswer" WHERE "attemptId" = ?')
+      .bind(attemptId),
+    db().prepare('DELETE FROM "Result" WHERE "attemptId" = ?').bind(attemptId),
+    db()
+      .prepare(
+        `UPDATE "Attempt" SET "status" = 'pending', "mode" = 'online',
+          "startedAt" = NULL, "endsAt" = NULL, "finishedAt" = NULL, "updatedAt" = ?
+        WHERE "id" = ? AND "mode" = 'paper'`,
+      )
+      .bind(currentDate().toISOString(), attemptId),
+  ]);
+  if (team.group.contest.consolidatedAt) {
+    await recomputeRanking(team.group.contestId);
+  }
+
+  res.status(204).send();
 });
 
 app.get("/api/groups/:id/roster-template", async (req, res) => {
@@ -6174,7 +6539,7 @@ async function recomputeRanking(contestId: string) {
         SELECT r."id" AS "id", ROW_NUMBER() OVER (
           PARTITION BY ${teamCategorySql(categories)}
           ORDER BY r."totalScore" DESC,
-            CASE WHEN a."startedAt" IS NULL OR a."finishedAt" IS NULL THEN 1 ELSE 0 END,
+            CASE WHEN a."startedAt" IS NULL OR a."finishedAt" IS NULL OR a."mode" = 'paper' THEN 1 ELSE 0 END,
             julianday(a."finishedAt") - julianday(a."startedAt"),
             r."id"
         ) AS "position"
@@ -6759,8 +7124,13 @@ app.post("/api/play/start", async (req, res) => {
     return;
   }
 
-  if (team.attempt.status === "finished") {
-    res.status(409).json({ message: "Ya entregaste este desafío." });
+  if (team.attempt.status === "finished" || team.attempt.mode === "paper") {
+    res.status(409).json({
+      message:
+        team.attempt.mode === "paper"
+          ? "Rendiste en papel: tu maestro ya cargó tus respuestas."
+          : "Ya entregaste este desafío.",
+    });
     return;
   }
 
@@ -7004,7 +7374,7 @@ app.post("/api/play/answer", async (req, res) => {
     return;
   }
 
-  if (team.attempt.status !== "in_progress") {
+  if (team.attempt.status !== "in_progress" || team.attempt.mode === "paper") {
     res.status(409).json({ message: "El desafío no está en curso." });
     return;
   }
@@ -7147,7 +7517,9 @@ app.get("/api/contests/:id/results", async (req, res) => {
       memberTwoLastName: team.memberTwoLastName,
       status: team.attempt?.status ?? "pending",
       elapsedSeconds:
-        team.attempt && team.attempt.startedAt && team.attempt.finishedAt
+        team.attempt?.mode !== "paper" &&
+        team.attempt?.startedAt &&
+        team.attempt.finishedAt
           ? Math.round(attemptElapsedMs(team.attempt) / 1000)
           : null,
       totalScore: team.attempt?.result?.totalScore ?? null,

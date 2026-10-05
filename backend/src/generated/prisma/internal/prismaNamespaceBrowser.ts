@@ -262,6 +262,7 @@ export const AttemptScalarFieldEnum = {
   endsAt: 'endsAt',
   finishedAt: 'finishedAt',
   status: 'status',
+  mode: 'mode',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const

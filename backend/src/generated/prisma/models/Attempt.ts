@@ -31,6 +31,7 @@ export type AttemptMinAggregateOutputType = {
   endsAt: Date | null
   finishedAt: Date | null
   status: string | null
+  mode: string | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -42,6 +43,7 @@ export type AttemptMaxAggregateOutputType = {
   endsAt: Date | null
   finishedAt: Date | null
   status: string | null
+  mode: string | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -53,6 +55,7 @@ export type AttemptCountAggregateOutputType = {
   endsAt: number
   finishedAt: number
   status: number
+  mode: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -66,6 +69,7 @@ export type AttemptMinAggregateInputType = {
   endsAt?: true
   finishedAt?: true
   status?: true
+  mode?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -77,6 +81,7 @@ export type AttemptMaxAggregateInputType = {
   endsAt?: true
   finishedAt?: true
   status?: true
+  mode?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -88,6 +93,7 @@ export type AttemptCountAggregateInputType = {
   endsAt?: true
   finishedAt?: true
   status?: true
+  mode?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -172,6 +178,7 @@ export type AttemptGroupByOutputType = {
   endsAt: Date | null
   finishedAt: Date | null
   status: string
+  mode: string
   createdAt: Date
   updatedAt: Date
   _count: AttemptCountAggregateOutputType | null
@@ -204,6 +211,7 @@ export type AttemptWhereInput = {
   endsAt?: Prisma.DateTimeNullableFilter<"Attempt"> | Date | string | null
   finishedAt?: Prisma.DateTimeNullableFilter<"Attempt"> | Date | string | null
   status?: Prisma.StringFilter<"Attempt"> | string
+  mode?: Prisma.StringFilter<"Attempt"> | string
   createdAt?: Prisma.DateTimeFilter<"Attempt"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Attempt"> | Date | string
   team?: Prisma.XOR<Prisma.TeamScalarRelationFilter, Prisma.TeamWhereInput>
@@ -218,6 +226,7 @@ export type AttemptOrderByWithRelationInput = {
   endsAt?: Prisma.SortOrderInput | Prisma.SortOrder
   finishedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   status?: Prisma.SortOrder
+  mode?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   team?: Prisma.TeamOrderByWithRelationInput
@@ -235,6 +244,7 @@ export type AttemptWhereUniqueInput = Prisma.AtLeast<{
   endsAt?: Prisma.DateTimeNullableFilter<"Attempt"> | Date | string | null
   finishedAt?: Prisma.DateTimeNullableFilter<"Attempt"> | Date | string | null
   status?: Prisma.StringFilter<"Attempt"> | string
+  mode?: Prisma.StringFilter<"Attempt"> | string
   createdAt?: Prisma.DateTimeFilter<"Attempt"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Attempt"> | Date | string
   team?: Prisma.XOR<Prisma.TeamScalarRelationFilter, Prisma.TeamWhereInput>
@@ -249,6 +259,7 @@ export type AttemptOrderByWithAggregationInput = {
   endsAt?: Prisma.SortOrderInput | Prisma.SortOrder
   finishedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   status?: Prisma.SortOrder
+  mode?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.AttemptCountOrderByAggregateInput
@@ -266,6 +277,7 @@ export type AttemptScalarWhereWithAggregatesInput = {
   endsAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Attempt"> | Date | string | null
   finishedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Attempt"> | Date | string | null
   status?: Prisma.StringWithAggregatesFilter<"Attempt"> | string
+  mode?: Prisma.StringWithAggregatesFilter<"Attempt"> | string
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Attempt"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Attempt"> | Date | string
 }
@@ -276,6 +288,7 @@ export type AttemptCreateInput = {
   endsAt?: Date | string | null
   finishedAt?: Date | string | null
   status?: string
+  mode?: string
   createdAt?: Date | string
   updatedAt?: Date | string
   team: Prisma.TeamCreateNestedOneWithoutAttemptInput
@@ -290,6 +303,7 @@ export type AttemptUncheckedCreateInput = {
   endsAt?: Date | string | null
   finishedAt?: Date | string | null
   status?: string
+  mode?: string
   createdAt?: Date | string
   updatedAt?: Date | string
   answers?: Prisma.AttemptAnswerUncheckedCreateNestedManyWithoutAttemptInput
@@ -302,6 +316,7 @@ export type AttemptUpdateInput = {
   endsAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   finishedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
+  mode?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   team?: Prisma.TeamUpdateOneRequiredWithoutAttemptNestedInput
@@ -316,6 +331,7 @@ export type AttemptUncheckedUpdateInput = {
   endsAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   finishedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
+  mode?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   answers?: Prisma.AttemptAnswerUncheckedUpdateManyWithoutAttemptNestedInput
@@ -329,6 +345,7 @@ export type AttemptCreateManyInput = {
   endsAt?: Date | string | null
   finishedAt?: Date | string | null
   status?: string
+  mode?: string
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -339,6 +356,7 @@ export type AttemptUpdateManyMutationInput = {
   endsAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   finishedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
+  mode?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -350,6 +368,7 @@ export type AttemptUncheckedUpdateManyInput = {
   endsAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   finishedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
+  mode?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -366,6 +385,7 @@ export type AttemptCountOrderByAggregateInput = {
   endsAt?: Prisma.SortOrder
   finishedAt?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  mode?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -377,6 +397,7 @@ export type AttemptMaxOrderByAggregateInput = {
   endsAt?: Prisma.SortOrder
   finishedAt?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  mode?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -388,6 +409,7 @@ export type AttemptMinOrderByAggregateInput = {
   endsAt?: Prisma.SortOrder
   finishedAt?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  mode?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -463,6 +485,7 @@ export type AttemptCreateWithoutTeamInput = {
   endsAt?: Date | string | null
   finishedAt?: Date | string | null
   status?: string
+  mode?: string
   createdAt?: Date | string
   updatedAt?: Date | string
   answers?: Prisma.AttemptAnswerCreateNestedManyWithoutAttemptInput
@@ -475,6 +498,7 @@ export type AttemptUncheckedCreateWithoutTeamInput = {
   endsAt?: Date | string | null
   finishedAt?: Date | string | null
   status?: string
+  mode?: string
   createdAt?: Date | string
   updatedAt?: Date | string
   answers?: Prisma.AttemptAnswerUncheckedCreateNestedManyWithoutAttemptInput
@@ -503,6 +527,7 @@ export type AttemptUpdateWithoutTeamInput = {
   endsAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   finishedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
+  mode?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   answers?: Prisma.AttemptAnswerUpdateManyWithoutAttemptNestedInput
@@ -515,6 +540,7 @@ export type AttemptUncheckedUpdateWithoutTeamInput = {
   endsAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   finishedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
+  mode?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   answers?: Prisma.AttemptAnswerUncheckedUpdateManyWithoutAttemptNestedInput
@@ -527,6 +553,7 @@ export type AttemptCreateWithoutAnswersInput = {
   endsAt?: Date | string | null
   finishedAt?: Date | string | null
   status?: string
+  mode?: string
   createdAt?: Date | string
   updatedAt?: Date | string
   team: Prisma.TeamCreateNestedOneWithoutAttemptInput
@@ -540,6 +567,7 @@ export type AttemptUncheckedCreateWithoutAnswersInput = {
   endsAt?: Date | string | null
   finishedAt?: Date | string | null
   status?: string
+  mode?: string
   createdAt?: Date | string
   updatedAt?: Date | string
   result?: Prisma.ResultUncheckedCreateNestedOneWithoutAttemptInput
@@ -567,6 +595,7 @@ export type AttemptUpdateWithoutAnswersInput = {
   endsAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   finishedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
+  mode?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   team?: Prisma.TeamUpdateOneRequiredWithoutAttemptNestedInput
@@ -580,6 +609,7 @@ export type AttemptUncheckedUpdateWithoutAnswersInput = {
   endsAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   finishedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
+  mode?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   result?: Prisma.ResultUncheckedUpdateOneWithoutAttemptNestedInput
@@ -591,6 +621,7 @@ export type AttemptCreateWithoutResultInput = {
   endsAt?: Date | string | null
   finishedAt?: Date | string | null
   status?: string
+  mode?: string
   createdAt?: Date | string
   updatedAt?: Date | string
   team: Prisma.TeamCreateNestedOneWithoutAttemptInput
@@ -604,6 +635,7 @@ export type AttemptUncheckedCreateWithoutResultInput = {
   endsAt?: Date | string | null
   finishedAt?: Date | string | null
   status?: string
+  mode?: string
   createdAt?: Date | string
   updatedAt?: Date | string
   answers?: Prisma.AttemptAnswerUncheckedCreateNestedManyWithoutAttemptInput
@@ -631,6 +663,7 @@ export type AttemptUpdateWithoutResultInput = {
   endsAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   finishedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
+  mode?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   team?: Prisma.TeamUpdateOneRequiredWithoutAttemptNestedInput
@@ -644,6 +677,7 @@ export type AttemptUncheckedUpdateWithoutResultInput = {
   endsAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   finishedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
+  mode?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   answers?: Prisma.AttemptAnswerUncheckedUpdateManyWithoutAttemptNestedInput
@@ -687,6 +721,7 @@ export type AttemptSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   endsAt?: boolean
   finishedAt?: boolean
   status?: boolean
+  mode?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   team?: boolean | Prisma.TeamDefaultArgs<ExtArgs>
@@ -702,6 +737,7 @@ export type AttemptSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   endsAt?: boolean
   finishedAt?: boolean
   status?: boolean
+  mode?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   team?: boolean | Prisma.TeamDefaultArgs<ExtArgs>
@@ -714,6 +750,7 @@ export type AttemptSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   endsAt?: boolean
   finishedAt?: boolean
   status?: boolean
+  mode?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   team?: boolean | Prisma.TeamDefaultArgs<ExtArgs>
@@ -726,11 +763,12 @@ export type AttemptSelectScalar = {
   endsAt?: boolean
   finishedAt?: boolean
   status?: boolean
+  mode?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type AttemptOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "teamId" | "startedAt" | "endsAt" | "finishedAt" | "status" | "createdAt" | "updatedAt", ExtArgs["result"]["attempt"]>
+export type AttemptOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "teamId" | "startedAt" | "endsAt" | "finishedAt" | "status" | "mode" | "createdAt" | "updatedAt", ExtArgs["result"]["attempt"]>
 export type AttemptInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   team?: boolean | Prisma.TeamDefaultArgs<ExtArgs>
   answers?: boolean | Prisma.Attempt$answersArgs<ExtArgs>
@@ -758,6 +796,7 @@ export type $AttemptPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     endsAt: Date | null
     finishedAt: Date | null
     status: string
+    mode: string
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["attempt"]>
@@ -1192,6 +1231,7 @@ export interface AttemptFieldRefs {
   readonly endsAt: Prisma.FieldRef<"Attempt", 'DateTime'>
   readonly finishedAt: Prisma.FieldRef<"Attempt", 'DateTime'>
   readonly status: Prisma.FieldRef<"Attempt", 'String'>
+  readonly mode: Prisma.FieldRef<"Attempt", 'String'>
   readonly createdAt: Prisma.FieldRef<"Attempt", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Attempt", 'DateTime'>
 }

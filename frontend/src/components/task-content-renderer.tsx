@@ -12,6 +12,8 @@ type TaskContentRendererProps = {
   /** Piso de ancho de las imágenes. Las opciones de respuesta lo bajan a cero. */
   minImageWidth?: string;
   renderBlank?: (blankId: string) => ReactNode;
+  /** En papel no hay celular: las imágenes no cambian con el ancho de la pantalla. */
+  fixed?: boolean;
 };
 
 /** Alto máximo de una imagen que quedó en su tamaño automático (100 %). */
@@ -22,6 +24,7 @@ export function TaskContentRenderer({
   className,
   minImageWidth = "16rem",
   renderBlank,
+  fixed = false,
 }: TaskContentRendererProps) {
   return (
     <div
@@ -34,7 +37,7 @@ export function TaskContentRenderer({
               <img
                 alt={block.image.name}
                 className={
-                  minImageWidth === "0px"
+                  minImageWidth === "0px" || fixed
                     ? "block h-auto max-w-full"
                     : // En celular, a lo ancho de la pantalla con el mismo tope de alto.
                       "block h-auto max-w-full max-sm:!w-full max-sm:!max-h-[24rem] max-sm:object-contain"
