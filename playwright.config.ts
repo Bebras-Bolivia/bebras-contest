@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
-const backendUrl = "http://localhost:3100";
-const frontendUrl = "http://localhost:4421";
+const backendUrl = "http://127.0.0.1:3100";
+const frontendUrl = "http://127.0.0.1:4421";
 const backendEnv = {
   ...process.env,
   WRANGLER_SEND_METRICS: "false",
@@ -40,6 +40,7 @@ const modules = {
     "scale-limits.spec.ts",
   ],
   grupos: [
+    "paper-flow.spec.ts",
     "groups-validation.spec.ts",
     "join-validation.spec.ts",
     "group-management.spec.ts",
