@@ -670,7 +670,10 @@ export async function findTaskByTitle(
 ) {
   const tasks = (await api
     .get(`${API}/api/tasks`, { headers })
-    .then((response) => response.json())) as Array<{ id: string; title: string }>;
+    .then((response) => response.json())) as Array<{
+    id: string;
+    title: string;
+  }>;
   const found = tasks.find((task) => task.title === title);
   expect(found, `No se encontró la tarea «${title}»`).toBeTruthy();
   return api

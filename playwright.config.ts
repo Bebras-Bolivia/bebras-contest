@@ -40,6 +40,7 @@ const modules = {
     "scale-limits.spec.ts",
   ],
   grupos: [
+    "paper-flow.spec.ts",
     "groups-validation.spec.ts",
     "join-validation.spec.ts",
     "group-management.spec.ts",
