@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
-const backendUrl = "http://127.0.0.1:3100";
-const frontendUrl = "http://127.0.0.1:4421";
+const backendUrl = "http://localhost:3100";
+const frontendUrl = "http://localhost:4421";
 const backendEnv = {
   ...process.env,
   WRANGLER_SEND_METRICS: "false",

@@ -1,6 +1,6 @@
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
-export const API = "http://127.0.0.1:3100";
+export const API = "http://localhost:3100";
 const FIREBASE_EMULATOR = "http://127.0.0.1:9099";
 const FIREBASE_PROJECT_ID = "bebras-bo-staging";
 
