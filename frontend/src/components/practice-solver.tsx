@@ -63,9 +63,7 @@ export function PracticeSolver() {
     () => loadedTasks.get(taskId) ?? null,
   );
   const [failed, setFailed] = useState(false);
-  const [saved] = useState(() =>
-    readSavedAnswer<PracticeCheck>(memoryKey, { lasting: true }),
-  );
+  const [saved] = useState(() => readSavedAnswer<PracticeCheck>(memoryKey));
   const [answer, setAnswer] = useState<unknown>(saved?.answer);
   const [result, setResult] = useState<PracticeCheck | null>(
     saved?.result ?? null,
@@ -74,7 +72,7 @@ export function PracticeSolver() {
   const [justChecked, setJustChecked] = useState(false);
 
   useEffect(() => {
-    if (taskId) saveAnswer(memoryKey, { answer, result }, { lasting: true });
+    if (taskId) saveAnswer(memoryKey, { answer, result });
   }, [taskId, memoryKey, answer, result]);
 
   useEffect(() => {
