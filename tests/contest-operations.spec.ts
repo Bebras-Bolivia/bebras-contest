@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
+import { readFileSync } from "node:fs";
 import {
   API,
   SEEDED_TASK,
@@ -403,4 +404,74 @@ test("probar el desafío como estudiante no crea intentos ni deja rastro", async
   await page.goto(`/desafios/probar?id=${contest.id}&categoria=${SEEDED_TASK.category}`);
   await expect(page.getByRole("link", { name: "Volver al desafío" })).toBeVisible();
   await expect(page.getByText(/Empezar/).first()).toBeVisible({ timeout: 15000 });
+});
+
+test("el administrador descarga en CSV los resultados de cada categoría", async ({
+  page,
+  request,
+}) => {
+  const { contest, students } = await contestWithStudents(request, ["Ana", "Beto"]);
+  await setE2EClock(request, at(contest.startsAt, 60000));
+  for (const name of ["Ana", "Beto"]) {
+    await request.post(`${API}/api/play/start`, { headers: students[name].headers });
+    await request.post(`${API}/api/play/answer`, {
+      headers: students[name].headers,
+      data: { taskId: SCORING_TASKS[0].taskId, payload: { selected: [name === "Ana" ? "B" : "A"] } },
+    });
+    await request.post(`${API}/api/play/submit`, { headers: students[name].headers });
+  }
+  await setE2EClock(request, at(contest.endsAt, 60000));
+
+  await loginAdminPage(page);
+  await page.goto(`/desafios/resultados?id=${contest.id}`);
+  await expect(page.getByText("Ana", { exact: false }).first()).toBeVisible({ timeout: 15000 });
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "CSV" }).click();
+  const file = await download;
+  expect(file.suggestedFilename()).toMatch(/^resultados-.*\.csv$/);
+  const content = readFileSync((await file.path())!, "utf8");
+  const [header, ...lines] = content.replace(/^\uFEFF/, "").trim().split("\n");
+  expect(header.startsWith("Categoria,Posicion,Nombres")).toBe(true);
+  expect(lines).toHaveLength(2);
+  expect(lines[0]).toContain(SEEDED_TASK.category);
+  expect(lines[0]).toContain("Ana");
+});
+
+test("el desafío deja de mostrarse en la portada y en el ranking al terminar el periodo de resultados", async ({
+  page,
+  request,
+}) => {
+  const { contest, students } = await contestWithStudents(request, ["Ana"], {
+    title: `Periodo de resultados ${Date.now()}`,
+  });
+  await setE2EClock(request, at(contest.startsAt, 60000));
+  await request.post(`${API}/api/play/start`, { headers: students.Ana.headers });
+  await request.post(`${API}/api/play/submit`, { headers: students.Ana.headers });
+
+  // Al cerrar se publican los resultados; sin fecha propia se ven siete días.
+  await setE2EClock(request, at(contest.endsAt, 60000));
+  const listed = (await request.get(`${API}/api/public-contests`).then((r) => r.json())) as Array<{
+    id: string;
+    state: string;
+    resultsUntil: string;
+  }>;
+  const mine = listed.find((item) => item.id === contest.id)!;
+  expect(mine.state).toBe("publicada");
+  expect(new Date(mine.resultsUntil).getTime()).toBe(at(contest.endsAt, 7 * 24 * 3600000).getTime());
+
+  // La portada decide con la hora del navegador.
+  const card = page.locator("article").filter({ hasText: (contest as { title?: string }).title ?? "" });
+  await page.clock.setFixedTime(at(contest.endsAt, 3600000));
+  await page.goto("/");
+  await expect(card).toContainText("Resultados visibles hasta el", { timeout: 15000 });
+
+  await page.clock.setFixedTime(at(contest.endsAt, 8 * 24 * 3600000));
+  await page.goto("/");
+  await page.waitForLoadState("networkidle");
+  await expect(card).toHaveCount(0);
+
+  // El ranking público tampoco lo muestra ya.
+  await setE2EClock(request, at(contest.endsAt, 8 * 24 * 3600000));
+  const ranking = (await request.get(`${API}/api/public-ranking`).then((r) => r.json())) as Array<{ id: string }>;
+  expect(ranking.some((item) => item.id === contest.id)).toBe(false);
 });

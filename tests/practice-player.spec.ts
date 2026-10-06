@@ -539,3 +539,28 @@ test("names written answer fields for assistive technology", async ({
     page.getByRole("textbox", { name: "Tu respuesta", exact: true }),
   ).toBeVisible();
 });
+
+test("la práctica recuerda lo que se resolvió y deja seguir con la siguiente pregunta", async ({
+  page,
+  request,
+}) => {
+  const headers = await loginAdmin(request);
+  const title = `Práctica recordada ${Date.now()}`;
+  const task = await createPracticeTask(request, headers, "multiple_choice", { title });
+
+  await page.goto(`/practica/tarea?nombre=Titi&id=${task.id}&from=%2Fpractica`);
+  await page.getByRole("button", { name: "Correcta", exact: true }).click();
+  await page.getByRole("button", { name: "Comprobar", exact: true }).click();
+  await expect(page.getByText("¡Correcto!", { exact: true })).toBeVisible();
+  // Después de comprobar se puede reintentar o seguir.
+  await expect(page.getByRole("button", { name: "Intentar de nuevo" })).toBeVisible();
+  const next = page.getByRole("link", { name: /^(Siguiente pregunta|Ver todas las preguntas)$/ });
+  await expect(next).toBeVisible();
+
+  await page.goto("/practica/categoria?nombre=Titi&from=%2Fpractica");
+  const row = page.getByRole("link").filter({ hasText: title });
+  await expect(row).toContainText("¡Resuelto!", { timeout: 15000 });
+  // El avance se guarda en el navegador: sigue ahí al volver.
+  await page.reload();
+  await expect(row).toContainText("¡Resuelto!", { timeout: 15000 });
+});

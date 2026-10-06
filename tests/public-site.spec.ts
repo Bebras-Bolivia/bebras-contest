@@ -1,10 +1,13 @@
 import { test, expect } from "@playwright/test";
 import {
   API,
+  createApprovedTeacher,
   createContest,
   createPracticeTask,
   loginAdmin,
+  loginPage,
   resetE2EClock,
+  setE2EClock,
 } from "./support/helpers";
 
 test.beforeEach(async ({ request }) => resetE2EClock(request));
@@ -131,4 +134,42 @@ test("la lista de una categoría de práctica va de fácil a difícil", async ({
   });
   const missing = await request.get(`${API}/api/practice/tasks?category=Nadie`);
   expect(missing.status()).toBe(404);
+});
+
+test("cada desafío de la portada ofrece lo que corresponde a su etapa y a quien mira", async ({
+  page,
+  request,
+}) => {
+  const headers = await loginAdmin(request);
+  const startsAt = new Date(Date.now() + 2 * 3600000);
+  const contest = await createContest(request, headers, {
+    title: `Portada por etapa ${Date.now()}`,
+    registrationStartsAt: "",
+    registrationEndsAt: "",
+    startsAt: startsAt.toISOString(),
+    endsAt: new Date(startsAt.getTime() + 3600000).toISOString(),
+  });
+  const card = page.locator("article").filter({ hasText: contest.title });
+
+  // Con la inscripción abierta, el estudiante se inscribe y el maestro tiene su acceso.
+  await page.goto("/");
+  await expect(card).toBeVisible({ timeout: 15000 });
+  await expect(card.getByRole("link", { name: "Inscribirme" })).toHaveAttribute("href", "/entrar");
+  await expect(card.getByRole("link", { name: "Soy maestro: inscribir a mis estudiantes" })).toBeVisible();
+
+  // Durante la prueba, se entra al desafío.
+  await setE2EClock(request, new Date(startsAt.getTime() + 60000));
+  await page.goto("/");
+  await expect(card.getByRole("link", { name: "Entrar al desafío" })).toBeVisible({ timeout: 15000 });
+  await resetE2EClock(request);
+
+  // Un maestro con sesión va a sus grupos.
+  const teacher = await createApprovedTeacher(request, headers);
+  await loginPage(page, teacher.identity, /\/perfil\/?$/);
+  await page.goto("/");
+  await expect(card.getByRole("link", { name: /Inscribir un grupo|Ver mis grupos/ })).toHaveAttribute(
+    "href",
+    /\/grupos/,
+    { timeout: 15000 },
+  );
 });

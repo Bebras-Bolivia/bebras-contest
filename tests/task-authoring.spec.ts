@@ -332,3 +332,89 @@ test("el editor de cada tipo de respuesta cabe en la pantalla del celular", asyn
     }
   }
 });
+
+test("la lista de tareas se busca y se filtra, y los filtros se quitan de una vez", async ({
+  page,
+}) => {
+  await loginAdminPage(page);
+  await page.goto("/tareas");
+  const rows = page
+    .locator("main li")
+    .filter({ has: page.locator('a[href^="/tareas/editar"]') });
+  await expect(rows.first()).toBeVisible({ timeout: 15000 });
+
+  // Sin tildes ni mayúsculas también la encuentra.
+  await page
+    .getByRole("searchbox", { name: "Buscar tarea por nombre, código o país" })
+    .fill("FIESTA DE PIZZA");
+  await expect(page.getByRole("link", { name: "Fiesta de pizza", exact: true })).toBeVisible();
+  await expect(rows).toHaveCount(1);
+  await expect(page).toHaveURL(/q=/);
+  await page.getByRole("button", { name: "Borrar búsqueda" }).click();
+
+  await page
+    .getByRole("group", { name: "Filtrar por tipo de respuesta" })
+    .getByRole("button", { name: /^Zonas sobre la imagen/ })
+    .click();
+  await expect(page.getByRole("link", { name: "Caminando por el bosque", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Fiesta de pizza", exact: true })).toHaveCount(0);
+  for (const row of await rows.all()) {
+    await expect(row).toContainText("Zonas sobre la imagen");
+  }
+  await page
+    .getByRole("group", { name: "Filtrar por tipo de respuesta" })
+    .getByRole("button", { name: /^Todas/ })
+    .click();
+
+  // Con una categoría aparece el filtro de dificultad.
+  await page
+    .getByRole("group", { name: "Filtrar por categoría" })
+    .getByRole("button", { name: /^Kuntur/ })
+    .click();
+  const difficulty = page.getByRole("group", { name: "Filtrar por dificultad en Kuntur" });
+  await expect(difficulty).toBeVisible();
+  await difficulty.getByRole("button", { name: /^Difícil/ }).click();
+  await expect(page).toHaveURL(/dificultad=hard/);
+  // Cada fila que queda es difícil en Kuntur (se espera a que la lista se actualice).
+  const hard = page.getByLabel("Kuntur: Difícil", { exact: true });
+  await expect
+    .poll(async () => (await rows.count()) - (await hard.count()))
+    .toBe(0);
+  expect(await rows.count()).toBeGreaterThan(0);
+
+  await page
+    .getByRole("searchbox", { name: "Buscar tarea por nombre, código o país" })
+    .fill("zzzz sin resultados");
+  await expect(page.getByText("No hay tareas con estos filtros.")).toBeVisible();
+  await page.getByRole("button", { name: "Quitar filtros" }).click();
+  await expect(rows.first()).toBeVisible();
+  await expect(page).not.toHaveURL(/q=|edad=|dificultad=/);
+});
+
+test("mover una opción cambia su contenido de lugar y la primera sigue siendo la A", async ({
+  page,
+  request: api,
+}) => {
+  const headers = await loginAdmin(api);
+  const task = await createPracticeTask(api, headers, "multiple_choice");
+  const letter = (key: string) =>
+    page.getByRole("button", { name: new RegExp(`^Opción ${key}(,|\\.)`) });
+
+  await loginAdminPage(page);
+  await openEditor(page, `/tareas/editar?id=${task.id}`);
+  await expect(page.getByRole("textbox", { name: "Texto de la opción A" })).toHaveValue("Incorrecta");
+  await expect(letter("B")).toHaveAttribute("aria-pressed", "true");
+
+  await page.getByRole("button", { name: "Bajar la opción A" }).click();
+  // El contenido se movió; las letras quedan en su lugar y la correcta sigue a su texto.
+  await expect(page.getByRole("textbox", { name: "Texto de la opción A" })).toHaveValue("Correcta");
+  await expect(page.getByRole("textbox", { name: "Texto de la opción B" })).toHaveValue("Incorrecta");
+  await expect(letter("A")).toHaveAttribute("aria-pressed", "true");
+  await expect(letter("B")).toHaveAttribute("aria-pressed", "false");
+
+  const saved = waitForSave(page, "PUT");
+  await page.getByRole("button", { name: "Guardar", exact: true }).click();
+  const payload = (await saved).request().postDataJSON();
+  expect(payload.correctAnswerId).toBe("single:A");
+  expect(payload.answers[0].blocks[0].content).toBe("Correcta");
+});

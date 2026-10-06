@@ -314,3 +314,25 @@ test("el registro y otro colegio solo aceptan códigos del catálogo", async ({
   });
   expect(extra.status()).toBe(400);
 });
+
+test("sin un colegio de la lista, el registro exige departamento y ciudad", async ({
+  request,
+}) => {
+  const noDepartment = await registerBebrasProfile(request, {
+    fields: { department: "" },
+  });
+  expect(noDepartment.response.status()).toBe(400);
+  expect((await noDepartment.response.json()).field).toBe("department");
+
+  const noCity = await registerBebrasProfile(request, {
+    fields: { city: "" },
+  });
+  expect(noCity.response.status()).toBe(400);
+  expect((await noCity.response.json()).field).toBe("city");
+
+  const homeschool = await registerBebrasProfile(request, {
+    institutionType: "homeschool",
+    fields: { department: "INVENTADO" },
+  });
+  expect(homeschool.response.status()).toBe(400);
+});

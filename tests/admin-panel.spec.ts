@@ -171,3 +171,27 @@ test("el panel del administrador muestra a los administradores y sus ajustes", a
     page.getByRole("heading", { name: "Certificados" }),
   ).toBeVisible();
 });
+
+test("hacer administrador pide confirmación y se puede cancelar", async ({ page }) => {
+  const email = `nuevo.admin.${Date.now()}@ejemplo.bo`;
+  await loginAdminPage(page);
+  await page.goto("/admin");
+  const field = page.getByRole("textbox", { name: "Correo del nuevo administrador" });
+  await expect(field).toBeVisible({ timeout: 15000 });
+
+  await field.fill(email);
+  await page.getByRole("button", { name: "Hacer administrador", exact: true }).click();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toContainText(`¿Hacer administrador a ${email}?`);
+  await expect(dialog).toContainText("no se puede quitar");
+  await dialog.getByRole("button", { name: "Cancelar" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByText(email, { exact: true })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Hacer administrador", exact: true }).click();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Hacer administrador" })
+    .click();
+  await expect(page.getByText(email, { exact: true })).toBeVisible();
+});

@@ -340,3 +340,24 @@ test("el curso de un estudiante se corrige hasta que empieza a rendir", async ({
   const renamed = await edit(SEEDED_TASK.grade, "Cursito");
   expect(renamed.status(), await renamed.text()).toBe(200);
 });
+
+test("el código y el enlace del grupo se copian para compartirlos", async ({
+  page,
+  request,
+}) => {
+  const adminHeaders = await loginAdmin(request);
+  const contest = await contestWithoutRegistrationWindow(request, adminHeaders);
+  const teacher = await createApprovedTeacher(request, adminHeaders);
+  const group = await createGroup(request, teacher.headers, contest.id, "Compartir");
+
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await loginPage(page, teacher.identity, /\/perfil\/?$/);
+  await page.goto(`/grupos/ver?id=${group.id}`);
+  await expect(page.getByText(group.accessCode).first()).toBeVisible({ timeout: 15000 });
+  const clipboard = () => page.evaluate(() => navigator.clipboard.readText());
+
+  await page.getByRole("button", { name: "Copiar código" }).click();
+  await expect.poll(clipboard).toBe(group.accessCode);
+  await page.getByRole("button", { name: "Copiar enlace" }).click();
+  await expect.poll(clipboard).toBe(`http://localhost:4421/entrar?code=${group.accessCode}`);
+});
