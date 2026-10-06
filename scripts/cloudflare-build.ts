@@ -22,7 +22,7 @@ const firebaseEnv = Object.fromEntries(
 const env = {
   ...process.env,
   ...firebaseEnv,
-  PUBLIC_REGISTRATION_ONLY: target === "production" ? "true" : "false",
+  PUBLIC_REGISTRATION_ONLY: "false",
   PUBLIC_API_BASE_URL: "",
 };
 for (const command of [

@@ -28,7 +28,7 @@
     },
     "production": {
       "name": "bebras-contest",
-      "vars": { "REGISTRATION_ONLY": "true", "FRONTEND_ORIGIN": "", "FIREBASE_PROJECT_ID": "bebras-bo" },
+      "vars": { "REGISTRATION_ONLY": "false", "FRONTEND_ORIGIN": "", "FIREBASE_PROJECT_ID": "bebras-bo" },
       "d1_databases": [{ "binding": "DB", "database_name": "bebras-prod", "database_id": "0fcbe3a5-ce81-47a0-a559-a5ccd22bf4b8", "migrations_dir": "backend/migrations" }],
       "r2_buckets": [{ "binding": "UPLOADS", "bucket_name": "bebras-uploads-prod" }]
     }

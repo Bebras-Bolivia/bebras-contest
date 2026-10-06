@@ -25,7 +25,7 @@ declare namespace Cloudflare {
 		UPLOADS: R2Bucket;
 		DB: D1Database;
 		ASSETS: Fetcher;
-		REGISTRATION_ONLY: "true";
+		REGISTRATION_ONLY: "false";
 		FRONTEND_ORIGIN: "";
 		FIREBASE_PROJECT_ID: string;
 	}
