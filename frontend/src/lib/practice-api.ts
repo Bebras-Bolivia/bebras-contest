@@ -1,6 +1,6 @@
 import type { ContentBlock } from "@/lib/task-schema";
 import type { PlayTask } from "@/lib/play-api";
-import { optionalAuthRequest } from "@/lib/api-client";
+import { ApiError, optionalAuthRequest } from "@/lib/api-client";
 
 export type PracticeCategory = {
   name: string;
@@ -28,8 +28,16 @@ export type PracticeCheck = {
 
 // Practicar es publico, pero mientras solo hay inscripcion la API queda
 // restringida: si hay sesion, conviene mandarla para no chocar con un 401.
-function get<T>(path: string) {
-  return optionalAuthRequest<T>(path);
+async function get<T>(path: string) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await optionalAuthRequest<T>(path);
+    } catch (error) {
+      const transient = !(error instanceof ApiError) || error.status >= 500;
+      if (!transient || attempt === 2) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1)));
+    }
+  }
 }
 
 /** Lo último que se cargó: al volver a una pantalla ya vista se muestra al instante. */

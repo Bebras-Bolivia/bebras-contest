@@ -39,7 +39,7 @@ const links = SITE_NAV_ITEMS.filter((item) => item.role !== "public").map(
   transition:animate="none"
 >
   <div
-    class="flex min-h-[4.25rem] w-full flex-wrap items-center justify-between gap-x-2 px-4 py-3 sm:px-8 lg:min-h-16 lg:flex-nowrap lg:gap-4 lg:px-12"
+    class="flex min-h-[4.25rem] w-full flex-wrap items-center justify-between gap-x-1 sm:gap-x-2 px-4 py-3 sm:px-8 lg:min-h-16 lg:flex-nowrap lg:gap-4 lg:px-12"
   >
     <div class="flex min-w-0 flex-1 items-center gap-3">
       <a
@@ -54,8 +54,13 @@ const links = SITE_NAV_ITEMS.filter((item) => item.role !== "public").map(
           height="40"
           class="h-9 w-auto transition-transform duration-200 group-hover:-rotate-6"
         />
-        <span class="text-lg leading-none font-bold tracking-tight">
-          Bebras<span class:list={["text-primary", heading && "max-sm:hidden"]}>
+        <span
+          class:list={[
+            "text-lg leading-none font-bold tracking-tight",
+            heading && "max-sm:hidden",
+          ]}
+        >
+          Bebras<span class="text-primary">
             {" "}Bolivia</span
           >
         </span>
@@ -143,12 +148,12 @@ const links = SITE_NAV_ITEMS.filter((item) => item.role !== "public").map(
         }
       </nav>
     </div>
+    <UserMenu client:only="react" transition:persist="user-menu" />
     <MobileNavigation
       pathname={pathname}
       client:only="react"
       transition:persist="mobile-navigation"
     />
-    <UserMenu client:only="react" transition:persist="user-menu" />
   </div>
 </header>
 

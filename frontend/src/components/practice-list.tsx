@@ -84,7 +84,20 @@ export function PracticeList() {
           alt=""
           className="h-24 w-auto opacity-80"
         />
-        <p className="font-semibold">No encontramos esta categoría</p>
+        <p className="font-semibold">
+          {category
+            ? "No se pudieron cargar las preguntas"
+            : "No encontramos esta categoría"}
+        </p>
+        {category && (
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="text-sm text-primary underline underline-offset-4"
+          >
+            Reintentar
+          </button>
+        )}
         <a
           href={origin}
           className="text-sm text-primary underline underline-offset-4"

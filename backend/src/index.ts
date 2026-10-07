@@ -2376,9 +2376,18 @@ const TASK_VISIBILITY = {
 async function loadPracticeTasks() {
   const tasks = await prisma.taskDraft.findMany({
     where: { isPractice: true },
-    orderBy: { updatedAt: "desc" },
+    select: {
+      id: true,
+      title: true,
+      sourceTaskCode: true,
+      answerType: true,
+      difficulties: true,
+    },
   });
-  return tasks.map(deserializeTask);
+  return tasks.map((task) => ({
+    ...task,
+    difficulties: normalizeTaskDifficulties(task.difficulties),
+  }));
 }
 
 app.get("/api/practice/categories", async (_req, res) => {
