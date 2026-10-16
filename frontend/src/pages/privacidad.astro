@@ -1,0 +1,84 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+const title = "Política de privacidad";
+---
+
+<Layout title={title} heading={title} backHref="/">
+  <main
+    class="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 text-sm leading-7 sm:px-6 lg:px-8"
+  >
+    <header class="flex flex-col gap-2">
+      <h1 class="font-heading text-2xl font-semibold">
+        Política de privacidad
+      </h1>
+      <p class="text-muted-foreground">
+        Desafío Bebras Bolivia · Actualizada el 16 de octubre de 2026
+      </p>
+    </header>
+
+    <section class="flex flex-col gap-2">
+      <h2 class="text-base font-semibold">Qué datos guardamos</h2>
+      <ul class="flex list-disc flex-col gap-1 pl-5">
+        <li>
+          <strong>Maestros:</strong> nombre, correo, teléfono, colegio (código, nombre,
+          departamento y ciudad), la carta de autorización del colegio y las fotos
+          del carnet que se suben para verificar la cuenta.
+        </li>
+        <li>
+          <strong>Ingreso con Google:</strong> solo el nombre y el correo de la cuenta
+          de Google. No accedemos a nada más de esa cuenta.
+        </li>
+        <li>
+          <strong>Estudiantes:</strong> nombres, apellidos, curso y un código personal
+          para rendir. Los estudiantes no tienen correo ni cuenta. Guardamos sus respuestas,
+          puntajes y resultados.
+        </li>
+        <li>
+          <strong>Práctica pública:</strong> el avance se guarda solo en el navegador
+          mientras la pestaña está abierta; no llega a nuestros servidores.
+        </li>
+      </ul>
+    </section>
+
+    <section class="flex flex-col gap-2">
+      <h2 class="text-base font-semibold">Para qué los usamos</h2>
+      <p>
+        Para organizar el Desafío Bebras: verificar a los maestros, inscribir a
+        sus estudiantes, corregir las pruebas y publicar resultados y
+        certificados. No usamos los datos para publicidad ni los vendemos.
+      </p>
+    </section>
+
+    <section class="flex flex-col gap-2">
+      <h2 class="text-base font-semibold">Con quién se comparten</h2>
+      <p>
+        Solo con los servicios técnicos que hacen funcionar el sistema:
+        Cloudflare (servidores y base de datos) y Google Firebase (inicio de
+        sesión). Los resultados de un grupo los ve su maestro y los
+        administradores del desafío.
+      </p>
+    </section>
+
+    <section class="flex flex-col gap-2">
+      <h2 class="text-base font-semibold">Cookies y almacenamiento</h2>
+      <p>
+        No usamos cookies de publicidad ni de seguimiento. El navegador guarda
+        solo lo necesario para mantener la sesión iniciada y el avance de la
+        prueba.
+      </p>
+    </section>
+
+    <section class="flex flex-col gap-2">
+      <h2 class="text-base font-semibold">Tus derechos</h2>
+      <p>
+        Puedes pedir ver, corregir o eliminar tus datos o los de tus estudiantes
+        escribiendo a
+        <a
+          class="font-medium underline underline-offset-4"
+          href="mailto:v.costas@umss.edu.bo">v.costas@umss.edu.bo</a
+        >.
+      </p>
+    </section>
+  </main>
+</Layout>
