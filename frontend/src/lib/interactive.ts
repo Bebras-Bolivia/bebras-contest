@@ -344,6 +344,7 @@ button,input,select,textarea{font-family:inherit}
 p{margin:0 0 10px}ul,ol{margin-top:0;margin-bottom:10px}
 #bebras-task{display:block;width:fit-content}
 .componental-task{position:relative}
+.componental-task svg image,.componental-task svg rect,.componental-task svg path,.componental-task svg text,.componental-task svg circle,.componental-task svg ellipse,.componental-task svg polygon,.componental-task [draggable=true],.componental-task .ui-draggable{touch-action:none}
 .sortable-ghost{opacity:.4}
 </style><script src="${engine}"></script></head><body><div id="bebras-task"></div>
 <script>window.__bebrasElements=${scriptJson(config.elements)};</script>
