@@ -15,6 +15,9 @@ import {
   type TaskMessage,
 } from "@/lib/interactive";
 
+// Más chica que esto la letra ya no se lee en el celular: la tarea se desliza de lado.
+const MIN_SCALE = 0.8;
+
 export function InteractiveTryout({ config }: { config: unknown }) {
   const [answer, setAnswer] = useState<unknown>({});
   return (
@@ -137,7 +140,9 @@ export function InteractivePlayer({
 
   const width = Math.max(available ?? config.width, content.width);
   const height = Math.max(config.height, content.height);
-  const scale = available ? Math.min(1, available / width) : 1;
+  const scale = available
+    ? Math.max(MIN_SCALE, Math.min(1, available / width))
+    : 1;
 
   const restart = () => {
     setEmitted(null);
@@ -152,7 +157,7 @@ export function InteractivePlayer({
 
   return (
     <div className="flex flex-col items-center gap-2">
-      <div ref={wrapper} className="w-full">
+      <div ref={wrapper} className="w-full overflow-x-auto">
         <div
           className="relative mx-auto overflow-hidden bg-white"
           style={{ width: width * scale, height: height * scale }}
