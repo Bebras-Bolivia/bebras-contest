@@ -521,7 +521,7 @@ export const TASK_METADATA: readonly TaskMetadata[] = [
     id: "bebras-2024-42-mapas-falsos",
     title: "Mapas Falsos",
     country: "Vietnam",
-    year: 2019,
+    year: 2024,
     sourceTaskCode: "2019-VN-04",
     difficulties: difficulties("", "", "", "", "", "hard"),
     master: false,
