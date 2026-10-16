@@ -31,7 +31,13 @@ export type TaskMessage =
       state: string;
       primary: boolean;
     }
-  | { source: typeof TASK_SOURCE; type: "size"; width: number; height: number }
+  | {
+      source: typeof TASK_SOURCE;
+      type: "size";
+      width: number;
+      height: number;
+      crop?: { x: number; y: number; width: number; height: number };
+    }
   | { source: typeof TASK_SOURCE; type: "text"; html: string }
   | { source: typeof TASK_SOURCE; type: "error"; message: string };
 
@@ -132,7 +138,7 @@ const BOOTSTRAP = String.raw`
   }
   function crop() {
     var stage = document.querySelector("#bebras-task .componental-task[data-bebras-cropped]");
-    if (!stage) return;
+    if (!stage) return null;
     var base = stage.getBoundingClientRect();
     var left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
     function add(rect) {
@@ -142,36 +148,43 @@ const BOOTSTRAP = String.raw`
       right = Math.max(right, rect.right);
       bottom = Math.max(bottom, rect.bottom);
     }
+    function blank(el) {
+      if ((el.textContent || "").trim()) return false;
+      if (el.matches("img") ? el.getAttribute("src") : el.querySelector("img[src]:not([src='']),svg,canvas,input,button,select,textarea")) return false;
+      var cs = getComputedStyle(el);
+      var painted = cs.backgroundColor !== "rgba(0, 0, 0, 0)" && cs.backgroundColor !== "transparent";
+      return !painted && !parseFloat(cs.borderTopWidth) && !parseFloat(cs.borderLeftWidth) && cs.backgroundImage === "none";
+    }
     Array.prototype.forEach.call(stage.children, function (el) {
-      if (el.hasAttribute("data-bebras-moved")) return;
+      if (el.hasAttribute("data-bebras-moved") || blank(el)) return;
       if (el.classList.contains("canvas-container")) {
-        el.querySelectorAll("svg > :not(desc):not(defs)").forEach(function (node) { add(node.getBoundingClientRect()); });
+        el.querySelectorAll("svg > :not(desc):not(defs)").forEach(function (node) {
+          if (node.tagName.toLowerCase() === "image" && !(node.getAttribute("href") || node.getAttribute("xlink:href"))) return;
+          add(node.getBoundingClientRect());
+        });
         return;
       }
       add(el.getBoundingClientRect());
     });
-    if (!isFinite(left)) return;
+    if (!isFinite(left)) return null;
     left = Math.max(base.left, left - 8);
     top = Math.max(base.top, top - 8);
     right = Math.min(base.right, right + 8);
     bottom = Math.min(base.bottom, bottom + 8);
-    var root = document.getElementById("bebras-task");
-    root.style.width = Math.ceil(right - left) + "px";
-    root.style.height = Math.ceil(bottom - top) + "px";
-    root.style.overflow = "hidden";
-    stage.style.marginLeft = -Math.floor(left - base.left) + "px";
-    stage.style.marginTop = -Math.floor(top - base.top) + "px";
+    return {
+      x: Math.floor(left + window.scrollX),
+      y: Math.floor(top + window.scrollY),
+      width: Math.ceil(right - left),
+      height: Math.ceil(bottom - top)
+    };
   }
   function size() {
     separate();
-    crop();
     var root = document.getElementById("bebras-task");
-    var cropped = root.style.overflow === "hidden";
-    post({
-      type: "size",
-      width: Math.ceil(cropped ? root.offsetWidth : root.scrollWidth),
-      height: Math.ceil(cropped ? root.offsetHeight : root.scrollHeight)
-    });
+    var message = { type: "size", width: Math.ceil(root.scrollWidth), height: Math.ceil(root.scrollHeight) };
+    var box = crop();
+    if (box) message.crop = box;
+    post(message);
   }
   function loadLibraries(list, done) {
     if (!list.length) return done();
@@ -329,7 +342,7 @@ export function interactiveSrcdoc(
 html,body{margin:0;padding:0;background:#fff;color:#1c1c1c;font-family:"DM Sans Variable","Helvetica Neue",Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;overflow:hidden}
 button,input,select,textarea{font-family:inherit}
 p{margin:0 0 10px}ul,ol{margin-top:0;margin-bottom:10px}
-#bebras-task{display:block;width:fit-content;margin:0 auto}
+#bebras-task{display:block;width:fit-content}
 .componental-task{position:relative}
 .sortable-ghost{opacity:.4}
 </style><script src="${engine}"></script></head><body><div id="bebras-task"></div>

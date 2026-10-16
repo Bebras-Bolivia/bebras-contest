@@ -52,7 +52,11 @@ export function InteractivePlayer({
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   );
-  const [content, setContent] = useState({ width: 0, height: 0 });
+  const [content, setContent] = useState<{
+    width: number;
+    height: number;
+    crop?: { x: number; y: number; width: number; height: number };
+  }>({ width: 0, height: 0 });
   const [lead, setLead] = useState<{ key: number; html: string } | null>(null);
   const [available, setAvailable] = useState<number | null>(null);
   const frame = useRef<HTMLIFrameElement>(null);
@@ -112,7 +116,7 @@ export function InteractivePlayer({
       } else if (data.type === "text") {
         setLead({ key: session.key, html: sanitizeLodgeText(data.html) });
       } else if (data.type === "size") {
-        setContent({ width: data.width, height: data.height });
+        setContent({ width: data.width, height: data.height, crop: data.crop });
       } else if (data.type === "change") {
         const payload = data.primary
           ? {}
@@ -139,9 +143,10 @@ export function InteractivePlayer({
     );
   }
 
-  const width = Math.max(available ?? config.width, content.width);
+  const width = content.width || config.width;
   const height = content.height || config.height;
-  const scale = available ? Math.min(1, available / width) : 1;
+  const view = content.crop ?? { x: 0, y: 0, width, height };
+  const scale = available ? Math.min(1, available / view.width) : 1;
 
   const restart = () => {
     setEmitted(null);
@@ -165,7 +170,7 @@ export function InteractivePlayer({
       <div ref={wrapper} className="w-full overflow-x-auto">
         <div
           className="relative mx-auto overflow-hidden bg-white"
-          style={{ width: width * scale, height: height * scale }}
+          style={{ width: view.width * scale, height: view.height * scale }}
         >
           <iframe
             key={session.key}
@@ -174,7 +179,11 @@ export function InteractivePlayer({
             sandbox="allow-scripts"
             srcDoc={srcdoc}
             className="absolute top-0 left-0 origin-top-left border-0 bg-white"
-            style={{ width, height, transform: `scale(${scale})` }}
+            style={{
+              width,
+              height,
+              transform: `translate(${-view.x * scale}px, ${-view.y * scale}px) scale(${scale})`,
+            }}
           />
           {disabled && <div aria-hidden="true" className="absolute inset-0" />}
           {status !== "ready" && (
