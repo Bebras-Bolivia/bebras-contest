@@ -178,7 +178,7 @@ export function InteractivePlayer({
             title="Actividad interactiva"
             sandbox="allow-scripts"
             srcDoc={srcdoc}
-            className="absolute top-0 left-0 origin-top-left border-0 bg-white"
+            className="absolute top-0 left-0 origin-top-left touch-none border-0 bg-white"
             style={{
               width,
               height,
