@@ -851,10 +851,18 @@ export function DragDropPlayer({
                   style={{
                     left: `${target.x}%`,
                     top: `${target.y}%`,
-                    width: size,
-                    height: size,
+                    width: previewItem?.image ? dragPreview.width : size,
+                    height: previewItem?.image ? undefined : size,
                   }}
-                />
+                >
+                  {previewItem?.image && (
+                    <img
+                      alt=""
+                      className="block h-auto w-full opacity-40"
+                      src={pieceSrc(previewItem.image.url)}
+                    />
+                  )}
+                </span>
               );
             })()}
           {placedItems.map((item) => {

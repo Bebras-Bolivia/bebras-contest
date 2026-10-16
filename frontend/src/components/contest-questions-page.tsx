@@ -5,6 +5,7 @@ import {
   ArrowLeftIcon,
   CheckIcon,
   LoaderCircleIcon,
+  PlusIcon,
   SaveIcon,
   SearchIcon,
   XIcon,
@@ -209,6 +210,18 @@ export function ContestQuestionsPage() {
         [activeCategory]: ids.includes(taskId)
           ? ids.filter((id) => id !== taskId)
           : [...ids, taskId],
+      };
+    });
+
+  const pickAll = () =>
+    setChosen((current) => {
+      const ids = current[activeCategory] ?? [];
+      return {
+        ...current,
+        [activeCategory]: [
+          ...ids,
+          ...visible.map((task) => task.id).filter((id) => !ids.includes(id)),
+        ],
       };
     });
 
@@ -447,6 +460,16 @@ export function ContestQuestionsPage() {
             <CheckIcon className="size-3.5" aria-hidden="true" />
             Elegidas
             <span className="tabular-nums opacity-60">{activeIds.length}</span>
+          </button>
+          <button
+            type="button"
+            disabled={visible.every((task) => activeIds.includes(task.id))}
+            onClick={pickAll}
+            className={chipClass}
+          >
+            <PlusIcon className="size-3.5" aria-hidden="true" />
+            Poner todas
+            <span className="tabular-nums opacity-60">{visible.length}</span>
           </button>
         </div>
       </div>

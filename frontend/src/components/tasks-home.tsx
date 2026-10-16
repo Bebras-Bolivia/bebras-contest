@@ -53,111 +53,20 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  answerTypeLabels,
-  answerTypes,
-  type AnswerType,
-} from "@/lib/task-schema";
+import { answerTypeLabels, answerTypes } from "@/lib/task-schema";
 import { BEBRAS_CATEGORIES } from "@/lib/contest-schema";
 import { difficultyStyles } from "@/lib/difficulty";
+import {
+  DIFFICULTIES,
+  NO_FILTERS,
+  levelFor,
+  matches,
+  readFilters,
+  visibleTasks,
+  writeFilters,
+  type Filters,
+} from "@/lib/task-filters";
 import { cn } from "@/lib/utils";
-
-type Filters = {
-  type: AnswerType | "all";
-  age: string;
-  difficulty: string;
-  visibility: TaskVisibility | "all";
-  query: string;
-};
-
-const NO_FILTERS: Filters = {
-  type: "all",
-  age: "all",
-  difficulty: "all",
-  visibility: "all",
-  query: "",
-};
-
-const DIFFICULTIES = ["easy", "medium", "hard"] as const;
-
-function readFilters(): Filters {
-  const params = new URLSearchParams(window.location.search);
-  const type = params.get("tipo");
-  const age =
-    BEBRAS_CATEGORIES.find((category) => category.name === params.get("edad"))
-      ?.name ?? "all";
-  const difficulty = params.get("dificultad");
-  return {
-    type: answerTypes.find((value) => value === type) ?? "all",
-    age,
-    difficulty:
-      age !== "all" && DIFFICULTIES.some((value) => value === difficulty)
-        ? (difficulty as string)
-        : "all",
-    visibility:
-      TASK_VISIBILITIES.find((item) => item.value === params.get("visible"))
-        ?.value ?? (params.get("practica") === "1" ? "practica" : "all"),
-    query: params.get("q") ?? "",
-  };
-}
-
-function writeFilters(filters: Filters) {
-  const url = new URL(window.location.href);
-  for (const [key, value] of [
-    ["tipo", filters.type],
-    ["edad", filters.age],
-    ["dificultad", filters.difficulty],
-    ["visible", filters.visibility],
-    ["q", filters.query.trim() || "all"],
-  ] as const) {
-    if (value === "all") url.searchParams.delete(key);
-    else url.searchParams.set(key, value);
-  }
-  window.history.replaceState(window.history.state, "", url);
-}
-
-function fold(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase();
-}
-
-function levelFor(task: HomeTaskItem, age: string) {
-  return task.levels.find((level) => level.name === age);
-}
-
-function matches(
-  task: HomeTaskItem,
-  filters: Filters,
-  skip?: "type" | "age" | "difficulty",
-) {
-  if (skip !== "type" && filters.type !== "all") {
-    if (task.answerType !== filters.type) return false;
-  }
-  if (skip !== "age" && filters.age !== "all") {
-    const level = levelFor(task, filters.age);
-    if (!level) return false;
-    if (skip !== "difficulty" && filters.difficulty !== "all") {
-      if (level.difficulty !== filters.difficulty) return false;
-    }
-  }
-  if (filters.visibility !== "all" && task.visibility !== filters.visibility) {
-    return false;
-  }
-  const query = fold(filters.query.trim());
-  if (query) {
-    const haystack = fold(
-      [task.title, task.sourceTaskCode, task.country].filter(Boolean).join(" "),
-    );
-    if (!haystack.includes(query)) return false;
-  }
-  return true;
-}
-
-function difficultyRank(task: HomeTaskItem, age: string) {
-  return difficultyStyles[levelFor(task, age)?.difficulty ?? ""]?.rank ?? 3;
-}
 
 const chipClass =
   "flex h-7 shrink-0 items-center gap-1.5 px-2.5 text-xs whitespace-nowrap text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/60 disabled:pointer-events-none disabled:opacity-40 aria-pressed:bg-primary/10 aria-pressed:font-semibold aria-pressed:text-primary";
@@ -185,13 +94,16 @@ export function TasksHome() {
   const filtered = JSON.stringify(filters) !== JSON.stringify(NO_FILTERS);
 
   useEffect(() => {
-    setFilters(readFilters());
+    const initial = readFilters();
+    setFilters(initial);
+    writeFilters(initial);
   }, []);
 
   const counts = useMemo(() => {
     const type = new Map<string, number>();
     const age = new Map<string, number>();
     const difficulty = new Map<string, number>();
+    const year = new Map<string, number>();
     const add = (map: Map<string, number>, key: string) =>
       map.set(key, (map.get(key) ?? 0) + 1);
     for (const task of tasks) {
@@ -203,23 +115,31 @@ export function TasksHome() {
         add(age, "all");
         for (const level of task.levels) add(age, level.name);
       }
+      if (task.year !== null && matches(task, filters, "year")) {
+        add(year, String(task.year));
+      }
       if (filters.age !== "all" && matches(task, filters, "difficulty")) {
         add(difficulty, "all");
         const level = levelFor(task, filters.age);
         if (level) add(difficulty, level.difficulty);
       }
     }
-    return { type, age, difficulty };
+    return { type, age, difficulty, year };
   }, [tasks, filters]);
 
-  const visibleTasks = useMemo(() => {
-    const matching = tasks.filter((task) => matches(task, filters));
-    return ageFilter === "all"
-      ? matching
-      : [...matching].sort(
-          (a, b) => difficultyRank(a, ageFilter) - difficultyRank(b, ageFilter),
-        );
-  }, [tasks, filters, ageFilter]);
+  const years = useMemo(
+    () =>
+      [...new Set(tasks.map((task) => task.year))]
+        .filter((year): year is number => year !== null)
+        .sort((left, right) => right - left)
+        .map(String),
+    [tasks],
+  );
+
+  const shownTasks = useMemo(
+    () => visibleTasks(tasks, filters),
+    [tasks, filters],
+  );
 
   const filterTransition = useRef(0);
   const filterBar = useRef<HTMLDivElement>(null);
@@ -457,7 +377,7 @@ export function TasksHome() {
               aria-label="Filtrar por tipo de respuesta"
               className="flex gap-5 overflow-x-auto overflow-y-hidden"
             >
-              {(["all", ...answerTypes] as const).map((type) => {
+              {answerTypes.map((type) => {
                 const active = typeFilter === type;
                 const count = counts.type.get(type) ?? 0;
                 return (
@@ -466,10 +386,12 @@ export function TasksHome() {
                     type="button"
                     aria-pressed={active}
                     disabled={count === 0 && !active}
-                    onClick={() => chooseFilters({ type })}
+                    onClick={() =>
+                      chooseFilters({ type: active ? "all" : type })
+                    }
                     className="relative flex shrink-0 items-baseline gap-1.5 py-2.5 text-sm whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground disabled:pointer-events-none disabled:opacity-40 aria-pressed:font-medium aria-pressed:text-foreground"
                   >
-                    {type === "all" ? "Todas" : answerTypeLabels[type]}
+                    {answerTypeLabels[type]}
                     <span className="text-xs tabular-nums opacity-60">
                       {count}
                     </span>
@@ -493,7 +415,7 @@ export function TasksHome() {
                 data-category-group=""
                 className="flex shrink-0 gap-1"
               >
-                {[{ name: "all" }, ...BEBRAS_CATEGORIES].map((category) => {
+                {BEBRAS_CATEGORIES.map((category) => {
                   const active = ageFilter === category.name;
                   const count = counts.age.get(category.name) ?? 0;
                   return (
@@ -502,17 +424,44 @@ export function TasksHome() {
                       type="button"
                       aria-pressed={active}
                       disabled={count === 0 && !active}
-                      onClick={() => chooseFilters({ age: category.name })}
+                      onClick={() =>
+                        chooseFilters({ age: active ? "all" : category.name })
+                      }
                       className={chipClass}
                     >
-                      {category.name === "all"
-                        ? "Todas las categorías"
-                        : category.name}
+                      {category.name}
                       <span className="tabular-nums opacity-60">{count}</span>
                     </button>
                   );
                 })}
               </div>
+              {years.length > 1 && (
+                <div
+                  role="group"
+                  aria-label="Filtrar por origen"
+                  className="flex shrink-0 items-center gap-1 border-l border-border/20 pl-2"
+                >
+                  {years.map((year) => {
+                    const active = filters.year === year;
+                    const count = counts.year.get(year) ?? 0;
+                    return (
+                      <button
+                        key={year}
+                        type="button"
+                        aria-pressed={active}
+                        disabled={count === 0 && !active}
+                        onClick={() =>
+                          chooseFilters({ year: active ? "all" : year })
+                        }
+                        className={chipClass}
+                      >
+                        {year}
+                        <span className="tabular-nums opacity-60">{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               {ageFilter !== "all" && (
                 <div
                   role="group"
@@ -520,7 +469,7 @@ export function TasksHome() {
                   data-difficulty-group=""
                   className="flex shrink-0 items-center gap-1 border-l border-border/20 pl-2 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-left-2 motion-safe:duration-200"
                 >
-                  {(["all", ...DIFFICULTIES] as const).map((difficulty) => {
+                  {DIFFICULTIES.map((difficulty) => {
                     const active = filters.difficulty === difficulty;
                     const count = counts.difficulty.get(difficulty) ?? 0;
                     const style = difficultyStyles[difficulty];
@@ -530,29 +479,40 @@ export function TasksHome() {
                         type="button"
                         aria-pressed={active}
                         disabled={count === 0 && !active}
-                        onClick={() => chooseFilters({ difficulty })}
+                        onClick={() =>
+                          chooseFilters({
+                            difficulty: active ? "all" : difficulty,
+                          })
+                        }
                         className={chipClass}
                       >
                         {style && (
                           <span
                             aria-hidden="true"
-                            className={cn(
-                              "size-2.5",
-                              style.className,
-                            )}
+                            className={cn("size-2.5", style.className)}
                           />
                         )}
-                        {style?.label ?? "Todas"}
+                        {style?.label}
                         <span className="tabular-nums opacity-60">{count}</span>
                       </button>
                     );
                   })}
                 </div>
               )}
+              {filtered && (
+                <button
+                  type="button"
+                  onClick={() => chooseFilters(NO_FILTERS)}
+                  className={cn(chipClass, "ml-1")}
+                >
+                  <XIcon className="size-3.5" aria-hidden="true" />
+                  Quitar filtros
+                </button>
+              )}
             </div>
           </div>
 
-          {visibleTasks.length === 0 ? (
+          {shownTasks.length === 0 ? (
             <div className="flex flex-col items-start gap-2 py-8 text-sm text-muted-foreground">
               <p>No hay tareas con estos filtros.</p>
               {filtered && (
@@ -567,7 +527,7 @@ export function TasksHome() {
             </div>
           ) : (
             <ul className="divide-y border-b">
-              {visibleTasks.map((task, index) => (
+              {shownTasks.map((task, index) => (
                 <li
                   key={task.id}
                   data-task-row=""

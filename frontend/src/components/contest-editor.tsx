@@ -32,6 +32,7 @@ import {
   type StoredContest,
 } from "@/lib/contest-schema";
 import { listTasks } from "@/lib/tasks-api";
+import { PAPER_BLOCKED_INTERACTIVE } from "@/lib/interactive";
 import { type StoredTask } from "@/lib/task-schema";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -662,6 +663,12 @@ export function ContestEditor() {
     .map((id) => tasksById.get(id))
     .filter((task): task is StoredTask => task !== undefined);
 
+  const hasInteractive = form.categories.some((category) =>
+    (form.tasks[category] ?? []).some(
+      (id) => tasksById.get(id)?.answerType === "interactive",
+    ),
+  );
+
   const setActiveIds = (ids: string[]) =>
     update({ tasks: { ...form.tasks, [activeCategory]: ids } });
 
@@ -943,6 +950,12 @@ export function ContestEditor() {
                     </li>
                   ))}
                 </ol>
+              )}
+
+              {hasInteractive && (
+                <p className="bg-secondary/20 px-4 py-3 text-sm">
+                  {PAPER_BLOCKED_INTERACTIVE}
+                </p>
               )}
 
               <div className="flex flex-wrap items-center justify-between gap-3">

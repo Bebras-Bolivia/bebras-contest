@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { TaskContentRenderer } from "@/components/task-content-renderer";
+import { InteractiveTryout } from "@/components/interactive-player";
 import { TaskExplanation } from "@/components/task-explanation";
 import { TaskOrigin } from "@/components/task-origin";
 
@@ -103,6 +104,9 @@ export function TaskPreviewDialog({
                   blocks={task.challengeBlocks}
                   className="gap-4"
                 />
+              )}
+              {task.answerType === "interactive" && (
+                <InteractiveTryout config={task.answerConfig} />
               )}
               {task.answerType === "multiple_choice" &&
                 task.answers.length > 0 && (

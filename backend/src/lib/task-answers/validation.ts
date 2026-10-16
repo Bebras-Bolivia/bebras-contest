@@ -4,6 +4,7 @@ import {
   parseAssignmentConfig,
   validateAssignmentAnswer,
 } from "./assignment-answers";
+import { validateInteractiveAnswer } from "./interactive";
 
 type ParsedDragDropAnswer =
   | { kind: "targets"; placements: Record<string, string> }
@@ -133,6 +134,8 @@ export function validateTaskAnswer(
         Object.keys(response).length === 0
         ? null
         : invalid;
+    case "interactive":
+      return validateInteractiveAnswer(payload) ? null : invalid;
     case "drag_drop": {
       const answer = parseDragDropAnswer(task, payload);
       return answer && (answer.kind === "targets" || task.dragDropVersion === 1)

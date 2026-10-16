@@ -209,6 +209,7 @@ export type GroupResults = {
     paperEntryUntil: string | null;
     printFrom: string | null;
     canPrint: boolean;
+    paperBlocked?: string | null;
   };
   categories: string[];
   showScores: boolean;

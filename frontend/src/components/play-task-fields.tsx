@@ -7,6 +7,7 @@ import {
 } from "@/components/assignment-player";
 import type { GridConfig } from "@/lib/assignment-answers";
 import { ImageHotspotPlayer } from "@/components/image-hotspot-player";
+import { InteractivePlayer } from "@/components/interactive-player";
 import type { HotspotConfig } from "@/lib/image-hotspot";
 
 import { TaskContentRenderer } from "@/components/task-content-renderer";
@@ -169,6 +170,14 @@ export function PlayTaskFields({
 
   return (
     <>
+      {task.answerType === "interactive" && (
+        <InteractivePlayer
+          config={task.answerConfig}
+          value={value}
+          disabled={disabled}
+          onChange={onChange}
+        />
+      )}
       {task.answerType === "state_grid" && task.answerConfig?.version === 1 && (
         <StateGridPlayer
           config={task.answerConfig as unknown as GridConfig}
@@ -278,7 +287,7 @@ export function PlayTaskFields({
                       // Las imágenes llegan con el ancho del cuadernillo; en
                       // una opción manda el alto, para que quepan varias.
                       imageChoices &&
-                        "[&_img]:max-h-40 [&_img]:w-auto! [&_img]:max-w-full [&_img]:mix-blend-multiply [&>div]:py-0",
+                        "[&_img]:max-h-48 md:[&_img]:max-h-64 [&_img]:w-auto! [&_img]:max-w-full [&_img]:mix-blend-multiply [&>div]:py-0",
                     )}
                     minImageWidth="0px"
                   />

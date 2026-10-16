@@ -79,6 +79,11 @@ FIGURES = [
     (36, 'diagrama-cruz-robot.png', 0, [(410, 586, 528, 700)]),
     (38, 'bebras-2024-38-imagenes-encriptadas-solution.png', 1, [(601, 679, 978, 795)]),
     (41, 'pared_original.png', 0, [(568, 332, 1004, 457)]),
+    (42, 'pergamino_A.png', 0, [(180, 474, 262, 586)]),
+    (42, 'pergamino_B.png', 0, [(342, 474, 425, 586)]),
+    (42, 'pergamino_C.png', 0, [(504, 474, 587, 586)]),
+    (42, 'pergamino_D.png', 0, [(662, 474, 744, 586)]),
+    (42, 'pergamino_E.png', 0, [(810, 474, 892, 586)]),
     (42, 'bebras-2024-42-mapas-falsos-solution.png', 0, [(198, 773, 439, 948)]),
     (43, 'bebras-2024-43-palago-solution.png', 1, [(589, 227, 992, 350), (588, 361, 717, 482), (583, 495, 761, 632)]),
 ]

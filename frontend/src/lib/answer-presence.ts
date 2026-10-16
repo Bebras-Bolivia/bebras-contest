@@ -38,6 +38,12 @@ export function answerHasResponse(
         !Array.isArray(response.placements) &&
         Object.keys(response.placements as object).length > 0
       );
+    case "interactive":
+      return (
+        response.version === 1 &&
+        typeof response.answer === "string" &&
+        response.answer.trim().length > 0
+      );
     default:
       return false;
   }

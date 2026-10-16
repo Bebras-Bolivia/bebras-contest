@@ -3,6 +3,15 @@ import { parseHotspotConfig } from "./image-hotspot";
 import { readMultipleChoiceLayout } from "./config";
 import { parseMcCorrectness } from "./multiple-choice";
 import { parseAssignmentConfig } from "./assignment-answers";
+import { parseInteractiveConfig } from "./interactive";
+
+function publicInteractiveConfig(value: unknown) {
+  try {
+    return parseInteractiveConfig(value);
+  } catch {
+    return {};
+  }
+}
 
 /** Inline blanks contain only a location ID, never a stored or correct answer. */
 function publicDocument(value: unknown, depth = 0): unknown {
@@ -212,17 +221,19 @@ export function renderSafeTask(
     // The current types use their existing fields. Future types must explicitly
     // project their validated configuration here, never the private answerKey.
     answerConfig:
-      task.answerType === "image_hotspot"
-        ? parseHotspotConfig(task.answerConfig)
-        : task.answerType === "state_grid" || task.answerType === "text_cloze"
-          ? parseAssignmentConfig(task.answerType, task.answerConfig)
-          : task.answerType === "multiple_choice"
-            ? {
-                multipleChoiceLayout: readMultipleChoiceLayout(
-                  task.answerConfig,
-                ),
-              }
-            : {},
+      task.answerType === "interactive"
+        ? publicInteractiveConfig(task.answerConfig)
+        : task.answerType === "image_hotspot"
+          ? parseHotspotConfig(task.answerConfig)
+          : task.answerType === "state_grid" || task.answerType === "text_cloze"
+            ? parseAssignmentConfig(task.answerType, task.answerConfig)
+            : task.answerType === "multiple_choice"
+              ? {
+                  multipleChoiceLayout: readMultipleChoiceLayout(
+                    task.answerConfig,
+                  ),
+                }
+              : {},
     multipleChoiceOrderMode: task.multipleChoiceOrderMode,
     multipleChoiceMode: parseMcCorrectness(task.correctAnswerId).mode,
     answers,

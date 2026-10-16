@@ -60,6 +60,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { TaskContentRenderer } from "@/components/task-content-renderer";
+import { InteractiveTryout } from "@/components/interactive-player";
 import { getPracticeTask } from "@/lib/practice-api";
 import type { PlayTask } from "@/lib/play-api";
 import {
@@ -696,6 +697,9 @@ export function PracticesHome() {
                     blocks={previewTask.challengeBlocks}
                     className="gap-4"
                   />
+                )}
+                {previewTask.answerType === "interactive" && (
+                  <InteractiveTryout config={previewTask.answerConfig} />
                 )}
               </>
             )}

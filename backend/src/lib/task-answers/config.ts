@@ -11,6 +11,7 @@ import {
   parseAssignmentConfig,
   parseAssignmentKey,
 } from "./assignment-answers";
+import { parseInteractiveConfig, parseInteractiveKey } from "./interactive";
 
 const serializeJson = JSON.stringify;
 const TASK_ANSWER_TYPES = [
@@ -20,6 +21,7 @@ const TASK_ANSWER_TYPES = [
   "image_hotspot",
   "state_grid",
   "text_cloze",
+  "interactive",
 ];
 
 type ContentBlockInput = {
@@ -317,6 +319,20 @@ export function readMultipleChoiceLayout(config: unknown) {
 
 export function parseTaskAnswerConfig(body: Record<string, unknown>) {
   const answerType = readText(body.answerType) || "multiple_choice";
+
+  if (answerType === "interactive") {
+    return {
+      answerType,
+      answerConfig: serializeJson(parseInteractiveConfig(body.answerConfig)),
+      answerKey: serializeJson(parseInteractiveKey(body.answerKey)),
+      multipleChoiceOrderMode: "fixed",
+      answers: "[]",
+      correctAnswerId: "",
+      shortAnswer: "",
+      dragDropBackground: "null",
+      dragDropItems: "[]",
+    };
+  }
 
   if (
     answerType === "image_hotspot" ||

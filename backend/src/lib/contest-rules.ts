@@ -352,3 +352,10 @@ export function resultsWindow(contest: {
     contest.resultsUntil ?? new Date(from.getTime() + 7 * 24 * 3600000);
   return { from, until };
 }
+
+export const PAPER_BLOCKED_INTERACTIVE =
+  "Este desafío tiene preguntas interactivas, que solo se responden en línea: no se puede imprimir ni cargar hojas en papel.";
+
+export function paperBlockedReason(answerTypes: string[]) {
+  return answerTypes.includes("interactive") ? PAPER_BLOCKED_INTERACTIVE : null;
+}

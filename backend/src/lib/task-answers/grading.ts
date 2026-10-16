@@ -7,6 +7,7 @@ import {
   assignmentAnswerIsCorrect,
   parseAssignmentConfig,
 } from "./assignment-answers";
+import { interactiveAnswerIsCorrect } from "./interactive";
 
 export function answerIsCorrect(task: PlayTask, payload: unknown) {
   if (
@@ -19,6 +20,9 @@ export function answerIsCorrect(task: PlayTask, payload: unknown) {
       ? (payload as Record<string, unknown>)
       : {};
   const type = task.answerType;
+  if (type === "interactive") {
+    return interactiveAnswerIsCorrect(task.answerKey, payload);
+  }
   if (type === "state_grid" || type === "text_cloze") {
     try {
       return assignmentAnswerIsCorrect(

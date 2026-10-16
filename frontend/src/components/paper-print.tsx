@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import {
   ArrowLeftIcon,
   DownloadIcon,
@@ -9,6 +15,7 @@ import {
   PrinterIcon,
 } from "lucide-react";
 
+import { cellBox } from "@/components/assignment-player";
 import { TaskContentRenderer } from "@/components/task-content-renderer";
 import { toast } from "sonner";
 
@@ -28,6 +35,7 @@ import {
   getPaperBundle,
   gridCellLabels,
   gridConfig,
+  gridRows,
   letter,
   markKind,
   paperPieces,
@@ -38,6 +46,7 @@ import {
   type PaperTask,
   type PaperTeam,
 } from "@/lib/paper";
+import type { GridConfig } from "@/lib/assignment-answers";
 import { sheetsToPdf } from "@/lib/paper-pdf";
 import { cn } from "@/lib/utils";
 
@@ -186,9 +195,11 @@ export function PaperPrint() {
 
         {!bundle.canPrint ? (
           <p className="bg-secondary/20 px-4 py-3 text-sm leading-6">
-            {bundle.printFrom
-              ? `La prueba se puede imprimir desde el ${formatDateTime(bundle.printFrom)}, dos días antes de que empiece.`
-              : "La prueba todavía no tiene fecha. Se puede imprimir dos días antes de que empiece."}
+            {bundle.paperBlocked
+              ? bundle.paperBlocked
+              : bundle.printFrom
+                ? `La prueba se puede imprimir desde el ${formatDateTime(bundle.printFrom)}, dos días antes de que empiece.`
+                : "La prueba todavía no tiene fecha. Se puede imprimir dos días antes de que empiece."}
           </p>
         ) : (
           <>
@@ -874,6 +885,9 @@ function BookletAnswer({ task }: { task: PaperTask }) {
   }
 
   const grid = gridConfig(task);
+  if (grid?.layout === "image" && grid.background) {
+    return <BookletGridImage grid={grid} />;
+  }
   if (grid) {
     const states = usable(grid.states);
     return (
@@ -979,6 +993,59 @@ function BookletDragDrop({ task }: { task: PaperTask }) {
           ? "; las que tienen ×2 o más se pueden usar esas veces."
           : "."}{" "}
         Los lugares que quedan vacíos se dejan en blanco.
+      </p>
+    </>
+  );
+}
+
+/** El fondo con el número de cada casilla, el mismo que pide la hoja. */
+function BookletGridImage({ grid }: { grid: GridConfig }) {
+  const [ratio, setRatio] = useState<number | null>(null);
+  const labels = gridCellLabels(grid);
+  return (
+    <>
+      <div className="pp-stage-wrap">
+        <div
+          className="pp-stage pp-stage-cells"
+          style={{
+            width: ratio
+              ? `min(100%, calc(var(--pp-img, 3.4in) * ${ratio.toFixed(4)}))`
+              : "100%",
+          }}
+        >
+          <img
+            src={grid.background!.url}
+            alt=""
+            onLoad={(event) => {
+              const image = event.currentTarget;
+              setRatio(image.naturalWidth / Math.max(1, image.naturalHeight));
+            }}
+          />
+          {grid.cells.map((cell, index) => (
+            <span
+              key={cell.id}
+              className="pp-cell"
+              style={
+                {
+                  ...cellBox(cell),
+                  "--pp-cell": `${Math.min(cell.width ?? 10, (cell.height ?? 10) / (ratio ?? 1))}cqw`,
+                } as CSSProperties
+              }
+            >
+              <b>{labels[index]}</b>
+            </span>
+          ))}
+        </div>
+      </div>
+      <Legend
+        options={usable(grid.states).map((state, index) => ({
+          letter: letter(index),
+          label: state.label,
+          image: state.image,
+        }))}
+      />
+      <p className="pp-hint">
+        En tu hoja, escribe en cada número la letra de lo que va en esa casilla.
       </p>
     </>
   );
@@ -1107,11 +1174,14 @@ function hotspotImage(task: PaperTask) {
     : null;
 }
 
+const sheetColumns = (grid: GridConfig) =>
+  Math.max(1, ...gridRows(grid).map((row) => row.length));
+
 function sheetRowIsWide(task: PaperTask) {
   if (task.answerType === "image_hotspot") return true;
   if (task.answerType === "drag_drop") return task.dragDropTargets.length > 5;
   const grid = gridConfig(task);
-  if (grid) return grid.columns > 5;
+  if (grid) return sheetColumns(grid) > 5;
   const cloze = clozeConfig(task);
   if (cloze) return cloze.blanks.length > 5;
   return false;
@@ -1167,16 +1237,25 @@ function SheetAnswer({ task }: { task: PaperTask }) {
 
   const grid = gridConfig(task);
   if (grid) {
+    const labels = gridCellLabels(grid);
     return (
       <div
         className="pp-row-answer pp-gridsheet"
-        style={{ gridTemplateColumns: `repeat(${grid.columns}, 0.42in)` }}
+        style={{
+          gridTemplateColumns: `repeat(${sheetColumns(grid)}, 0.42in)`,
+        }}
       >
-        {gridCellLabels(grid).map((label, index) => (
-          <span key={grid.cells[index].id} className="pp-slot">
-            <small>{label}</small>
-          </span>
-        ))}
+        {gridRows(grid).flatMap((row, rowIndex) =>
+          row.map((index) => (
+            <span
+              key={grid.cells[index].id}
+              className="pp-slot"
+              style={{ gridRow: rowIndex + 1 }}
+            >
+              <small>{labels[index]}</small>
+            </span>
+          )),
+        )}
       </div>
     );
   }
@@ -1518,6 +1597,17 @@ const PRINT_CSS = `
   background: #fff;
   box-shadow: 0 0 0 2px #fff;
   font-size: 10pt; font-weight: 900;
+}
+.pp-stage-cells { container-type: inline-size; }
+.pp-cell { position: absolute; display: grid; place-items: center; }
+.pp-cell b {
+  display: grid; place-items: center;
+  width: min(0.3in, calc(var(--pp-cell) * 0.72));
+  height: min(0.3in, calc(var(--pp-cell) * 0.72));
+  border: 2px solid var(--pp-ink);
+  border-radius: 50%;
+  background: #fff;
+  font-size: min(10pt, calc(var(--pp-cell) * 0.4)); font-weight: 900; line-height: 1;
 }
 .pp-pieces, .pp-legend { display: flex; flex-wrap: wrap; gap: 8px; }
 .pp-piece, .pp-legend-item {

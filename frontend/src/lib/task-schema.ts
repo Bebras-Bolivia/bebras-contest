@@ -25,6 +25,7 @@ export const answerTypes = [
   "image_hotspot",
   "state_grid",
   "text_cloze",
+  "interactive",
 ] as const;
 export const answerTypeLabels: Record<(typeof answerTypes)[number], string> = {
   multiple_choice: "Opción múltiple",
@@ -33,7 +34,12 @@ export const answerTypeLabels: Record<(typeof answerTypes)[number], string> = {
   image_hotspot: "Zonas sobre la imagen",
   state_grid: "Estados por casilla",
   text_cloze: "Huecos en el texto",
+  interactive: "Interactiva",
 };
+/** Las interactivas llegan hechas desde ViLLE: el editor no las crea. */
+export const authoringAnswerTypes = answerTypes.filter(
+  (type) => type !== "interactive",
+);
 export const multipleChoiceOrderModes = ["fixed", "random"] as const;
 export const multipleChoiceCorrectnessModes = ["single", "any", "all"] as const;
 export const multipleChoiceLayouts = ["vertical", "horizontal"] as const;

@@ -31,6 +31,7 @@ export type PaperBundle = {
   printFrom: string | null;
   canPrint: boolean;
   entryOpen: boolean;
+  paperBlocked?: string | null;
   entryUntil: string | null;
   categories: Array<{ name: string; rules: ContestRules; tasks: PaperTask[] }>;
   teams: PaperTeam[];
@@ -95,6 +96,15 @@ export function clozeConfig(task: PlayTask) {
  * reproductor en línea.
  */
 export function gridCellLabels(config: GridConfig) {
+  if (config.layout === "image") {
+    const labels: string[] = [];
+    gridRows(config)
+      .flat()
+      .forEach((cellIndex, position) => {
+        labels[cellIndex] = String(position + 1);
+      });
+    return labels;
+  }
   const positional = config.cells.every((cell, index) => {
     const label = cell.label.trim().toLowerCase();
     const position = String(index + 1);
@@ -106,6 +116,42 @@ export function gridCellLabels(config: GridConfig) {
   });
   return config.cells.map((cell, index) =>
     positional ? String(index + 1) : cell.label.trim(),
+  );
+}
+
+/**
+ * Las casillas sobre una imagen se numeran en orden de lectura: por franjas de
+ * arriba abajo y, en cada una, de izquierda a derecha. En la cuadrícula, cada
+ * fila es una franja.
+ */
+export function gridRows(config: GridConfig): number[][] {
+  if (config.layout !== "image")
+    return Array.from({ length: config.rows }, (_, row) =>
+      Array.from(
+        { length: config.columns },
+        (_, column) => row * config.columns + column,
+      ),
+    );
+  const middle = (index: number) => {
+    const cell = config.cells[index];
+    return (cell.y ?? 0) + (cell.height ?? 0) / 2;
+  };
+  const rows: number[][] = [];
+  for (const index of config.cells
+    .map((_, index) => index)
+    .sort((a, b) => middle(a) - middle(b))) {
+    const row = rows.at(-1);
+    const first = row && config.cells[row[0]];
+    if (
+      row &&
+      first &&
+      Math.abs(middle(index) - middle(row[0])) < (first.height ?? 0) / 2
+    )
+      row.push(index);
+    else rows.push([index]);
+  }
+  return rows.map((row) =>
+    row.sort((a, b) => (config.cells[a].x ?? 0) - (config.cells[b].x ?? 0)),
   );
 }
 

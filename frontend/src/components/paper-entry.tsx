@@ -319,10 +319,12 @@ export function PaperEntry() {
         </div>
         {!bundle.entryOpen && (
           <p className="bg-secondary/20 px-4 py-3 text-sm">
-            {bundle.contest.startsAt &&
-            new Date(bundle.contest.startsAt) > new Date()
-              ? `Las hojas se cargan desde que empieza la prueba: el ${dateAtEnd(bundle.contest.startsAt)}`
-              : "Los resultados ya se calcularon: ya no se pueden cargar hojas."}
+            {bundle.paperBlocked
+              ? bundle.paperBlocked
+              : bundle.contest.startsAt &&
+                  new Date(bundle.contest.startsAt) > new Date()
+                ? `Las hojas se cargan desde que empieza la prueba: el ${dateAtEnd(bundle.contest.startsAt)}`
+                : "Los resultados ya se calcularon: ya no se pueden cargar hojas."}
           </p>
         )}
       </div>

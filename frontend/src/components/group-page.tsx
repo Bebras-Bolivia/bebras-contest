@@ -1154,6 +1154,20 @@ function PaperSection({
   const { contest, teams } = results;
   const loaded = teams.filter((team) => team.paper).length;
 
+  if (contest.paperBlocked) {
+    return (
+      <section
+        className={cn(enter, "flex flex-col gap-1 border-t pt-6")}
+        style={{ animationDelay: "120ms" }}
+      >
+        <h2 className="font-heading text-lg font-semibold">
+          ¿Sin internet en el aula?
+        </h2>
+        <p className="text-sm text-muted-foreground">{contest.paperBlocked}</p>
+      </section>
+    );
+  }
+
   return (
     <section
       className={cn(enter, "flex flex-col gap-3 border-t pt-6")}

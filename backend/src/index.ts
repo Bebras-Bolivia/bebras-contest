@@ -27,6 +27,7 @@ import {
   initialScoreOf,
   isDifficultyKey,
   normalizeCategories,
+  paperBlockedReason,
   parseContestScoring,
   parseGrade,
   registrationOpenAt,
@@ -48,6 +49,10 @@ import { answerIsCorrect } from "./lib/task-answers/grading";
 import { validateTaskAnswer } from "./lib/task-answers/validation";
 import { renderSafeTask } from "./lib/task-answers/public-task";
 import type { PlayTask } from "./lib/task-answers/types";
+import {
+  interactiveEngineKey,
+  parseInteractiveEngineKey,
+} from "./lib/task-answers/interactive";
 import {
   authenticateFirebase,
   requireAdmin,
@@ -606,6 +611,7 @@ const TASK_COUNTRIES = [
   "Malta",
   "Montenegro",
   "México",
+  "Noruega",
   "Pakistán",
   "Paraguay",
   "Países Bajos",
@@ -730,12 +736,9 @@ function parseTaskPayload(body: Record<string, unknown>) {
     throw new Error("Debes agregar contenido en la pregunta o desafío.");
   }
 
-  if (countFilledBlocks(body.explanationBlocks) === 0) {
-    throw new Error("La explicación de la respuesta es obligatoria.");
-  }
   const answerFields = parseTaskAnswerConfig(body);
 
-  return {
+  const row = {
     title,
     country: country || null,
     year,
@@ -747,6 +750,35 @@ function parseTaskPayload(body: Record<string, unknown>) {
     ...answerFields,
     explanationBlocks: serializeJson(body.explanationBlocks ?? []),
   };
+  const rowBytes = Object.values(row).reduce<number>(
+    (total, value) =>
+      total + (typeof value === "string" ? Buffer.byteLength(value) : 8),
+    0,
+  );
+
+  if (rowBytes > TASK_ROW_MAX_BYTES) {
+    throw new Error(
+      `La tarea pesa ${(rowBytes / 1_000_000).toFixed(1).replace(".", ",")} MB y el máximo es 1,9 MB. Achica sus imágenes.`,
+    );
+  }
+
+  return row;
+}
+
+const TASK_ROW_MAX_BYTES = 1_900_000;
+
+async function interactiveEngineProblem(payload: {
+  answerType: string;
+  answerConfig: string;
+}) {
+  if (payload.answerType !== "interactive") return null;
+  const { engine } = JSON.parse(payload.answerConfig) as {
+    engine: { name: string; version: string };
+  };
+  const stored = await env.UPLOADS.head(interactiveEngineKey(engine));
+  return stored
+    ? null
+    : `El motor ${engine.name} ${engine.version} de la actividad no está subido.`;
 }
 
 const GROUP_CODE_LIFETIME_MINUTES = 30;
@@ -2480,10 +2512,65 @@ app.post("/api/practice/tasks/:id/check", async (req, res) => {
   });
 });
 
+app.get("/api/interactive/engines/:name/:file", async (req, res) => {
+  const version = /^([0-9a-f]{12})\.js$/.exec(String(req.params.file))?.[1];
+  const engine = version
+    ? parseInteractiveEngineKey(
+        interactiveEngineKey({ name: String(req.params.name), version }),
+      )
+    : null;
+  const object = engine
+    ? await env.UPLOADS.get(interactiveEngineKey(engine))
+    : null;
+
+  if (!object) {
+    res.status(404).json({ message: "Motor no encontrado." });
+    return;
+  }
+
+  res.setHeader("Content-Type", "text/javascript; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.send(Buffer.from(await object.arrayBuffer()));
+});
+
 // Banco de tareas, desafíos y gestión de usuarios: solo admin.
 app.use(["/api/tasks", "/api/contests", "/api/users"], requireAdmin);
 
 app.use("/api/admin", requireAdmin);
+
+app.get("/api/admin/interactive-engines/latest", async (_req, res) => {
+  const engines = [];
+  let cursor: string | undefined;
+  do {
+    const page = await env.UPLOADS.list({
+      prefix: "interactive/engines/",
+      cursor,
+    });
+    for (const object of page.objects) {
+      const engine = parseInteractiveEngineKey(object.key);
+      if (engine) engines.push({ ...engine, uploaded: object.uploaded });
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+
+  const latest = engines.sort(
+    (left, right) => right.uploaded.getTime() - left.uploaded.getTime(),
+  )[0];
+
+  if (!latest) {
+    res.status(404).json({ message: "No hay motores subidos." });
+    return;
+  }
+
+  res.json({
+    name: latest.name,
+    version: latest.version,
+    uploadedAt: latest.uploaded.toISOString(),
+  });
+});
 
 const INFO_SITE_KEY = "infoSiteUrl";
 
@@ -2949,6 +3036,12 @@ app.post("/api/tasks", async (req, res) => {
     return;
   }
 
+  const engineProblem = await interactiveEngineProblem(payload);
+  if (engineProblem) {
+    res.status(400).json({ message: engineProblem });
+    return;
+  }
+
   const task = await prisma.taskDraft.create({
     data: {
       ...payload,
@@ -3052,6 +3145,12 @@ app.put("/api/tasks/:id", async (req, res) => {
     res.status(400).json({
       message: error instanceof Error ? error.message : "Tarea inválida.",
     });
+    return;
+  }
+
+  const engineProblem = await interactiveEngineProblem(payload);
+  if (engineProblem) {
+    res.status(400).json({ message: engineProblem });
     return;
   }
 
@@ -4375,7 +4474,9 @@ async function loadGroupResults(
         include: {
           tasks: {
             orderBy: { position: "asc" },
-            include: { taskDraft: { select: { title: true } } },
+            include: {
+              taskDraft: { select: { title: true, answerType: true } },
+            },
           },
         },
       },
@@ -4397,6 +4498,13 @@ async function loadGroupResults(
   const contest = group.contest;
   const { state } = computeContestState(contest);
   const paper = paperWindow(contest, user);
+  const paperBlocked = paperBlockedReason(
+    contest.tasks.map((task) => task.taskDraft.answerType),
+  );
+  if (paperBlocked) {
+    paper.canPrint = false;
+    paper.entryOpen = false;
+  }
   // Durante la rendición el maestro solo ve el avance; los aciertos, cuando cierra.
   const showScores = contest.isPractice || contestHasEnded(state);
   const categories = groupCategories(group);
@@ -4494,6 +4602,7 @@ async function loadGroupResults(
       paperEntryUntil: paper.entryUntil?.toISOString() ?? null,
       printFrom: paper.printFrom?.toISOString() ?? null,
       canPrint: paper.canPrint,
+      paperBlocked,
     },
     categories,
     showScores,
@@ -5177,6 +5286,14 @@ function paperWindow(
   };
 }
 
+async function contestPaperBlocked(contestId: string) {
+  const tasks = await prisma.contestTask.findMany({
+    where: { contestId },
+    select: { taskDraft: { select: { answerType: true } } },
+  });
+  return paperBlockedReason(tasks.map((task) => task.taskDraft.answerType));
+}
+
 /** El departamento del colegio del maestro, para el castor de la portada. */
 async function teacherDepartment(userId: number | null) {
   if (!userId) return null;
@@ -5241,6 +5358,11 @@ app.get("/api/groups/:id/paper", async (req, res) => {
   });
   const contest = group.contest;
   const window = paperWindow(contest, req.user);
+  const paperBlocked = await contestPaperBlocked(contest.id);
+  if (paperBlocked) {
+    window.canPrint = false;
+    window.entryOpen = false;
+  }
   const teams = [...group.teams].sort(
     (left, right) =>
       left.createdAt.getTime() - right.createdAt.getTime() ||
@@ -5258,6 +5380,7 @@ app.get("/api/groups/:id/paper", async (req, res) => {
       startsAt: contest.startsAt?.toISOString() ?? null,
       endsAt: contest.endsAt?.toISOString() ?? null,
     },
+    paperBlocked,
     department: await teacherDepartment(group.createdById),
     printFrom: window.printFrom?.toISOString() ?? null,
     canPrint: window.canPrint,
@@ -5354,6 +5477,12 @@ app.put("/api/teams/:id/paper", async (req, res) => {
 
   if (!window.entryOpen) {
     res.status(409).json({ message: paperEntryClosedMessage(window) });
+    return;
+  }
+
+  const paperBlocked = await contestPaperBlocked(contest.id);
+  if (paperBlocked) {
+    res.status(409).json({ message: paperBlocked });
     return;
   }
 

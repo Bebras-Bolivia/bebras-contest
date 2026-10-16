@@ -21,6 +21,7 @@ const HOW_TO_ANSWER: Record<string, string> = {
   image_hotspot: "Toca la imagen",
   state_grid: "Marca las casillas",
   text_cloze: "Completa la frase",
+  interactive: "Resuelve la actividad",
 };
 
 type Outcome = "correct" | "wrong" | null;

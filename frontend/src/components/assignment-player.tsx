@@ -4,18 +4,15 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { CheckIcon, PlusIcon } from "lucide-react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { PlusIcon } from "lucide-react";
 import { TaskContentRenderer } from "@/components/task-content-renderer";
 import type {
   AssignmentOption,
+  GridCell,
   GridConfig,
   ClozeConfig,
 } from "@/lib/assignment-answers";
@@ -40,7 +37,7 @@ export function readAssignments(
  * Pone `optionId` en `slotId` (o lo vacía con ""). Una opción que ya llegó a su
  * límite se muda: deja libre la posición donde estaba.
  */
-function withAssignment(
+export function withAssignment(
   options: AssignmentOption[],
   value: Record<string, string>,
   slotId: string,
@@ -59,7 +56,7 @@ function withAssignment(
 }
 
 /** Supr vacía la posición y las flechas recorren sus opciones sin abrir menú. */
-function slotKeyDown(
+export function slotKeyDown(
   event: KeyboardEvent,
   allowed: AssignmentOption[],
   chosenId: string | undefined,
@@ -86,94 +83,6 @@ function slotKeyDown(
   }
 }
 
-const floatingCard =
-  "border-2 shadow-[0_6px_16px_-6px_rgba(0,0,0,0.2)] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50";
-
-/**
- * Lista que se abre pegada a una casilla: una tarjeta por opción, con su letra,
- * y «Quitar respuesta» si ya hay una elegida.
- */
-function ChoiceMenu({
-  label,
-  options,
-  chosenId,
-  onPick,
-}: {
-  label: string;
-  options: AssignmentOption[];
-  chosenId: string | undefined;
-  onPick: (optionId: string) => void;
-}) {
-  return (
-    <PopoverContent
-      align="start"
-      data-plain-menu=""
-      className="w-auto max-w-[min(24rem,calc(100vw-2rem))] bg-transparent p-0"
-      aria-label={`Opciones de ${label}`}
-    >
-      <ul className="flex flex-col gap-1.5">
-        {options.map((option, index) => {
-          const selected = option.id === chosenId;
-          return (
-            <li key={option.id}>
-              <button
-                type="button"
-                aria-pressed={selected}
-                onClick={() => onPick(option.id)}
-                className={cn(
-                  floatingCard,
-                  "flex min-h-12 w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors",
-                  selected
-                    ? "border-primary bg-[color-mix(in_srgb,var(--primary)_10%,var(--background))] font-medium"
-                    : "border-border/40 bg-background hover:border-primary/60 hover:bg-[color-mix(in_srgb,var(--primary)_5%,var(--background))]",
-                )}
-              >
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "grid size-6 shrink-0 place-items-center text-xs font-semibold",
-                    selected
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground",
-                  )}
-                >
-                  {String.fromCharCode(65 + index)}
-                </span>
-                {option.image ? (
-                  <img
-                    src={option.image.url}
-                    alt={option.label}
-                    className="size-10 shrink-0 object-contain mix-blend-multiply"
-                  />
-                ) : (
-                  <span className="min-w-0 flex-1">{option.label}</span>
-                )}
-                {selected && (
-                  <CheckIcon className="size-4 shrink-0 text-primary" />
-                )}
-              </button>
-            </li>
-          );
-        })}
-        {chosenId && (
-          <li>
-            <button
-              type="button"
-              onClick={() => onPick("")}
-              className={cn(
-                floatingCard,
-                "flex min-h-10 w-full items-center justify-center border-border/40 bg-background px-3 py-2 text-sm text-muted-foreground hover:text-foreground",
-              )}
-            >
-              Quitar respuesta
-            </button>
-          </li>
-        )}
-      </ul>
-    </PopoverContent>
-  );
-}
-
 /**
  * Un rótulo que solo repite el puesto («1», «Posición 2») no dice nada que la
  * fila no muestre ya. Se ocultan únicamente si todos son así: cuando llevan
@@ -191,10 +100,67 @@ function positionalLabels(cells: GridConfig["cells"]) {
   });
 }
 
+export type ImageGridConfig = GridConfig & {
+  layout: "image";
+  background: NonNullable<GridConfig["background"]>;
+};
+
+export function gridOnImage(config: GridConfig): config is ImageGridConfig {
+  return config.layout === "image" && Boolean(config.background);
+}
+
+export function cellBox(
+  cell: Pick<GridCell, "x" | "y" | "width" | "height">,
+): CSSProperties {
+  return {
+    left: `${cell.x ?? 0}%`,
+    top: `${cell.y ?? 0}%`,
+    width: `${cell.width ?? 10}%`,
+    height: `${cell.height ?? 10}%`,
+  };
+}
+
 /**
- * Cada casilla se resuelve tocándola y eligiendo su estado en la lista que se
- * abre al lado.
+ * El fondo ocupa el ancho elegido (en el celular, todo el ancho), pero nunca
+ * tan poco que la casilla más angosta mida menos de 2.25 rem: si no cabe, la
+ * imagen se desliza.
  */
+export function imageStageStyle(config: GridConfig): CSSProperties {
+  const narrowest = Math.min(
+    ...config.cells.map((cell) => cell.width ?? 10),
+    100,
+  );
+  const minimum = Math.min(48, 2.25 / (Math.max(narrowest, 1) / 100));
+  return {
+    "--stage-w": `${config.widthPercent ?? 100}%`,
+    "--stage-min": `${minimum.toFixed(2)}rem`,
+  } as CSSProperties;
+}
+
+export const imageStageClass =
+  "relative mx-auto w-[max(100%,var(--stage-min))] sm:w-[max(var(--stage-w),var(--stage-min))]";
+
+/** Lo que muestra una casilla con estado: su imagen, de borde a borde. */
+export function CellFace({ state }: { state: AssignmentOption }) {
+  return state.image ? (
+    <img
+      key={state.id}
+      src={state.image.url}
+      alt=""
+      draggable={false}
+      className="pointer-events-none size-full object-contain motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-75 motion-safe:duration-200"
+    />
+  ) : (
+    <span
+      key={state.id}
+      className="pointer-events-none max-w-full truncate bg-background/85 px-0.5 text-xs font-medium motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150"
+    >
+      {state.label}
+    </span>
+  );
+}
+
+/** Cada toque en una casilla pasa al estado siguiente; tras el último, la vacía. */
 export function StateGridPlayer({
   config,
   value,
@@ -208,7 +174,6 @@ export function StateGridPlayer({
   disabled?: boolean;
   renderLabel?: (cell: GridConfig["cells"][number], index: number) => ReactNode;
 }) {
-  const [openId, setOpenId] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const states = config.states.filter((state) => state.limit !== 0);
   const showLabels = !positionalLabels(config.cells);
@@ -222,6 +187,70 @@ export function StateGridPlayer({
     setAnnouncement(`${cell.label}: ${state?.label ?? "vacío"}`);
   }
 
+  const advance = (cellId: string, currentId: string | undefined) => {
+    const index = states.findIndex((entry) => entry.id === currentId);
+    assign(cellId, states[index + 1]?.id ?? "");
+  };
+
+  if (gridOnImage(config))
+    return (
+      <div className="min-w-0 overflow-x-auto" data-assignment-surface>
+        <div className={imageStageClass} style={imageStageStyle(config)}>
+          <img
+            src={config.background.url}
+            alt=""
+            draggable={false}
+            className="block h-auto w-full select-none"
+          />
+          {config.cells.map((cell, index) => {
+            const state = config.states.find(
+              (entry) => entry.id === value[cell.id],
+            );
+            return (
+              <button
+                key={cell.id}
+                type="button"
+                data-assignment-slot={cell.id}
+                disabled={disabled}
+                aria-label={`${cell.label}: ${state?.label ?? "vacío"}`}
+                onClick={() => advance(cell.id, state?.id)}
+                onKeyDown={(event) =>
+                  slotKeyDown(event, states, state?.id, (id) =>
+                    assign(cell.id, id),
+                  )
+                }
+                style={cellBox(cell)}
+                className={cn(
+                  "absolute grid cursor-pointer touch-manipulation place-items-center overflow-hidden outline-none select-none transition-[background-color,box-shadow,transform] duration-150 focus-visible:z-10 focus-visible:ring-[3px] focus-visible:ring-ring/70 enabled:hover:z-10 enabled:hover:shadow-[inset_0_0_0_2px_var(--primary)] enabled:active:scale-90 disabled:cursor-default",
+                  !state &&
+                    "bg-primary/10 text-primary/60 shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--primary)_40%,transparent)] enabled:hover:bg-primary/20",
+                )}
+              >
+                {state ? (
+                  <CellFace state={state} />
+                ) : (
+                  !disabled && (
+                    <PlusIcon
+                      aria-hidden="true"
+                      className="pointer-events-none size-[45%] max-h-6 max-w-6"
+                    />
+                  )
+                )}
+                {renderLabel && (
+                  <span className="pointer-events-none absolute top-0 left-0 bg-background/85 px-0.5 leading-none">
+                    {renderLabel(cell, index)}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <span className="sr-only" role="status">
+          {announcement}
+        </span>
+      </div>
+    );
+
   return (
     <div className="min-w-0 overflow-x-auto" data-assignment-surface>
       <div
@@ -234,7 +263,6 @@ export function StateGridPlayer({
           const state = config.states.find(
             (entry) => entry.id === value[cell.id],
           );
-          const expanded = openId === cell.id && !disabled;
           return (
             <div
               key={cell.id}
@@ -247,62 +275,46 @@ export function StateGridPlayer({
                       {cell.label}
                     </span>
                   )}
-              <Popover
-                open={expanded}
-                onOpenChange={(open) => setOpenId(open ? cell.id : null)}
+              <button
+                type="button"
+                data-assignment-slot={cell.id}
+                disabled={disabled}
+                aria-label={`${cell.label}: ${state?.label ?? "vacío"}`}
+                onClick={() => advance(cell.id, state?.id)}
+                onKeyDown={(event) =>
+                  slotKeyDown(event, states, state?.id, (id) =>
+                    assign(cell.id, id),
+                  )
+                }
+                className={cn(
+                  "grid aspect-square w-full touch-manipulation place-items-center overflow-hidden rounded-lg transition-[background-color,border-color,transform] duration-150 outline-none select-none focus-visible:ring-[3px] focus-visible:ring-ring/50 enabled:active:scale-95 disabled:cursor-default",
+                  state
+                    ? "enabled:hover:bg-muted/60"
+                    : "border-2 border-dashed border-primary/50 text-primary enabled:hover:bg-primary/5",
+                )}
               >
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    data-assignment-slot={cell.id}
-                    disabled={disabled}
-                    aria-label={`${cell.label}: ${state?.label ?? "vacío"}`}
-                    onKeyDown={(event) =>
-                      slotKeyDown(event, states, state?.id, (id) =>
-                        assign(cell.id, id),
-                      )
-                    }
-                    className={cn(
-                      "grid aspect-square w-full touch-manipulation place-items-center overflow-hidden rounded-lg transition-[background-color,border-color,transform] duration-150 outline-none select-none focus-visible:ring-[3px] focus-visible:ring-ring/50 enabled:active:scale-95 disabled:cursor-default",
-                      state
-                        ? "bg-primary/10 shadow-[inset_0_-3px_0_var(--primary)] enabled:hover:bg-primary/15"
-                        : "border-2 border-dashed border-primary/50 text-primary enabled:hover:bg-primary/5",
-                      expanded && "bg-primary/15",
-                    )}
-                  >
-                    {state ? (
-                      state.image ? (
-                        <img
-                          // La clave nueva reinicia la animación en cada cambio.
-                          key={state.id}
-                          src={state.image.url}
-                          alt=""
-                          draggable={false}
-                          className="h-4/5 w-4/5 object-contain mix-blend-multiply motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-75 motion-safe:duration-200"
-                        />
-                      ) : (
-                        <span
-                          key={state.id}
-                          className="truncate px-1 text-xs font-medium motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
-                        >
-                          {state.label}
-                        </span>
-                      )
-                    ) : (
-                      !disabled && <PlusIcon className="size-5" />
-                    )}
-                  </button>
-                </PopoverTrigger>
-                <ChoiceMenu
-                  label={cell.label}
-                  options={states}
-                  chosenId={state?.id}
-                  onPick={(id) => {
-                    assign(cell.id, id);
-                    setOpenId(null);
-                  }}
-                />
-              </Popover>
+                {state ? (
+                  state.image ? (
+                    <img
+                      // La clave nueva reinicia la animación en cada cambio.
+                      key={state.id}
+                      src={state.image.url}
+                      alt=""
+                      draggable={false}
+                      className="size-full object-contain mix-blend-multiply motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-75 motion-safe:duration-200"
+                    />
+                  ) : (
+                    <span
+                      key={state.id}
+                      className="truncate px-1 text-xs font-medium motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+                    >
+                      {state.label}
+                    </span>
+                  )
+                ) : (
+                  !disabled && <PlusIcon className="size-5" />
+                )}
+              </button>
             </div>
           );
         })}

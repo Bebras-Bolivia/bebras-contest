@@ -162,6 +162,8 @@ export function AttemptPage({
   const [unsaved, setUnsaved] = useState(false);
   const failedSaves = useRef(new Set<string>());
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [direction, setDirection] = useState<-1 | 0 | 1>(0);
+  const questionTop = useRef<HTMLDivElement>(null);
 
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const saveQueues = useRef<Record<string, Promise<void>>>({});
@@ -841,10 +843,27 @@ export function AttemptPage({
     );
   }
 
+  const goToTask = (index: number) => {
+    const target = Math.min(Math.max(index, 0), attempt.tasks.length - 1);
+    if (target === currentIndex) return;
+    setDirection(target > currentIndex ? 1 : -1);
+    setCurrentIndex(target);
+    const top = questionTop.current;
+    if (top && top.getBoundingClientRect().top < 0) {
+      top.scrollIntoView({
+        block: "start",
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
+      });
+    }
+  };
+  const oneByOne = attempt.questionDisplayMode !== "all";
+
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
       {previewNotice}
-      <div className="sticky top-2 z-10 flex items-center justify-between gap-4 rounded-md border bg-background px-4 py-3 shadow-sm">
+      <div className="sticky top-2 z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-md border bg-background px-4 py-3 shadow-sm">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">
             {attempt.contestTitle}
@@ -854,6 +873,38 @@ export function AttemptPage({
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {oneByOne && (
+            <nav
+              aria-label="Moverse entre tareas"
+              className="flex items-center gap-1"
+            >
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                aria-label="Tarea anterior"
+                title="Tarea anterior"
+                disabled={currentIndex === 0}
+                onClick={() => goToTask(currentIndex - 1)}
+              >
+                <ChevronLeftIcon />
+              </Button>
+              <span className="min-w-10 text-center text-xs text-muted-foreground tabular-nums">
+                {currentIndex + 1} / {attempt.tasks.length}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                aria-label="Tarea siguiente"
+                title="Tarea siguiente"
+                disabled={currentIndex >= attempt.tasks.length - 1}
+                onClick={() => goToTask(currentIndex + 1)}
+              >
+                <ChevronRightIcon />
+              </Button>
+            </nav>
+          )}
           <span
             className={cn(
               "inline-flex items-center gap-1.5 font-mono text-lg font-semibold",
@@ -911,7 +962,7 @@ export function AttemptPage({
           />
         ))
       ) : (
-        <div className="flex flex-col gap-4">
+        <div ref={questionTop} className="flex scroll-mt-24 flex-col gap-4">
           <div className="flex flex-wrap gap-2">
             {attempt.tasks.map((task, index) => {
               const answered = answerHasResponse(
@@ -924,7 +975,7 @@ export function AttemptPage({
                   key={task.taskId}
                   type="button"
                   aria-current={isCurrent ? "true" : undefined}
-                  onClick={() => setCurrentIndex(index)}
+                  onClick={() => goToTask(index)}
                   className={cn(
                     "flex size-9 items-center justify-center rounded-md border text-sm font-medium transition",
                     isCurrent
@@ -941,15 +992,23 @@ export function AttemptPage({
           </div>
 
           {attempt.tasks[currentIndex] && (
-            <TaskSection
+            <div
               key={attempt.tasks[currentIndex].taskId}
-              task={attempt.tasks[currentIndex]}
-              value={answers[attempt.tasks[currentIndex].taskId]}
-              disabled={submitting || suspended}
-              onChange={(payload) =>
-                setAnswer(attempt.tasks[currentIndex].taskId, payload)
-              }
-            />
+              className={cn(
+                "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300",
+                direction === 1 && "motion-safe:slide-in-from-right-8",
+                direction === -1 && "motion-safe:slide-in-from-left-8",
+              )}
+            >
+              <TaskSection
+                task={attempt.tasks[currentIndex]}
+                value={answers[attempt.tasks[currentIndex].taskId]}
+                disabled={submitting || suspended}
+                onChange={(payload) =>
+                  setAnswer(attempt.tasks[currentIndex].taskId, payload)
+                }
+              />
+            </div>
           )}
 
           <div className="flex items-center justify-between gap-4">
@@ -957,7 +1016,7 @@ export function AttemptPage({
               type="button"
               variant="outline"
               disabled={currentIndex === 0}
-              onClick={() => setCurrentIndex((index) => Math.max(0, index - 1))}
+              onClick={() => goToTask(currentIndex - 1)}
             >
               <ChevronLeftIcon data-icon="inline-start" />
               Anterior
@@ -986,11 +1045,7 @@ export function AttemptPage({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() =>
-                  setCurrentIndex((index) =>
-                    Math.min(attempt.tasks.length - 1, index + 1),
-                  )
-                }
+                onClick={() => goToTask(currentIndex + 1)}
               >
                 Siguiente
                 <ChevronRightIcon data-icon="inline-end" />

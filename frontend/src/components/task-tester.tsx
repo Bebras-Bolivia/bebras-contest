@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertCircleIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   PencilIcon,
   RotateCcwIcon,
   XIcon,
@@ -17,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import {
   getTask,
   listTasks,
+  mapTaskToHomeItem,
   previewTask,
   previewTaskDraft,
   checkTask,
@@ -24,12 +27,17 @@ import {
   type TaskCheckResult,
 } from "@/lib/tasks-api";
 import { readTaskDraftForTest } from "@/lib/task-draft-test";
-import { readSavedAnswer, saveAnswer } from "@/lib/answer-memory";
 import { answerHasResponse, type PlayTask } from "@/lib/play-api";
 import { BEBRAS_CATEGORIES } from "@/lib/contest-schema";
 import { cn } from "@/lib/utils";
 import { difficultyStyles } from "@/lib/difficulty";
 import { smoothReset } from "@/lib/smooth-reset";
+import {
+  NO_FILTERS,
+  readFilters,
+  storedFilters,
+  visibleTasks,
+} from "@/lib/task-filters";
 
 /** Ancla de la fila de dificultad de un rango en el editor («10–12» → «10-12»). */
 export function difficultyAnchor(ageRange: string) {
@@ -47,22 +55,18 @@ export function TaskTester() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [backHref, setBackHref] = useState<string | null>(null);
+  const [order, setOrder] = useState<string[] | null>(null);
+  const [direction, setDirection] = useState<-1 | 0 | 1>(0);
+  const [switching, setSwitching] = useState(false);
+  const cache = useRef(
+    new Map<string, Promise<{ task: StoredTask; preview: PlayTask }>>(),
+  );
+  const initialId = useRef<string | null>(null);
   // Cuando se prueba lo que hay en el editor, la tarea no está en la base y
   // hay que mandarla entera en cada llamada.
   const [draft, setDraft] = useState<unknown>(null);
   const revision = useRef(0);
   const checkController = useRef<AbortController | null>(null);
-  // Solo las tareas guardadas recuerdan la respuesta, y atada a su versión:
-  // si alguien la edita, la respuesta vieja podría no encajar.
-  const memoryKey =
-    selectedTask && !draft
-      ? `probador:${selectedTask.id}:${selectedTask.updatedAt}`
-      : null;
-
-  useEffect(() => {
-    if (memoryKey) saveAnswer(memoryKey, { answer, result });
-  }, [memoryKey, answer, result]);
-
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const taskId = params.get("id");
@@ -99,13 +103,6 @@ export function TaskTester() {
         if (!task || !active) return;
         const preview = await previewTask(task.id, controller.signal);
         if (!active) return;
-        const saved = readSavedAnswer<TaskCheckResult>(
-          `probador:${task.id}:${task.updatedAt}`,
-        );
-        if (saved) {
-          setAnswer(saved.answer ?? {});
-          setResult(saved.result);
-        }
         setSelectedTask(task);
         setPlayTask(preview);
       } catch (error) {
@@ -127,6 +124,152 @@ export function TaskTester() {
       revision.current += 1;
     };
   }, []);
+
+  const currentId = selectedTask && !draft ? selectedTask.id : null;
+  if (currentId && !initialId.current) initialId.current = currentId;
+  const hasCurrent = currentId !== null;
+  useEffect(() => {
+    if (!hasCurrent) return;
+    let active = true;
+    void listTasks()
+      .then((tasks) => {
+        if (!active) return;
+        const items = tasks.map(mapTaskToHomeItem);
+        const filtered = visibleTasks(items, readFilters(storedFilters())).map(
+          (task) => task.id,
+        );
+        setOrder(
+          filtered.includes(initialId.current ?? "")
+            ? filtered
+            : visibleTasks(items, NO_FILTERS).map((task) => task.id),
+        );
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [hasCurrent]);
+
+  const navOrder = order;
+  const index = navOrder && currentId ? navOrder.indexOf(currentId) : -1;
+  const neighbors =
+    navOrder && index !== -1
+      ? {
+          previous: navOrder[index - 1] ?? null,
+          next: navOrder[index + 1] ?? null,
+          position: index + 1,
+          total: navOrder.length,
+        }
+      : null;
+
+  const fetchTask = (taskId: string) => {
+    let entry = cache.current.get(taskId);
+    if (!entry) {
+      entry = getTask(taskId).then(async (task) => ({
+        task,
+        preview: await previewTask(task.id),
+      }));
+      entry.catch(() => cache.current.delete(taskId));
+      cache.current.set(taskId, entry);
+    }
+    return entry;
+  };
+
+  useEffect(() => {
+    for (const taskId of [neighbors?.previous, neighbors?.next]) {
+      if (taskId) void fetchTask(taskId).catch(() => {});
+    }
+  });
+
+  const testerHref = (taskId: string | null | undefined) =>
+    taskId
+      ? `/tareas/probador?id=${encodeURIComponent(taskId)}${backHref?.startsWith("/") && !draft ? `&volver=${encodeURIComponent(backHref)}` : ""}`
+      : null;
+  const goTo = async (taskId: string, step: -1 | 1, push = true) => {
+    setSwitching(true);
+    revision.current += 1;
+    checkController.current?.abort();
+    try {
+      const { task, preview } = await fetchTask(taskId);
+      setDirection(step);
+      setSelectedTask(task);
+      setPlayTask(preview);
+      setAnswer({});
+      setResult(null);
+      setJustChecked(false);
+      setChecking(false);
+      const href = testerHref(taskId);
+      if (push && href) window.history.pushState(null, "", href);
+      window.scrollTo({
+        top: 0,
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
+      });
+    } catch {
+      toast.error("No se pudo cargar la tarea.");
+    } finally {
+      setSwitching(false);
+    }
+  };
+
+  const goToRef = useRef(goTo);
+  const orderRef = useRef(navOrder);
+  const currentRef = useRef(currentId);
+  useEffect(() => {
+    goToRef.current = goTo;
+    orderRef.current = navOrder;
+    currentRef.current = currentId;
+  });
+  useEffect(() => {
+    const onPop = () => {
+      const taskId = new URLSearchParams(window.location.search).get("id");
+      if (!taskId || taskId === currentRef.current) return;
+      const list = orderRef.current ?? [];
+      const step =
+        list.indexOf(taskId) < list.indexOf(currentRef.current ?? "") ? -1 : 1;
+      void goToRef.current(taskId, step, false);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  const stepButton = (
+    taskId: string | null,
+    step: -1 | 1,
+    label: string,
+    icon: ReactNode,
+  ) =>
+    taskId ? (
+      <Button
+        asChild
+        variant="outline"
+        size="icon-sm"
+        aria-label={label}
+        title={label}
+      >
+        <a
+          href={testerHref(taskId) ?? undefined}
+          onClick={(event) => {
+            if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+            event.preventDefault();
+            if (!switching) void goTo(taskId, step);
+          }}
+        >
+          {icon}
+        </a>
+      </Button>
+    ) : (
+      <Button
+        variant="outline"
+        size="icon-sm"
+        aria-label={label}
+        title={label}
+        disabled
+      >
+        {icon}
+      </Button>
+    );
 
   const handleAnswerChange = (payload: unknown) => {
     revision.current += 1;
@@ -173,10 +316,11 @@ export function TaskTester() {
 
   // Con un borrador se vuelve a ese borrador, no a lo guardado.
   const editHref =
-    backHref ??
-    (selectedTask && draft === null
-      ? `/tareas/editar?id=${encodeURIComponent(selectedTask.id)}`
-      : null);
+    backHref && (draft !== null || currentId === initialId.current)
+      ? backHref
+      : selectedTask && draft === null
+        ? `/tareas/editar?id=${encodeURIComponent(selectedTask.id)}`
+        : null;
 
   const exitButton = (
     <Button
@@ -220,7 +364,7 @@ export function TaskTester() {
 
       {selectedTask && (
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300 sm:gap-7">
-          <div className="flex flex-wrap items-center gap-2 border-b pb-3 text-sm text-muted-foreground">
+          <div className="sticky top-0 z-20 -mx-4 -mt-3 flex flex-wrap items-center gap-2 border-b bg-background px-4 pt-3 pb-3 text-sm text-muted-foreground sm:mx-0 sm:px-0">
             {exitButton}
             <span>Probando:</span>
             <h1 className="font-medium text-foreground">
@@ -232,84 +376,116 @@ export function TaskTester() {
                 {category}
               </Badge>
             ))}
-          </div>
-          <nav
-            aria-label="Dificultad por categoría"
-            className="-mt-3 flex flex-wrap gap-1.5 sm:-mt-4"
-          >
-            {BEBRAS_CATEGORIES.map((category) => {
-              const level =
-                difficultyStyles[
-                  (selectedTask.difficulties[category.ageRange] ?? "").trim()
-                ];
-              return (
-                <Badge
-                  key={category.name}
-                  asChild
-                  // Con dificultad, sin borde: el color ya marca la etiqueta.
-                  variant={level ? "secondary" : "outline"}
-                  className={cn(
-                    "h-6 gap-1.5 px-2 font-semibold hover:brightness-95",
-                    level?.className ?? "border-dashed text-muted-foreground",
-                  )}
-                >
-                  <a
-                    href={
-                      editHref
-                        ? `${editHref}#${difficultyAnchor(category.ageRange)}`
-                        : undefined
-                    }
-                    aria-label={`${category.name}: ${level?.label ?? "sin dificultad"}. Cambiar en el editor.`}
-                    title={level?.label ?? "Sin dificultad"}
-                  >
-                    {category.name}
-                  </a>
-                </Badge>
-              );
-            })}
-          </nav>
-
-          {playTask && (
-            <TaskPlayContent
-              task={playTask}
-              value={answer}
-              onChange={handleAnswerChange}
-            />
-          )}
-
-          {result && (
-            <AnswerResult
-              correct={result.correct}
-              explanationBlocks={result.explanationBlocks}
-              reveal={justChecked}
-            />
-          )}
-
-          <div className="flex justify-end border-t pt-5">
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 md:flex-nowrap">
-              {editHref && (
-                <Button asChild type="button" variant="outline">
-                  <a href={editHref}>
-                    <PencilIcon data-icon="inline-start" />
-                    Editar
-                  </a>
-                </Button>
-              )}
-              <Button type="button" variant="outline" onClick={handleReset}>
-                <RotateCcwIcon data-icon="inline-start" />
-                Reiniciar
-              </Button>
-              <Button
-                type="button"
-                onClick={handleCheckAnswer}
-                disabled={
-                  !playTask ||
-                  checking ||
-                  !answerHasResponse(playTask.answerType, answer)
-                }
+            {neighbors && (
+              <nav
+                aria-label="Moverse entre tareas"
+                className="ml-auto flex items-center gap-1.5"
               >
-                {checking ? "Comprobando…" : "Comprobar"}
-              </Button>
+                {stepButton(
+                  neighbors.previous,
+                  -1,
+                  "Tarea anterior",
+                  <ChevronLeftIcon />,
+                )}
+                <span className="min-w-12 text-center text-xs tabular-nums">
+                  {neighbors.position} / {neighbors.total}
+                </span>
+                {stepButton(
+                  neighbors.next,
+                  1,
+                  "Tarea siguiente",
+                  <ChevronRightIcon />,
+                )}
+              </nav>
+            )}
+          </div>
+          <div
+            key={selectedTask.id}
+            className={cn(
+              "flex flex-col gap-6 transition-opacity duration-150 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300 sm:gap-7",
+              direction === 1 && "motion-safe:slide-in-from-right-8",
+              direction === -1 && "motion-safe:slide-in-from-left-8",
+              switching && "opacity-60",
+            )}
+          >
+            <nav
+              aria-label="Dificultad por categoría"
+              className="-mt-3 flex flex-wrap gap-1.5 sm:-mt-4"
+            >
+              {BEBRAS_CATEGORIES.map((category) => {
+                const level =
+                  difficultyStyles[
+                    (selectedTask.difficulties[category.ageRange] ?? "").trim()
+                  ];
+                return (
+                  <Badge
+                    key={category.name}
+                    asChild
+                    // Con dificultad, sin borde: el color ya marca la etiqueta.
+                    variant={level ? "secondary" : "outline"}
+                    className={cn(
+                      "h-6 gap-1.5 px-2 font-semibold hover:brightness-95",
+                      level?.className ?? "border-dashed text-muted-foreground",
+                    )}
+                  >
+                    <a
+                      href={
+                        editHref
+                          ? `${editHref}#${difficultyAnchor(category.ageRange)}`
+                          : undefined
+                      }
+                      aria-label={`${category.name}: ${level?.label ?? "sin dificultad"}. Cambiar en el editor.`}
+                      title={level?.label ?? "Sin dificultad"}
+                    >
+                      {category.name}
+                    </a>
+                  </Badge>
+                );
+              })}
+            </nav>
+
+            {playTask && (
+              <TaskPlayContent
+                task={playTask}
+                value={answer}
+                onChange={handleAnswerChange}
+              />
+            )}
+
+            {result && (
+              <AnswerResult
+                correct={result.correct}
+                explanationBlocks={result.explanationBlocks}
+                reveal={justChecked}
+              />
+            )}
+
+            <div className="flex justify-end border-t pt-5">
+              <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end sm:gap-3 [&>*]:min-w-0 [&>*:last-child:nth-child(odd)]:col-span-2">
+                {editHref && (
+                  <Button asChild type="button" variant="outline">
+                    <a href={editHref}>
+                      <PencilIcon data-icon="inline-start" />
+                      Editar
+                    </a>
+                  </Button>
+                )}
+                <Button type="button" variant="outline" onClick={handleReset}>
+                  <RotateCcwIcon data-icon="inline-start" />
+                  Reiniciar
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleCheckAnswer}
+                  disabled={
+                    !playTask ||
+                    checking ||
+                    !answerHasResponse(playTask.answerType, answer)
+                  }
+                >
+                  {checking ? "Comprobando…" : "Comprobar"}
+                </Button>
+              </div>
             </div>
           </div>
         </div>

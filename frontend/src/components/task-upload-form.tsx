@@ -15,6 +15,7 @@ import {
   type AssignmentKey,
 } from "@/lib/assignment-answers";
 import { ImageHotspotEditor } from "@/components/image-hotspot-editor";
+import { InteractiveTryout } from "@/components/interactive-player";
 import {
   parseHotspotConfig,
   parseHotspotKey,
@@ -32,6 +33,7 @@ import {
   MousePointerClickIcon,
   MoveIcon,
   PlayIcon,
+  PuzzleIcon,
   TextCursorInputIcon,
   UploadIcon,
 } from "lucide-react";
@@ -81,7 +83,7 @@ import { categoryForAgeRange } from "@/lib/contest-schema";
 import {
   ageRanges,
   answerTypeLabels,
-  answerTypes,
+  authoringAnswerTypes,
   buildAgeSummary,
   categories,
   createContentBlock,
@@ -122,6 +124,7 @@ const answerTypeIcons = {
   image_hotspot: MousePointerClickIcon,
   state_grid: Grid3x3Icon,
   text_cloze: BracketsIcon,
+  interactive: PuzzleIcon,
 } satisfies Record<AnswerType, unknown>;
 type BlocksSection = "bodyBlocks" | "challengeBlocks" | "explanationBlocks";
 
@@ -134,6 +137,8 @@ function missingAnswerPart(state: FormState) {
       return "Marca la zona correcta.";
   }
   if (state.answerType === "state_grid") {
+    if (state.gridConfig.layout === "image" && !state.gridConfig.background)
+      return "Falta la imagen de fondo de las casillas.";
     if (!state.gridConfig.states.length) return "Falta al menos un estado.";
     const answer = state.gridKey.acceptedAssignments[0] ?? {};
     if (state.gridConfig.cells.some((cell) => !answer[cell.id]))
@@ -190,6 +195,8 @@ type FormState = {
   answerType: AnswerType;
   hotspotConfig: HotspotConfig | null;
   hotspotKey: HotspotKey;
+  interactiveConfig: Record<string, unknown> | null;
+  interactiveKey: Record<string, unknown> | null;
   gridConfig: GridConfig;
   clozeConfig: ClozeConfig;
   gridKey: AssignmentKey;
@@ -268,6 +275,8 @@ const createInitialState = (
     gridKey: { version: 1, acceptedAssignments: [{}] },
     clozeKey: { version: 1, acceptedAssignments: [{}] },
     hotspotKey: { version: 1, acceptedRegionIds: [] },
+    interactiveConfig: null,
+    interactiveKey: null,
     multipleChoiceOrderMode: "fixed",
     multipleChoiceLayout: "vertical",
     answerCount: minimumAnswerCount,
@@ -355,6 +364,10 @@ function createStateFromTask(task: StoredTask): FormState {
       task.answerType === "image_hotspot" && task.answerKey?.version === 1
         ? (task.answerKey as unknown as HotspotKey)
         : { version: 1, acceptedRegionIds: [] },
+    interactiveConfig:
+      task.answerType === "interactive" ? (task.answerConfig ?? null) : null,
+    interactiveKey:
+      task.answerType === "interactive" ? (task.answerKey ?? null) : null,
     multipleChoiceOrderMode: task.multipleChoiceOrderMode ?? "fixed",
     multipleChoiceLayout: readMultipleChoiceLayout(task.answerConfig),
     answerCount:
@@ -638,10 +651,6 @@ function validateForm(state: FormState) {
     }
   }
 
-  if (!getNonEmptyBlocks(state.explanationBlocks).length) {
-    errors.push("Falta la explicación.");
-  }
-
   return errors;
 }
 
@@ -681,35 +690,39 @@ function buildStoredTask(
     challengeBlocks: state.challengeBlocks,
     answerType: state.answerType,
     answerConfig:
-      state.answerType === "state_grid"
-        ? state.gridConfig
-        : state.answerType === "text_cloze"
-          ? activeCloze(state.clozeConfig, [
-              ...state.bodyBlocks,
-              ...state.challengeBlocks,
-            ])
-          : state.answerType === "image_hotspot"
-            ? (state.hotspotConfig ?? {})
-            : state.answerType === "multiple_choice"
-              ? { multipleChoiceLayout: state.multipleChoiceLayout }
-              : {},
-    answerKey:
-      state.answerType === "state_grid"
-        ? activeKey(
-            state.gridKey,
-            state.gridConfig.cells.map((cell) => cell.id),
-          )
-        : state.answerType === "text_cloze"
-          ? activeKey(
-              state.clozeKey,
-              activeCloze(state.clozeConfig, [
+      state.answerType === "interactive"
+        ? (state.interactiveConfig ?? {})
+        : state.answerType === "state_grid"
+          ? state.gridConfig
+          : state.answerType === "text_cloze"
+            ? activeCloze(state.clozeConfig, [
                 ...state.bodyBlocks,
                 ...state.challengeBlocks,
-              ]).blanks.map((blank) => blank.id),
+              ])
+            : state.answerType === "image_hotspot"
+              ? (state.hotspotConfig ?? {})
+              : state.answerType === "multiple_choice"
+                ? { multipleChoiceLayout: state.multipleChoiceLayout }
+                : {},
+    answerKey:
+      state.answerType === "interactive"
+        ? (state.interactiveKey ?? {})
+        : state.answerType === "state_grid"
+          ? activeKey(
+              state.gridKey,
+              state.gridConfig.cells.map((cell) => cell.id),
             )
-          : state.answerType === "image_hotspot"
-            ? state.hotspotKey
-            : {},
+          : state.answerType === "text_cloze"
+            ? activeKey(
+                state.clozeKey,
+                activeCloze(state.clozeConfig, [
+                  ...state.bodyBlocks,
+                  ...state.challengeBlocks,
+                ]).blanks.map((blank) => blank.id),
+              )
+            : state.answerType === "image_hotspot"
+              ? state.hotspotKey
+              : {},
     multipleChoiceOrderMode:
       state.answerType === "multiple_choice"
         ? state.multipleChoiceOrderMode
@@ -1178,7 +1191,10 @@ export function TaskUploadForm({
           aria-label="Tipo de respuesta"
           className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap"
         >
-          {answerTypes.map((type) => {
+          {(form.answerType === "interactive"
+            ? (["interactive"] as const)
+            : authoringAnswerTypes
+          ).map((type) => {
             const Icon = answerTypeIcons[type];
             const selected = form.answerType === type;
             return (
@@ -1313,6 +1329,9 @@ export function TaskUploadForm({
 
       <FormSection title="Respuesta">
         <FieldGroup className="gap-4">
+          {form.answerType === "interactive" && (
+            <InteractivePreview config={form.interactiveConfig} />
+          )}
           {form.answerType === "state_grid" && (
             <StateGridEditor
               config={form.gridConfig}
@@ -1797,6 +1816,18 @@ export function TaskUploadForm({
         </div>
       </div>
     </form>
+  );
+}
+
+function InteractivePreview({ config }: { config: unknown }) {
+  return (
+    <section className="flex flex-col gap-3">
+      <p className="text-sm text-muted-foreground">
+        La actividad viene de ViLLE y su código no se edita aquí. Para ver si
+        una respuesta es correcta, usa «Probar».
+      </p>
+      <InteractiveTryout config={config} />
+    </section>
   );
 }
 

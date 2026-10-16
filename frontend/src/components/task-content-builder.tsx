@@ -373,7 +373,8 @@ export function TaskContentBuilder({
                       src={block.image.url}
                       widthPercent={block.widthPercent}
                       maxHeight={IMAGE_MAX_HEIGHT}
-                      minWidth="16rem"
+                      minWidth="6rem"
+                      minPercent={10}
                       className="mx-auto w-full max-w-4xl"
                       onChange={(widthPercent) =>
                         onUpdateBlockWidth(block.id, widthPercent)

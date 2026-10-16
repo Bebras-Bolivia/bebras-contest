@@ -6,12 +6,24 @@ export type AssignmentOption = {
   image: AssignmentImage | null;
   limit: number | null;
 };
+/** En modo imagen, x/y/width/height van en % de la imagen de fondo. */
+export type GridCell = {
+  id: string;
+  label: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+};
 export type GridConfig = {
   version: 1;
+  layout?: "grid" | "image";
   rows: number;
   columns: number;
-  cells: Array<{ id: string; label: string }>;
+  cells: GridCell[];
   states: AssignmentOption[];
+  background?: AssignmentImage;
+  widthPercent?: number;
 };
 export type ClozeConfig = {
   version: 1;
@@ -54,6 +66,28 @@ function list(value: unknown, max: number, label: string): unknown[] {
     throw new Error(`Debes definir entre 1 y ${max} ${label}.`);
   return value;
 }
+function image(raw: unknown, message: string): AssignmentImage {
+  if (
+    !object(raw) ||
+    typeof raw.name !== "string" ||
+    typeof raw.url !== "string" ||
+    !raw.url.trim()
+  )
+    throw new Error(message);
+  return { id: id(raw.id), name: raw.name, url: raw.url };
+}
+function percent(value: unknown, min: number, max: number): number {
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    value < min ||
+    value > max
+  )
+    throw new Error(
+      "Cada casilla debe quedar dentro de la imagen (posición y tamaño entre 0 y 100 %).",
+    );
+  return Math.round(value * 1000) / 1000;
+}
 function options(value: unknown): AssignmentOption[] {
   const result = list(value, 64, "opciones").map((entry) => {
     if (!object(entry)) throw new Error("La opción no es válida.");
@@ -62,18 +96,9 @@ function options(value: unknown): AssignmentOption[] {
       throw new Error(
         "Cada opción necesita una etiqueta de hasta 1000 caracteres.",
       );
-    let image: AssignmentImage | null = null;
-    if (entry.image !== null && entry.image !== undefined) {
-      const raw = entry.image;
-      if (
-        !object(raw) ||
-        typeof raw.name !== "string" ||
-        typeof raw.url !== "string" ||
-        !raw.url.trim()
-      )
-        throw new Error("La imagen de la opción no es válida.");
-      image = { id: id(raw.id), name: raw.name, url: raw.url };
-    }
+    let picture: AssignmentImage | null = null;
+    if (entry.image !== null && entry.image !== undefined)
+      picture = image(entry.image, "La imagen de la opción no es válida.");
     if (entry.limit !== null && !integer(entry.limit, 0, 144))
       throw new Error(
         "La cantidad disponible debe ser un entero entre 0 y 144, o ilimitada.",
@@ -81,7 +106,7 @@ function options(value: unknown): AssignmentOption[] {
     return {
       id: id(entry.id),
       label,
-      image,
+      image: picture,
       limit: entry.limit as number | null,
     };
   });
@@ -97,6 +122,13 @@ export function parseGridConfig(value: unknown): GridConfig {
     throw new Error("La configuración de casillas no es válida.");
   if (!integer(value.rows, 1, 12) || !integer(value.columns, 1, 12))
     throw new Error("La rejilla debe tener entre 1 y 12 filas y columnas.");
+  if (
+    value.layout !== undefined &&
+    value.layout !== "grid" &&
+    value.layout !== "image"
+  )
+    throw new Error("La forma de las casillas no es válida.");
+  const onImage = value.layout === "image";
   const cells = list(value.cells, 144, "casillas").map((entry) => {
     if (
       !object(entry) ||
@@ -105,9 +137,17 @@ export function parseGridConfig(value: unknown): GridConfig {
       entry.label.length > 1000
     )
       throw new Error("Cada casilla necesita una etiqueta.");
-    return { id: id(entry.id), label: entry.label.trim() };
+    const cell: GridCell = { id: id(entry.id), label: entry.label.trim() };
+    if (!onImage) return cell;
+    const x = percent(entry.x, 0, 100);
+    const y = percent(entry.y, 0, 100);
+    const width = percent(entry.width, 0.1, 100);
+    const height = percent(entry.height, 0.1, 100);
+    if (x + width > 100.001 || y + height > 100.001)
+      throw new Error("Cada casilla debe quedar dentro de la imagen.");
+    return { ...cell, x, y, width, height };
   });
-  if (cells.length !== value.rows * value.columns)
+  if (!onImage && cells.length !== value.rows * value.columns)
     throw new Error(
       "La cantidad de casillas debe coincidir con las filas y columnas.",
     );
@@ -115,13 +155,32 @@ export function parseGridConfig(value: unknown): GridConfig {
     cells.map((entry) => entry.id),
     "Los IDs de las casillas deben ser únicos.",
   );
-  return {
+  const states = options(value.states);
+  if (!onImage)
+    return {
+      version: 1,
+      rows: value.rows,
+      columns: value.columns,
+      cells,
+      states,
+    };
+  if (value.background === undefined || value.background === null)
+    throw new Error("Las casillas sobre una imagen necesitan la imagen.");
+  const config: GridConfig = {
     version: 1,
+    layout: "image",
     rows: value.rows,
     columns: value.columns,
+    background: image(value.background, "La imagen de fondo no es válida."),
     cells,
-    states: options(value.states),
+    states,
   };
+  if (value.widthPercent !== undefined) {
+    if (!integer(value.widthPercent, 10, 100))
+      throw new Error("El ancho de la imagen debe ser un entero de 10 a 100.");
+    config.widthPercent = value.widthPercent;
+  }
+  return config;
 }
 
 /** Backend-local renderer/editor contract. Keep frontend assignment validation in sync.
