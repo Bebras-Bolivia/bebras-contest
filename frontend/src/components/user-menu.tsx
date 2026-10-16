@@ -54,11 +54,8 @@ export function UserMenu() {
 
   if (!user) {
     return (
-      <Button asChild size="sm">
-        <a href="/login">
-          <span className="sm:hidden">Entrar</span>
-          <span className="max-sm:hidden">Iniciar sesión</span>
-        </a>
+      <Button asChild size="sm" className="max-lg:hidden">
+        <a href="/login">Iniciar sesión</a>
       </Button>
     );
   }

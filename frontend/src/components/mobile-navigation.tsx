@@ -83,6 +83,13 @@ export function MobileNavigation({ pathname }: MobileNavigationProps) {
               </Button>
             );
           })}
+          {!user && (
+            <Button asChild className="mt-1 w-full">
+              <a href="/login" onClick={() => setOpen(false)}>
+                Iniciar sesión
+              </a>
+            </Button>
+          )}
         </nav>
       </CollapsibleContent>
     </Collapsible>

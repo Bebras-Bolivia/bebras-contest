@@ -84,14 +84,6 @@ export function InteractivePlayer({
   }, []);
 
   useEffect(() => {
-    if (status !== "ready" || !available) return;
-    frame.current?.contentWindow?.postMessage(
-      { source: HOST_SOURCE, type: "fit", width: Math.floor(available) },
-      "*",
-    );
-  }, [status, available, session.key]);
-
-  useEffect(() => {
     const savedState = session.state;
     const timeout = window.setTimeout(
       () => setStatus((current) => (current === "loading" ? "error" : current)),
@@ -145,7 +137,6 @@ export function InteractivePlayer({
 
   const width = Math.max(available ?? config.width, content.width);
   const height = content.height || config.height;
-  const scale = available ? Math.min(1, available / width) : 1;
 
   const restart = () => {
     setEmitted(null);
@@ -163,7 +154,7 @@ export function InteractivePlayer({
       <div ref={wrapper} className="w-full overflow-x-auto">
         <div
           className="relative mx-auto overflow-hidden bg-white"
-          style={{ width: width * scale, height: height * scale }}
+          style={{ width, height }}
         >
           <iframe
             key={session.key}
@@ -171,8 +162,8 @@ export function InteractivePlayer({
             title="Actividad interactiva"
             sandbox="allow-scripts"
             srcDoc={srcdoc}
-            className="absolute top-0 left-0 origin-top-left border-0 bg-white"
-            style={{ width, height, transform: `scale(${scale})` }}
+            className="absolute top-0 left-0 border-0 bg-white"
+            style={{ width, height }}
           />
           {disabled && <div aria-hidden="true" className="absolute inset-0" />}
           {status !== "ready" && (
