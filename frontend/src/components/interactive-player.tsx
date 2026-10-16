@@ -15,9 +15,6 @@ import {
   type TaskMessage,
 } from "@/lib/interactive";
 
-// Más chica que esto la letra ya no se lee en el celular: la tarea se desliza de lado.
-const MIN_SCALE = 0.8;
-
 export function InteractiveTryout({ config }: { config: unknown }) {
   const [answer, setAnswer] = useState<unknown>({});
   return (
@@ -87,6 +84,14 @@ export function InteractivePlayer({
   }, []);
 
   useEffect(() => {
+    if (status !== "ready" || !available) return;
+    frame.current?.contentWindow?.postMessage(
+      { source: HOST_SOURCE, type: "fit", width: Math.floor(available) },
+      "*",
+    );
+  }, [status, available, session.key]);
+
+  useEffect(() => {
     const savedState = session.state;
     const timeout = window.setTimeout(
       () => setStatus((current) => (current === "loading" ? "error" : current)),
@@ -139,10 +144,8 @@ export function InteractivePlayer({
   }
 
   const width = Math.max(available ?? config.width, content.width);
-  const height = Math.max(config.height, content.height);
-  const scale = available
-    ? Math.max(MIN_SCALE, Math.min(1, available / width))
-    : 1;
+  const height = content.height || config.height;
+  const scale = available ? Math.min(1, available / width) : 1;
 
   const restart = () => {
     setEmitted(null);
