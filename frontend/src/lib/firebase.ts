@@ -6,16 +6,9 @@ import { FIREBASE_AUTH_LANGUAGE } from "@/lib/email-verification";
 // Astro sustituye estas variables al compilar. La configuracion Web de Firebase
 // es publica por diseno (las reglas de acceso viven en el proyecto Firebase y en
 // el Worker), pero sigue el mismo mecanismo `PUBLIC_*` del resto del frontend.
-// En el dominio propio el ingreso pasa por /__/auth del Worker, no por
-// firebaseapp.com: así Google muestra bebrasbolivia.org y el celular no lo corta.
-const OWN_AUTH_HOSTS = ["bebrasbolivia.org"];
 const config = {
   apiKey: import.meta.env.PUBLIC_FIREBASE_API_KEY ?? "",
-  authDomain:
-    typeof window !== "undefined" &&
-    OWN_AUTH_HOSTS.includes(window.location.hostname)
-      ? window.location.hostname
-      : (import.meta.env.PUBLIC_FIREBASE_AUTH_DOMAIN ?? ""),
+  authDomain: import.meta.env.PUBLIC_FIREBASE_AUTH_DOMAIN ?? "",
   projectId: import.meta.env.PUBLIC_FIREBASE_PROJECT_ID ?? "",
   appId: import.meta.env.PUBLIC_FIREBASE_APP_ID ?? "",
   messagingSenderId: import.meta.env.PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? "",
