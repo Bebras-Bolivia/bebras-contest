@@ -1188,6 +1188,28 @@ function parseContestPayload(body: Record<string, unknown>) {
   };
 }
 
+// El ingreso con Google pasa por el propio dominio: los navegadores del celular
+// bloquean el almacenamiento de terceros y la ventana de firebaseapp.com se cortaba.
+app.get(/^\/__\/(auth|firebase)\//, async (req, res) => {
+  const project = (env as Cloudflare.Env & { FIREBASE_PROJECT_ID?: string })
+    .FIREBASE_PROJECT_ID;
+  if (!project) {
+    res.sendStatus(404);
+    return;
+  }
+  const upstream = await fetch(
+    `https://${project}.firebaseapp.com${req.originalUrl}`,
+    { headers: { accept: req.headers.accept ?? "*/*" } },
+  );
+  res.status(upstream.status);
+  for (const [name, value] of upstream.headers) {
+    if (!["content-encoding", "content-length", "transfer-encoding", "connection"].includes(name)) {
+      res.setHeader(name, value);
+    }
+  }
+  res.send(Buffer.from(await upstream.arrayBuffer()));
+});
+
 app.use((_req, res, next) => {
   if (!isE2E()) {
     withRequestPrisma(next);
