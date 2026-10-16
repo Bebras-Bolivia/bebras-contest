@@ -858,7 +858,6 @@ export function AttemptPage({
       });
     }
   };
-  const oneByOne = attempt.questionDisplayMode !== "all";
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
@@ -873,38 +872,6 @@ export function AttemptPage({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {oneByOne && (
-            <nav
-              aria-label="Moverse entre tareas"
-              className="flex items-center gap-1"
-            >
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-sm"
-                aria-label="Tarea anterior"
-                title="Tarea anterior"
-                disabled={currentIndex === 0}
-                onClick={() => goToTask(currentIndex - 1)}
-              >
-                <ChevronLeftIcon />
-              </Button>
-              <span className="min-w-10 text-center text-xs text-muted-foreground tabular-nums">
-                {currentIndex + 1} / {attempt.tasks.length}
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-sm"
-                aria-label="Tarea siguiente"
-                title="Tarea siguiente"
-                disabled={currentIndex >= attempt.tasks.length - 1}
-                onClick={() => goToTask(currentIndex + 1)}
-              >
-                <ChevronRightIcon />
-              </Button>
-            </nav>
-          )}
           <span
             className={cn(
               "inline-flex items-center gap-1.5 font-mono text-lg font-semibold",
@@ -1015,11 +982,13 @@ export function AttemptPage({
             <Button
               type="button"
               variant="outline"
+              size="icon"
+              aria-label="Tarea anterior"
+              title="Tarea anterior"
               disabled={currentIndex === 0}
               onClick={() => goToTask(currentIndex - 1)}
             >
-              <ChevronLeftIcon data-icon="inline-start" />
-              Anterior
+              <ChevronLeftIcon />
             </Button>
             <span className="text-sm text-muted-foreground">
               Tarea {currentIndex + 1} de {attempt.tasks.length}
@@ -1045,10 +1014,12 @@ export function AttemptPage({
               <Button
                 type="button"
                 variant="outline"
+                size="icon"
+                aria-label="Tarea siguiente"
+                title="Tarea siguiente"
                 onClick={() => goToTask(currentIndex + 1)}
               >
-                Siguiente
-                <ChevronRightIcon data-icon="inline-end" />
+                <ChevronRightIcon />
               </Button>
             )}
           </div>
