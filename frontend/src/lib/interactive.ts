@@ -110,7 +110,22 @@ const BOOTSTRAP = String.raw`
     last = current;
     post({ type: type, answer: current.answer, state: current.state, primary: current.answer === initial });
   }
+  var fitWidth = 0;
+  function fit() {
+    var limit = fitWidth || document.documentElement.clientWidth;
+    if (!limit) return;
+    var fitted = [];
+    document.querySelectorAll("#bebras-task svg, #bebras-task canvas, #bebras-task img, #bebras-task [style*='width']").forEach(function (node) {
+      for (var i = 0; i < fitted.length; i++) if (fitted[i].contains(node)) return;
+      var zoom = parseFloat(node.style.zoom) || 1;
+      var natural = node.getBoundingClientRect().width / zoom;
+      var next = natural > limit + 1 ? limit / natural : 1;
+      if (Math.abs(next - zoom) > 0.005) node.style.zoom = next === 1 ? "" : String(next);
+      if (next < 1) fitted.push(node);
+    });
+  }
   function size() {
+    fit();
     var root = document.getElementById("bebras-task");
     post({ type: "size", width: Math.ceil(root.scrollWidth), height: Math.ceil(root.scrollHeight) });
   }
@@ -182,6 +197,10 @@ const BOOTSTRAP = String.raw`
     var data = event.data;
     if (event.source !== window.parent || !data || data.source !== HOST) return;
     if (data.type === "init") start(typeof data.state === "string" ? data.state : null);
+    if (data.type === "fit" && typeof data.width === "number") {
+      fitWidth = data.width;
+      if (started) size();
+    }
   });
   window.addEventListener("error", function (event) {
     if (!started) fail(event.message);
