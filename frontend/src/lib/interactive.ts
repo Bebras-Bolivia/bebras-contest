@@ -334,6 +334,7 @@ export function sanitizeLodgeText(html: string) {
 export function interactiveSrcdoc(
   config: InteractiveConfig,
   engineUrl: string,
+  touch = false,
 ) {
   const engine = engineUrl.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><style>
@@ -346,7 +347,7 @@ p{margin:0 0 10px}ul,ol{margin-top:0;margin-bottom:10px}
 .componental-task{position:relative}
 html,body,#bebras-task,.componental-task,.componental-task *{touch-action:none}
 .sortable-ghost{opacity:.4}
-</style><script src="${engine}"></script></head><body><div id="bebras-task"></div>
+</style>${touch ? '<script>if(!("ontouchstart" in window))window.ontouchstart=null;</script>' : ""}<script src="${engine}"></script></head><body><div id="bebras-task"></div>
 <script>window.__bebrasElements=${scriptJson(config.elements)};</script>
 <script>${BOOTSTRAP}</script></body></html>`;
 }

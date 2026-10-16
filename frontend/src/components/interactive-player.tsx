@@ -38,7 +38,11 @@ export function InteractivePlayer({
   const srcdoc = useMemo(
     () =>
       config
-        ? interactiveSrcdoc(config, interactiveEngineUrl(config.engine))
+        ? interactiveSrcdoc(
+            config,
+            interactiveEngineUrl(config.engine),
+            typeof navigator !== "undefined" && navigator.maxTouchPoints > 0,
+          )
         : "",
     [config],
   );
