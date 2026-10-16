@@ -12,6 +12,7 @@ import {
   interactiveSrcdoc,
   readInteractiveAnswer,
   readInteractiveConfig,
+  sanitizeLodgeText,
   type TaskMessage,
 } from "@/lib/interactive";
 
@@ -52,6 +53,7 @@ export function InteractivePlayer({
     "loading",
   );
   const [content, setContent] = useState({ width: 0, height: 0 });
+  const [lead, setLead] = useState<{ key: number; html: string } | null>(null);
   const [available, setAvailable] = useState<number | null>(null);
   const frame = useRef<HTMLIFrameElement>(null);
   const wrapper = useRef<HTMLDivElement>(null);
@@ -84,14 +86,6 @@ export function InteractivePlayer({
   }, []);
 
   useEffect(() => {
-    if (status !== "ready" || !available) return;
-    frame.current?.contentWindow?.postMessage(
-      { source: HOST_SOURCE, type: "fit", width: Math.floor(available) },
-      "*",
-    );
-  }, [status, available, session.key]);
-
-  useEffect(() => {
     const savedState = session.state;
     const timeout = window.setTimeout(
       () => setStatus((current) => (current === "loading" ? "error" : current)),
@@ -115,6 +109,8 @@ export function InteractivePlayer({
         setStatus("ready");
       } else if (data.type === "error") {
         setStatus("error");
+      } else if (data.type === "text") {
+        setLead({ key: session.key, html: sanitizeLodgeText(data.html) });
       } else if (data.type === "size") {
         setContent({ width: data.width, height: data.height });
       } else if (data.type === "change") {
@@ -160,6 +156,12 @@ export function InteractivePlayer({
 
   return (
     <div className="flex flex-col items-center gap-2">
+      {lead?.key === session.key && lead.html && (
+        <div
+          className="w-full leading-7 [&_li]:mb-1 [&_ol]:mb-3 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:mb-3 [&_ul]:mb-3 [&_ul]:list-disc [&_ul]:pl-6"
+          dangerouslySetInnerHTML={{ __html: lead.html }}
+        />
+      )}
       <div ref={wrapper} className="w-full overflow-x-auto">
         <div
           className="relative mx-auto overflow-hidden bg-white"

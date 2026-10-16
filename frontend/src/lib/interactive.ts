@@ -32,6 +32,7 @@ export type TaskMessage =
       primary: boolean;
     }
   | { source: typeof TASK_SOURCE; type: "size"; width: number; height: number }
+  | { source: typeof TASK_SOURCE; type: "text"; html: string }
   | { source: typeof TASK_SOURCE; type: "error"; message: string };
 
 export function readInteractiveConfig(
@@ -110,24 +111,67 @@ const BOOTSTRAP = String.raw`
     last = current;
     post({ type: type, answer: current.answer, state: current.state, primary: current.answer === initial });
   }
-  var fitWidth = 0;
-  function fit() {
-    var limit = fitWidth || document.documentElement.clientWidth;
-    if (!limit) return;
-    var fitted = [];
-    document.querySelectorAll("#bebras-task svg, #bebras-task canvas, #bebras-task img, #bebras-task [style*='width']").forEach(function (node) {
-      for (var i = 0; i < fitted.length; i++) if (fitted[i].contains(node)) return;
-      var zoom = parseFloat(node.style.zoom) || 1;
-      var natural = node.getBoundingClientRect().width / zoom;
-      var next = natural > limit + 1 ? limit / natural : 1;
-      if (Math.abs(next - zoom) > 0.005) node.style.zoom = next === 1 ? "" : String(next);
-      if (next < 1) fitted.push(node);
+  var separated = false;
+  function separate() {
+    if (separated) return;
+    var stage = document.querySelector("#bebras-task .componental-task");
+    if (!stage) return;
+    var parts = [];
+    Array.prototype.forEach.call(stage.children, function (el) {
+      if (el.classList.contains("canvas-container") || getComputedStyle(el).position !== "absolute") return;
+      if (!el.querySelector("p,ul,ol") || el.querySelector("input,button,select,textarea,svg,canvas,table,[draggable]")) return;
+      if ((el.textContent || "").trim().length < 40) return;
+      parts.push(el.innerHTML);
+      el.setAttribute("data-bebras-moved", "");
+      el.style.visibility = "hidden";
     });
+    if (!parts.length) return;
+    separated = true;
+    stage.setAttribute("data-bebras-cropped", "");
+    post({ type: "text", html: parts.join("") });
+  }
+  function crop() {
+    var stage = document.querySelector("#bebras-task .componental-task[data-bebras-cropped]");
+    if (!stage) return;
+    var base = stage.getBoundingClientRect();
+    var left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+    function add(rect) {
+      if (rect.width < 1 || rect.height < 1) return;
+      left = Math.min(left, rect.left);
+      top = Math.min(top, rect.top);
+      right = Math.max(right, rect.right);
+      bottom = Math.max(bottom, rect.bottom);
+    }
+    Array.prototype.forEach.call(stage.children, function (el) {
+      if (el.hasAttribute("data-bebras-moved")) return;
+      if (el.classList.contains("canvas-container")) {
+        el.querySelectorAll("svg > :not(desc):not(defs)").forEach(function (node) { add(node.getBoundingClientRect()); });
+        return;
+      }
+      add(el.getBoundingClientRect());
+    });
+    if (!isFinite(left)) return;
+    left = Math.max(base.left, left - 8);
+    top = Math.max(base.top, top - 8);
+    right = Math.min(base.right, right + 8);
+    bottom = Math.min(base.bottom, bottom + 8);
+    var root = document.getElementById("bebras-task");
+    root.style.width = Math.ceil(right - left) + "px";
+    root.style.height = Math.ceil(bottom - top) + "px";
+    root.style.overflow = "hidden";
+    stage.style.marginLeft = -Math.floor(left - base.left) + "px";
+    stage.style.marginTop = -Math.floor(top - base.top) + "px";
   }
   function size() {
-    fit();
+    separate();
+    crop();
     var root = document.getElementById("bebras-task");
-    post({ type: "size", width: Math.ceil(root.scrollWidth), height: Math.ceil(root.scrollHeight) });
+    var cropped = root.style.overflow === "hidden";
+    post({
+      type: "size",
+      width: Math.ceil(cropped ? root.offsetWidth : root.scrollWidth),
+      height: Math.ceil(cropped ? root.offsetHeight : root.scrollHeight)
+    });
   }
   function loadLibraries(list, done) {
     if (!list.length) return done();
@@ -176,6 +220,8 @@ const BOOTSTRAP = String.raw`
           }
           report("ready");
           size();
+          setTimeout(size, 300);
+          setTimeout(size, 1200);
           watch();
         }, 50);
       }
@@ -197,10 +243,6 @@ const BOOTSTRAP = String.raw`
     var data = event.data;
     if (event.source !== window.parent || !data || data.source !== HOST) return;
     if (data.type === "init") start(typeof data.state === "string" ? data.state : null);
-    if (data.type === "fit" && typeof data.width === "number") {
-      fitWidth = data.width;
-      if (started) size();
-    }
   });
   window.addEventListener("error", function (event) {
     if (!started) fail(event.message);
@@ -213,6 +255,68 @@ const BOOTSTRAP = String.raw`
   })();
 })();
 `;
+
+const TEXT_TAGS = new Set([
+  "P",
+  "BR",
+  "STRONG",
+  "B",
+  "EM",
+  "I",
+  "U",
+  "UL",
+  "OL",
+  "LI",
+  "SPAN",
+  "SUB",
+  "SUP",
+  "CODE",
+]);
+
+/** El texto de instrucciones que se saca de la actividad: solo formato básico, sin atributos. */
+export function sanitizeLodgeText(html: string) {
+  const source = new DOMParser().parseFromString(html, "text/html").body;
+  const clean = (node: Node, into: Node) => {
+    for (const child of Array.from(node.childNodes)) {
+      if (child.nodeType === Node.TEXT_NODE) {
+        into.appendChild(document.createTextNode(child.textContent ?? ""));
+      } else if (child instanceof HTMLElement) {
+        if (["SCRIPT", "STYLE", "IFRAME", "OBJECT"].includes(child.tagName))
+          continue;
+        if (
+          child instanceof HTMLImageElement &&
+          child.getAttribute("src")?.startsWith("data:image/")
+        ) {
+          const image = document.createElement("img");
+          image.src = child.getAttribute("src") ?? "";
+          image.alt = child.getAttribute("alt") ?? "";
+          const height = parseFloat(
+            child.style.height || child.getAttribute("height") || "",
+          );
+          const width = parseFloat(
+            child.style.width || child.getAttribute("width") || "",
+          );
+          if (height > 0) image.style.height = `${Math.min(height, 160)}px`;
+          else if (width > 0) image.style.width = `${Math.min(width, 320)}px`;
+          else image.style.height = "1.6em";
+          image.className = "inline-block max-w-full align-middle";
+          into.appendChild(image);
+        } else if (TEXT_TAGS.has(child.tagName)) {
+          const copy = document.createElement(child.tagName.toLowerCase());
+          clean(child, copy);
+          into.appendChild(copy);
+        } else {
+          clean(child, into);
+        }
+      }
+    }
+  };
+  const result = document.createElement("div");
+  clean(source, result);
+  while (result.firstChild?.nodeName === "BR")
+    result.removeChild(result.firstChild);
+  return result.innerHTML;
+}
 
 export function interactiveSrcdoc(
   config: InteractiveConfig,
