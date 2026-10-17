@@ -95,7 +95,7 @@ export function levelFor(task: HomeTaskItem, age: string) {
 export function matches(
   task: HomeTaskItem,
   filters: Filters,
-  skip?: "type" | "age" | "difficulty" | "year",
+  skip?: "type" | "age" | "difficulty" | "year" | "visibility",
 ) {
   if (skip !== "type" && filters.type !== "all") {
     if (task.answerType !== filters.type) return false;
@@ -114,7 +114,11 @@ export function matches(
       if (level.difficulty !== filters.difficulty) return false;
     }
   }
-  if (filters.visibility !== "all" && task.visibility !== filters.visibility) {
+  if (
+    skip !== "visibility" &&
+    filters.visibility !== "all" &&
+    task.visibility !== filters.visibility
+  ) {
     return false;
   }
   const query = fold(filters.query.trim());

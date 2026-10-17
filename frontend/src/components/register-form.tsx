@@ -63,6 +63,7 @@ import { GoogleButton } from "@/components/google-button";
 import { AUTH_EMULATOR_HOST, isFirebaseConfigured } from "@/lib/firebase";
 import {
   GoogleRedirectStarted,
+  consumeGoogleRedirect,
   continueWithGoogle,
   firebaseErrorMessage,
   forgetGoogleProfile,
@@ -145,6 +146,7 @@ export function RegisterForm() {
   const cityRef = useRef<HTMLElement>(null);
   const formErrorRef = useRef<HTMLParagraphElement>(null);
   const prefilledRef = useRef(false);
+  const returnedRef = useRef(false);
   const verificationCheckRef = useRef<((showPendingMessage?: boolean) => void) | null>(
     null,
   );
@@ -210,6 +212,24 @@ export function RegisterForm() {
     if (profile?.firstName) setFirstName(profile.firstName);
     if (profile?.lastName) setLastName(profile.lastName);
   }, [completing, session.email, session.user]);
+
+  // Al volver del redirect de Google (celular) no hay `handleGoogle` esperando:
+  // quien ya era usuario de Bebras entra directo y los demas completan el perfil.
+  useEffect(() => {
+    if (session.loading || !session.user || returnedRef.current) return;
+    returnedRef.current = true;
+    if (!consumeGoogleRedirect()) return;
+    const user = session.user;
+    void (async () => {
+      const outcome = await openBebrasSession(user);
+      if (outcome.status === "ok") {
+        forgetGoogleProfile();
+        window.location.replace(landingPath(outcome.user));
+      } else if (outcome.status === "error") {
+        setErrors({ form: outcome.message });
+      }
+    })();
+  }, [session.loading, session.user]);
 
   useEffect(() => {
     if (submitting || step !== "form" || !pendingResponseFocusRef.current) {

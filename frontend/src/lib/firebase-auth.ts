@@ -94,7 +94,11 @@ function start() {
   // No se toca la persistencia: `getAuth()` ya guarda en IndexedDB con respaldo
   // en localStorage, y cambiarla aqui competiria con la restauracion en curso.
   // Consume el resultado del flujo por redireccion (respaldo de los popups).
-  void getRedirectResult(auth).catch(() => undefined);
+  void getRedirectResult(auth)
+    .then((credential) => {
+      if (credential) rememberGoogleProfile(readGoogleProfile(credential));
+    })
+    .catch(() => undefined);
 
   onIdTokenChanged(auth, (user) => {
     if (!user) {
@@ -309,6 +313,39 @@ const POPUP_UNAVAILABLE = new Set([
   "auth/cancelled-popup-request",
 ]);
 
+// En el celular la ventana emergente se abre como otra pestaña y el navegador
+// la da por cerrada antes de que Google termine (auth/popup-closed-by-user).
+function prefersRedirect() {
+  if (typeof window === "undefined") return false;
+  const mobileAgent = /android|iphone|ipad|ipod|mobile/i.test(
+    window.navigator.userAgent,
+  );
+  const touchOnly =
+    window.matchMedia?.("(pointer: coarse) and (hover: none)").matches ?? false;
+  return mobileAgent || touchOnly;
+}
+
+const GOOGLE_REDIRECT_KEY = "bebras_google_redirect";
+
+function markGoogleRedirect() {
+  try {
+    window.sessionStorage.setItem(GOOGLE_REDIRECT_KEY, "1");
+  } catch {
+    // Sin sessionStorage el registro no retoma solo al volver de Google.
+  }
+}
+
+/** Verdadero una sola vez: la pagina acaba de volver de un redirect de Google. */
+export function consumeGoogleRedirect() {
+  try {
+    const returned = window.sessionStorage.getItem(GOOGLE_REDIRECT_KEY) === "1";
+    window.sessionStorage.removeItem(GOOGLE_REDIRECT_KEY);
+    return returned;
+  } catch {
+    return false;
+  }
+}
+
 export class GoogleRedirectStarted extends Error {
   constructor() {
     super("Continuando con Google en esta misma pestaña.");
@@ -322,11 +359,18 @@ export class GoogleRedirectStarted extends Error {
 export async function continueWithGoogle(): Promise<UserCredential> {
   const auth = firebaseAuth();
 
+  if (prefersRedirect()) {
+    markGoogleRedirect();
+    await signInWithRedirect(auth, googleProvider());
+    throw new GoogleRedirectStarted();
+  }
+
   try {
     return await signInWithPopup(auth, googleProvider());
   } catch (error) {
     const code = (error as AuthError)?.code ?? "";
     if (!POPUP_UNAVAILABLE.has(code)) throw error;
+    markGoogleRedirect();
     await signInWithRedirect(auth, googleProvider());
     throw new GoogleRedirectStarted();
   }

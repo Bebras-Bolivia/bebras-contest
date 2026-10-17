@@ -346,7 +346,8 @@ button,input,select,textarea{font-family:inherit}
 p{margin:0 0 10px}ul,ol{margin-top:0;margin-bottom:10px}
 #bebras-task{display:block;width:fit-content}
 .componental-task{position:relative}
-html,body,#bebras-task,.componental-task,.componental-task *{touch-action:none}
+html,body,#bebras-task,.componental-task{touch-action:pan-y pinch-zoom}
+.componental-task svg image,.componental-task svg rect,.componental-task svg path,.componental-task svg text,.componental-task svg circle,.componental-task svg ellipse,.componental-task svg polygon,.componental-task svg g[class],.componental-task canvas,.componental-task [draggable=true],.componental-task .ui-draggable,.componental-task .sortable-chosen,.componental-task [style*="cursor: move"],.componental-task [style*="cursor:move"],.componental-task [style*="grab"]{touch-action:none}
 .sortable-ghost{opacity:.4}
 </style><script>window.__bebrasNarrow=${narrow ? "true" : "false"};${touch ? 'if(!("ontouchstart" in window))window.ontouchstart=null;' : ""}</script><script src="${engine}"></script></head><body><div id="bebras-task"></div>
 <script>window.__bebrasElements=${scriptJson(config.elements)};</script>

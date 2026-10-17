@@ -58,8 +58,19 @@ export async function apiRequest<T>(
   const { auth = true, fallbackMessage, headers, ...init } = options;
   // El SDK renueva el ID Token por su cuenta; pedirselo a el evita mandar una
   // copia vencida de localStorage.
+  // En lo que es publico, una restauracion de sesion lenta (celular, red
+  // inestable) no debe dejar la peticion colgada: se sigue sin cabecera.
   const requestHeaders = new Headers(
-    auth === false ? undefined : await authorizationHeaders(),
+    auth === false
+      ? undefined
+      : auth === "optional"
+        ? await Promise.race([
+            authorizationHeaders().catch(() => ({})),
+            new Promise<Record<string, string>>((resolve) =>
+              setTimeout(() => resolve({}), 4000),
+            ),
+          ])
+        : await authorizationHeaders(),
   );
 
   new Headers(headers).forEach((value, key) => {

@@ -19,18 +19,21 @@ import {
   type StoredContest,
 } from "@/lib/contest-schema";
 import { difficultyStyles } from "@/lib/difficulty";
-import { listTasks } from "@/lib/tasks-api";
+import { listTasks, mapTaskToHomeItem } from "@/lib/tasks-api";
+import {
+  NO_FILTERS,
+  matches as matchesFilters,
+  type Filters,
+} from "@/lib/task-filters";
 import {
   answerTypeLabels,
   answerTypes,
-  type AnswerType,
   type StoredTask,
 } from "@/lib/task-schema";
 import {
   TASK_VISIBILITIES,
   taskVisibility,
   visibilityInfo,
-  type TaskVisibility,
 } from "@/lib/task-visibility";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -49,13 +52,6 @@ const EDITABLE: ContestState[] = [
 
 const chipClass =
   "flex h-7 shrink-0 items-center gap-1.5 px-2.5 text-xs whitespace-nowrap text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/60 disabled:pointer-events-none disabled:opacity-40 aria-pressed:bg-primary/10 aria-pressed:font-semibold aria-pressed:text-primary";
-
-function fold(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase();
-}
 
 function tasksByCategory(contest: StoredContest) {
   const result: Record<string, string[]> = {};
@@ -81,10 +77,10 @@ export function ContestQuestionsPage() {
   const [loadError, setLoadError] = useState<string | null>(
     contestId ? null : "No se indicó el desafío.",
   );
-  const [query, setQuery] = useState("");
-  const [type, setType] = useState<AnswerType | "all">("all");
-  const [difficulty, setDifficulty] = useState<string>("all");
-  const [visibility, setVisibility] = useState<TaskVisibility | "all">("all");
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  const { query, type, difficulty, visibility, year } = filters;
+  const change = (next: Partial<Filters>) =>
+    setFilters((current) => ({ ...current, ...next }));
   const [onlyChosen, setOnlyChosen] = useState(false);
   const [preview, setPreview] = useState<StoredTask | null>(null);
   const [saving, setSaving] = useState(false);
@@ -137,37 +133,21 @@ export function ContestQuestionsPage() {
     [bank, activeCategory],
   );
 
+  // Mismos filtros y misma lógica que la lista de Tareas (`lib/task-filters`);
+  // la categoría la fija la pestaña activa.
+  const homeItems = useMemo(
+    () => new Map(bank.map((task) => [task.id, mapTaskToHomeItem(task)])),
+    [bank],
+  );
+  const scoped: Filters = { ...filters, age: activeCategory };
+
   const matches = (
     task: StoredTask,
-    skip?: "type" | "difficulty" | "visibility",
+    skip?: "type" | "difficulty" | "visibility" | "year",
   ) => {
     if (onlyChosen && !activeIds.includes(task.id)) return false;
-    if (skip !== "type" && type !== "all" && task.answerType !== type) {
-      return false;
-    }
-    if (
-      skip !== "difficulty" &&
-      difficulty !== "all" &&
-      difficultyOf(task, activeCategory) !== difficulty
-    ) {
-      return false;
-    }
-    if (
-      skip !== "visibility" &&
-      visibility !== "all" &&
-      taskVisibility(task) !== visibility
-    ) {
-      return false;
-    }
-    const term = fold(query.trim());
-    return (
-      !term ||
-      fold(
-        [task.title, task.sourceTaskCode, task.country]
-          .filter(Boolean)
-          .join(" "),
-      ).includes(term)
-    );
+    const item = homeItems.get(task.id);
+    return item ? matchesFilters(item, scoped, skip) : false;
   };
 
   const visible = usable
@@ -180,16 +160,36 @@ export function ContestQuestionsPage() {
             3) || left.title.localeCompare(right.title),
     );
 
-  const count = (skip: "type" | "difficulty" | "visibility", value: string) =>
+  const years = [
+    ...new Set(
+      usable.flatMap((task) => (task.year ? [String(task.year)] : [])),
+    ),
+  ].sort();
+
+  const count = (
+    skip: "type" | "difficulty" | "visibility" | "year",
+    value: string,
+  ) =>
     usable.filter(
       (task) =>
         matches(task, skip) &&
-        (skip === "type"
-          ? value === "all" || task.answerType === value
-          : skip === "difficulty"
-            ? value === "all" || difficultyOf(task, activeCategory) === value
-            : value === "all" || taskVisibility(task) === value),
+        (value === "all" ||
+          (skip === "type"
+            ? task.answerType === value
+            : skip === "difficulty"
+              ? difficultyOf(task, activeCategory) === value
+              : skip === "year"
+                ? String(task.year) === value
+                : taskVisibility(task) === value)),
     ).length;
+
+  const filtered =
+    onlyChosen ||
+    query.trim() !== "" ||
+    type !== "all" ||
+    difficulty !== "all" ||
+    visibility !== "all" ||
+    year !== "all";
 
   const publicChosen = usable.filter(
     (task) =>
@@ -358,7 +358,7 @@ export function ContestQuestionsPage() {
           <input
             type="search"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => change({ query: event.target.value })}
             placeholder="Buscar pregunta"
             aria-label="Buscar pregunta por nombre, código o país"
             className="h-full w-full bg-muted/60 pr-8 pl-8 text-sm outline-none placeholder:text-muted-foreground focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-primary/60 [&::-webkit-search-cancel-button]:hidden"
@@ -367,7 +367,7 @@ export function ContestQuestionsPage() {
             <button
               type="button"
               aria-label="Borrar búsqueda"
-              onClick={() => setQuery("")}
+              onClick={() => change({ query: "" })}
               className="absolute right-1.5 grid size-6 place-items-center text-muted-foreground outline-none hover:text-foreground"
             >
               <XIcon className="size-4" />
@@ -390,7 +390,9 @@ export function ContestQuestionsPage() {
                 visibility !== item.value
               }
               onClick={() =>
-                setVisibility(visibility === item.value ? "all" : item.value)
+                change({
+                  visibility: visibility === item.value ? "all" : item.value,
+                })
               }
               className={chipClass}
             >
@@ -415,7 +417,9 @@ export function ContestQuestionsPage() {
                 type="button"
                 aria-pressed={type === value}
                 disabled={total === 0 && type !== value}
-                onClick={() => setType(value)}
+                onClick={() =>
+                  change({ type: type === value ? "all" : value })
+                }
                 className={chipClass}
               >
                 {value === "all" ? "Todas" : answerTypeLabels[value]}
@@ -438,7 +442,7 @@ export function ContestQuestionsPage() {
                 aria-pressed={difficulty === value}
                 disabled={total === 0 && difficulty !== value}
                 onClick={() =>
-                  setDifficulty(difficulty === value ? "all" : value)
+                  change({ difficulty: difficulty === value ? "all" : value })
                 }
                 className={chipClass}
               >
@@ -451,6 +455,38 @@ export function ContestQuestionsPage() {
               </button>
             );
           })}
+          {years.length > 1 &&
+            years.map((value) => {
+              const total = count("year", value);
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={year === value}
+                  disabled={total === 0 && year !== value}
+                  onClick={() =>
+                    change({ year: year === value ? "all" : value })
+                  }
+                  className={chipClass}
+                >
+                  {value}
+                  <span className="tabular-nums opacity-60">{total}</span>
+                </button>
+              );
+            })}
+          {filtered && (
+            <button
+              type="button"
+              onClick={() => {
+                setFilters(NO_FILTERS);
+                setOnlyChosen(false);
+              }}
+              className={chipClass}
+            >
+              <XIcon className="size-3.5" aria-hidden="true" />
+              Quitar filtros
+            </button>
+          )}
           <button
             type="button"
             aria-pressed={onlyChosen}

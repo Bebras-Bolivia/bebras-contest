@@ -31,11 +31,17 @@ export type PracticeCheck = {
 async function get<T>(path: string) {
   for (let attempt = 0; ; attempt++) {
     try {
-      return await optionalAuthRequest<T>(path);
+      return await optionalAuthRequest<T>(path, {
+        signal: AbortSignal.timeout(12000),
+      });
     } catch (error) {
-      const transient = !(error instanceof ApiError) || error.status >= 500;
-      if (!transient || attempt === 2) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1)));
+      const transient =
+        !(error instanceof ApiError) ||
+        error.status >= 500 ||
+        error.status === 408 ||
+        error.status === 429;
+      if (!transient || attempt === 4) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)));
     }
   }
 }
