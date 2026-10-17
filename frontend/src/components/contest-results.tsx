@@ -1,12 +1,12 @@
 "use client";
 
+import { ListPageSkeleton } from "@/components/page-skeletons";
 import { useEffect, useState } from "react";
 import {
   CalculatorIcon,
   DownloadIcon,
   EyeIcon,
   EyeOffIcon,
-  LoaderCircleIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -204,9 +204,7 @@ export function ContestResults() {
 
   if (loading) {
     return (
-      <div className="flex min-h-72 items-center justify-center">
-        <LoaderCircleIcon className="size-6 animate-spin text-muted-foreground" />
-      </div>
+      <ListPageSkeleton label="Cargando resultados..." />
     );
   }
 

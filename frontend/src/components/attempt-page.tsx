@@ -1,5 +1,6 @@
 "use client";
 
+import { QuestionSkeleton } from "@/components/page-skeletons";
 import {
   useCallback,
   useEffect,
@@ -636,9 +637,7 @@ export function AttemptPage({
 
   if (loading) {
     return (
-      <div className="flex min-h-72 items-center justify-center">
-        <LoaderCircleIcon className="size-6 animate-spin text-muted-foreground" />
-      </div>
+      <QuestionSkeleton />
     );
   }
 

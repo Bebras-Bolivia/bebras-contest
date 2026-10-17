@@ -1,12 +1,13 @@
 "use client";
 
+import { RowsSkeleton } from "@/components/page-skeletons";
+import { ListPageSkeleton } from "@/components/page-skeletons";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   ClockIcon,
   CopyIcon,
   EyeIcon,
   LinkIcon,
-  LoaderCircleIcon,
   PlusIcon,
   XIcon,
   UsersIcon,
@@ -315,9 +316,7 @@ export function PracticesHome() {
 
   if (loading) {
     return (
-      <div className="flex min-h-72 items-center justify-center">
-        <LoaderCircleIcon className="size-6 animate-spin text-muted-foreground" />
-      </div>
+      <ListPageSkeleton label="Cargando prácticas..." />
     );
   }
 
@@ -470,9 +469,9 @@ export function PracticesHome() {
                         Elige una categoría para ver las preguntas disponibles.
                       </p>
                     ) : poolLoading ? (
-                      <p className="p-3 text-sm text-muted-foreground">
-                        Cargando preguntas...
-                      </p>
+                      <div className="p-3">
+                        <RowsSkeleton label="Cargando preguntas..." rows={4} />
+                      </div>
                     ) : pool.length === 0 ? (
                       <p className="p-3 text-sm text-muted-foreground">
                         El organizador todavía no liberó preguntas para esta
@@ -683,9 +682,7 @@ export function PracticesHome() {
           </DialogHeader>
           <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
             {previewLoading || !previewTask ? (
-              <div className="flex min-h-40 items-center justify-center">
-                <LoaderCircleIcon className="size-5 animate-spin text-muted-foreground" />
-              </div>
+              <RowsSkeleton rows={5} label="Cargando la pregunta..." />
             ) : (
               <>
                 <TaskContentRenderer

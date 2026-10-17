@@ -1,9 +1,9 @@
 "use client";
 
+import { QuestionSkeleton } from "@/components/page-skeletons";
 import { useEffect, useState } from "react";
 import {
   ArrowRightIcon,
-  LoaderCircleIcon,
   RotateCcwIcon,
   XIcon,
 } from "lucide-react";
@@ -181,9 +181,7 @@ export function PracticeSolver() {
     return (
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
         {topBar}
-        <div className="flex justify-center py-10">
-          <LoaderCircleIcon className="size-6 animate-spin text-muted-foreground" />
-        </div>
+        <QuestionSkeleton />
       </div>
     );
   }

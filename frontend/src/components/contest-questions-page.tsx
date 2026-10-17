@@ -1,10 +1,10 @@
 "use client";
 
+import { ListPageSkeleton } from "@/components/page-skeletons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeftIcon,
   CheckIcon,
-  LoaderCircleIcon,
   PlusIcon,
   SaveIcon,
   SearchIcon,
@@ -277,9 +277,7 @@ export function ContestQuestionsPage() {
 
   if (!contest) {
     return (
-      <div className="flex min-h-72 items-center justify-center">
-        <LoaderCircleIcon className="size-6 animate-spin text-muted-foreground" />
-      </div>
+      <ListPageSkeleton label="Cargando preguntas..." />
     );
   }
 
@@ -325,7 +323,7 @@ export function ContestQuestionsPage() {
               aria-selected={selected}
               onClick={() => {
                 setCategory(item);
-                setDifficulty("all");
+                change({ difficulty: "all" });
               }}
               className="relative flex shrink-0 items-baseline gap-1.5 py-2.5 text-sm whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground aria-selected:font-medium aria-selected:text-foreground"
             >

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LoaderCircleIcon, RotateCcwIcon } from "lucide-react";
+import { RotateCcwIcon } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -194,10 +194,10 @@ export function InteractivePlayer({
           {status !== "ready" && (
             <div className="absolute inset-0 flex items-center justify-center bg-white p-6 text-center text-sm text-muted-foreground">
               {status === "loading" ? (
-                <span className="flex items-center gap-2">
-                  <LoaderCircleIcon className="size-4 animate-spin" />
-                  Cargando la actividad…
-                </span>
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-0 animate-pulse bg-muted"
+                />
               ) : (
                 "No se pudo cargar la actividad. Revisa tu conexión y recarga la página."
               )}

@@ -1,5 +1,6 @@
 "use client";
 
+import { RowsSkeleton } from "@/components/page-skeletons";
 import { useEffect, useState, type FormEvent } from "react";
 import {
   CheckIcon,
@@ -148,7 +149,7 @@ function AdminsSection() {
 
       {admins === null ? (
         !error && (
-          <LoaderCircleIcon className="size-5 animate-spin text-muted-foreground" />
+          <RowsSkeleton />
         )
       ) : (
         <ul className="divide-y border-y">
@@ -351,7 +352,7 @@ function CertificatesSection() {
 
       {link === null ? (
         !error && (
-          <LoaderCircleIcon className="size-5 animate-spin text-muted-foreground" />
+          <RowsSkeleton />
         )
       ) : (
         <div className="flex flex-col gap-3">

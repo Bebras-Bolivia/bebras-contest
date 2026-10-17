@@ -1,12 +1,12 @@
 "use client";
 
+import { FormPageSkeleton } from "@/components/page-skeletons";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
   BarChart3Icon,
   CheckIcon,
-  LoaderCircleIcon,
   PlayIcon,
   PlusIcon,
   RotateCcwIcon,
@@ -649,9 +649,7 @@ export function ContestEditor() {
 
   if (!form) {
     return (
-      <div className="flex min-h-72 items-center justify-center">
-        <LoaderCircleIcon className="size-6 animate-spin text-muted-foreground" />
-      </div>
+      <FormPageSkeleton label="Cargando desafío..." />
     );
   }
 
