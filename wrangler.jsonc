@@ -24,15 +24,6 @@
   ],
   "triggers": { "crons": ["*/5 * * * *"] },
   "env": {
-    "staging": {
-      "name": "bebras-contest-staging",
-      "vars": { "REGISTRATION_ONLY": "false", "FRONTEND_ORIGIN": "", "FIREBASE_PROJECT_ID": "bebras-bo-staging" },
-      "d1_databases": [{ "binding": "DB", "database_name": "bebras-staging", "database_id": "767cab4c-1445-4dbb-9e24-b93512d684f9", "migrations_dir": "backend/migrations" }],
-      "r2_buckets": [
-        { "binding": "UPLOADS", "bucket_name": "bebras-uploads-staging" },
-        { "binding": "PUBLIC_ASSETS", "bucket_name": "bebras-public-staging" }
-      ]
-    },
     "production": {
       "name": "bebras-contest",
       "vars": { "REGISTRATION_ONLY": "false", "FRONTEND_ORIGIN": "", "FIREBASE_PROJECT_ID": "bebras-bo", "PUBLIC_ASSETS_URL": "https://cdn.bebrasbolivia.org" },

@@ -1,6 +1,6 @@
 # Herramientas locales y bootstrap D1
 
-Ejecutar desde raíz con las dependencias instaladas. El **bootstrap esencial** (`scripts/cloudflare-seed.ts`) requiere `--target local|staging|production`. Sólo este flujo aditivo de admins y colegios admite remoto. Las herramientas de tareas, reset de admins, reemplazo de colegios y limpieza requieren `--target local`. Local usa `getPlatformProxy` del Wrangler instalado, con `remoteBindings: false`, y el binding **DB** de Miniflare/workerd. No usan el cliente Prisma del Worker, `DATABASE_URL` ni better-sqlite3.
+Ejecutar desde raíz con las dependencias instaladas. El **bootstrap esencial** (`scripts/cloudflare-seed.ts`) requiere `--target local|production`. Sólo este flujo aditivo de admins y colegios admite remoto. Las herramientas de tareas, reset de admins, reemplazo de colegios y limpieza requieren `--target local`. Local usa `getPlatformProxy` del Wrangler instalado, con `remoteBindings: false`, y el binding **DB** de Miniflare/workerd. No usan el cliente Prisma del Worker, `DATABASE_URL` ni better-sqlite3.
 
 `bun run setup` instala con lockfile congelado los tres paquetes independientes
 (raíz, backend y frontend); consulta [Workers Builds](../README.md#configuración-reproducible-de-workers-builds)
@@ -38,7 +38,7 @@ try {
 
 Inserta Marko, Steven y Vladimir, y el snapshot `backend/prisma/seed/schools.ndjson.gz`. Conserva por completo usuarios/colegios existentes, incluso roles y contraseñas. La contraseña es obligatoria sin valor predeterminado y se convierte con el **bcryptjs actual, coste 10**, fuera del Worker. No se imprime el secreto. Esos hashes se conservan para el bootstrap y la migración de cuentas; el login actual usa Firebase Authentication.
 
-El entorno local de `wrangler.jsonc` usa Firebase staging y `bun run dev` lo
+El entorno local de `wrangler.jsonc` usa el proyecto Firebase `bebras-bo-staging` y `bun run dev` lo
 fuerza también por CLI; `.dev.vars` solo sirve como override al invocar Wrangler
 directamente (ver [Firebase Authentication](./firebase-auth.md)).
 `bun scripts/cloudflare-credentials.ts local prepare` genera credenciales aleatorias
@@ -52,13 +52,11 @@ es un secreto de runtime del Worker.
 Con los IDs remotos configurados y el secreto inyectado, los comandos del operador son:
 
 ```powershell
-bun scripts/cloudflare-seed.ts --target staging --check
-bun scripts/cloudflare-seed.ts --target staging
 bun scripts/cloudflare-seed.ts --target production --check
 bun scripts/cloudflare-seed.ts --target production
 ```
 
-El bootstrap remoto ejecuta exclusivamente `wrangler d1 execute DB --env staging|production --remote --file ...`, usando el CLI instalado y `--config` explícito. Serializa únicamente INSERT aditivos de `User`/`School`, escapa literales y valida el límite de 100 KB antes de crear temporales. Los SQL temporales se crean en `.wrangler/seed-*`, con modo `0600` y directorio `0700` en POSIX, o ACL privada en Windows; la ruta debe estar ignorada por Git. Se eliminan al finalizar, también si falla un lote. Una terminación forzada puede dejar restos privados para limpiar. La contraseña se excluye del entorno del proceso hijo, no se pasa como argumento, y la salida/logs de Wrangler se suprimen para no exponer SQL o hashes. Estas operaciones remotas no forman parte de las pruebas de integración.
+El bootstrap remoto ejecuta exclusivamente `wrangler d1 execute DB --env production --remote --file ...`, usando el CLI instalado y `--config` explícito. Serializa únicamente INSERT aditivos de `User`/`School`, escapa literales y valida el límite de 100 KB antes de crear temporales. Los SQL temporales se crean en `.wrangler/seed-*`, con modo `0600` y directorio `0700` en POSIX, o ACL privada en Windows; la ruta debe estar ignorada por Git. Se eliminan al finalizar, también si falla un lote. Una terminación forzada puede dejar restos privados para limpiar. La contraseña se excluye del entorno del proceso hijo, no se pasa como argumento, y la salida/logs de Wrangler se suprimen para no exponer SQL o hashes. Estas operaciones remotas no forman parte de las pruebas de integración.
 
 Las fechas siguen `@prisma/adapter-d1`: `YYYY-MM-DDTHH:mm:ss.sss+00:00`. Local usa parámetros y lotes D1 de 50; remoto usa archivos con hasta 250 sentencias y conflictos dirigidos por clave. El bootstrap completo no promete atomicidad entre lotes y permite reintentos. `--check` valida entradas y límites sin abrir D1 ni comprobar el esquema, también para staging/production.
 

@@ -3,11 +3,11 @@ import { firebaseWebConfig } from "./firebase-config";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const target = process.argv[2];
-if (!["local", "staging", "production"].includes(target ?? "")) {
-  throw new Error("Uso: bun scripts/cloudflare-build.ts local|staging|production");
+if (!["local", "production"].includes(target ?? "")) {
+  throw new Error("Uso: bun scripts/cloudflare-build.ts local|production");
 }
 const branch = process.env.WORKERS_CI_BRANCH;
-if (branch && branch !== (target === "production" ? "master" : "staging")) {
+if (branch && (branch !== "master" || target !== "production")) {
   throw new Error(`La rama ${branch} no puede publicar el entorno ${target}.`);
 }
 // La configuracion Web es publica. Local comparte identidades con staging, pero

@@ -47,9 +47,9 @@ export function compareMigrations(local: string[], applied: string[]) {
 
 async function main() {
   const target = process.argv[2];
-  if (target !== "staging" && target !== "production") {
+  if (target !== "production") {
     throw new Error(
-      "Uso: bun scripts/cloudflare-migrations-check.ts staging|production",
+      "Uso: bun scripts/cloudflare-migrations-check.ts production",
     );
   }
 

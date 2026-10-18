@@ -7,8 +7,8 @@ import { assertIgnored, protectPath } from "./cloudflare-cli";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const target = process.argv[2];
 const action = process.argv[3] ?? "prepare";
-if (!["local", "staging", "production"].includes(target ?? "") || !["prepare", "seed", "upload"].includes(action)) {
-  throw new Error("Uso: bun scripts/cloudflare-credentials.ts local|staging|production prepare|seed|upload");
+if (!["local", "production"].includes(target ?? "") || !["prepare", "seed", "upload"].includes(action)) {
+  throw new Error("Uso: bun scripts/cloudflare-credentials.ts local|production prepare|seed|upload");
 }
 if (target === "local" && action === "upload") throw new Error("Local utiliza .dev.vars.");
 // La autenticacion es Firebase y se verifica con claves publicas: el Worker ya no

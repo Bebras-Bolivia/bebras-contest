@@ -37,9 +37,9 @@ const selectedUsers = selectedMigrationUsers(args);
 const targetIndex = args.indexOf("--target");
 const target = targetIndex >= 0 ? args[targetIndex + 1] : undefined;
 
-if (target !== "production" && target !== "staging") {
+if (target !== "production") {
   throw new Error(
-    "Uso: bun scripts/firebase-migrate-users.ts --target production|staging [--check] [--mark-verified --user <correo-o-uid> ...]",
+    "Uso: bun scripts/firebase-migrate-users.ts --target production [--check] [--mark-verified --user <correo-o-uid> ...]",
   );
 }
 if (markVerified && !selectedUsers.length) {

@@ -11,7 +11,7 @@ export function isScriptMain(relativePath: string): boolean {
   return !!process.argv[1] && resolve(process.argv[1]) === resolve(ROOT, relativePath);
 }
 const backendRequire = createRequire(join(ROOT, "backend/package.json"));
-export type Target = "local" | "staging" | "production";
+export type Target = "local" | "production";
 type Options = { target: Target; config: string; check: boolean };
 export const ADMINS = [
   { name: "Marko", email: "marko@bebras.bo" },
@@ -30,7 +30,7 @@ export function parseOptions(args: string[], tasks = false): Options {
     seen.add(arg);
     if (arg === "--target") {
       const value = args[++i];
-      if (!["local", "staging", "production"].includes(value)) throw new Error("Target inválido.");
+      if (!["local", "production"].includes(value)) throw new Error("Target inválido.");
       target = value as Target;
     } else if (arg === "--config") {
       const value = args[++i];
@@ -39,7 +39,7 @@ export function parseOptions(args: string[], tasks = false): Options {
     } else if (arg === "--check") check = true;
     else throw new Error("Parámetro desconocido; consulta --help.");
   }
-  if (!target) throw new Error("Es obligatorio --target local|staging|production.");
+  if (!target) throw new Error("Es obligatorio --target local|production.");
   if (tasks && target !== "local") throw new Error("El catálogo de tareas sólo admite --target local.");
   return { target, config, check };
 }
@@ -104,7 +104,7 @@ export function remoteBootstrapSql(statement: Statement): string {
 }
 
 export function remoteExecuteArgs(options: Options, file: string): string[] {
-  if (options.target !== "staging" && options.target !== "production") throw new Error("Ambiente remoto explícito requerido.");
+  if (options.target !== "production") throw new Error("Ambiente remoto explícito requerido.");
   return ["d1", "execute", "DB", "--config", options.config, "--env", options.target, "--remote", "--file", file, "--yes"];
 }
 
@@ -141,7 +141,7 @@ export async function executeStatements(options: Options, statements: Statement[
 
 export async function main(args = process.argv.slice(2)): Promise<void> {
   if (args.length === 1 && args[0] === "--help") {
-    console.log("bun scripts/cloudflare-seed.ts --target local|staging|production [--config ruta] [--check]\nSólo los 3 admins y colegios. Requiere SEED_ADMIN_PASSWORD explícito, incluso con --check.");
+    console.log("bun scripts/cloudflare-seed.ts --target local|production [--config ruta] [--check]\nSólo los 3 admins y colegios. Requiere SEED_ADMIN_PASSWORD explícito, incluso con --check.");
     return;
   }
   const options = parseOptions(args);

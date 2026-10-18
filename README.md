@@ -25,7 +25,7 @@ bun run env:setup
 
 `env:setup` crea `backend/.env` y `frontend/.env` a partir de sus ejemplos sin
 sobrescribir archivos existentes. `bun run dev` no depende de esos archivos para
-seleccionar Firebase: fuerza Firebase Auth de staging tanto en Astro como en el
+seleccionar Firebase: fuerza el proyecto Firebase `bebras-bo-staging` tanto en Astro como en el
 Worker local, mientras D1 y R2 permanecen locales. `.dev.vars` es solo un override
 opcional para invocar Wrangler directamente y nunca se sube al Worker. Consulta la
 [guía de Firebase Authentication](docs/firebase-auth.md).
@@ -46,10 +46,10 @@ Levanta backend y frontend juntos:
 bun run dev
 ```
 
-Este comando no admite producción ni bindings remotos. Las identidades de
-Firebase se comparten con staging, pero perfiles, roles, colegios, documentos,
-concursos y tareas se guardan en D1/R2 locales. Para probar staging completo, usa
-su URL desplegada en lugar de mezclar frontend local con servicios remotos.
+Este comando no admite producción ni bindings remotos. Las identidades salen del
+proyecto Firebase `bebras-bo-staging`, pero perfiles, roles, colegios, documentos,
+concursos y tareas se guardan en D1/R2 locales. Ya no hay un entorno staging en
+Cloudflare: solo local y producción.
 
 Para que tampoco la autenticación salga de la máquina:
 
@@ -178,7 +178,7 @@ servidor se verifican con los mismos casos en las pruebas unitarias.
 
 Para actualizar D1, respaldar la base y ejecutar desde la raíz `bun run db:generate`
 y `bun x --no-install wrangler d1 migrations apply DB --local` (remoto: seleccionar
-`--env staging|production --remote`). El parche
+`--env production --remote`). El parche
 `backend/prisma/patches/20260906-task-answer-contract.sql` es una referencia del
 flujo SQLite legado, no una alternativa al historial de migraciones D1.
 
@@ -348,7 +348,6 @@ la suite unitaria.
 | Entorno | Rama local | Build | Flags de registro (build / runtime) |
 | --- | --- | --- | --- |
 | Local | `develop` | `bun run build:local` | `PUBLIC_REGISTRATION_ONLY=false` / `REGISTRATION_ONLY=false` |
-| Staging | `staging` | `bun run build:staging` | `false` / `false` |
 | Producción | `master` | `bun run build:production` | `true` / `true` |
 
 Todos los builds fijan `PUBLIC_API_BASE_URL=""` (API en el mismo origen). El flag
@@ -357,21 +356,15 @@ no reconstruye los assets. Preparar y empaquetar cada entorno consecutivamente,
 porque comparten `frontend/dist`:
 
 ```bash
-bun run build:staging
-bun x --no-install wrangler deploy --env staging --dry-run
 bun run build:production
 bun x --no-install wrangler deploy --env production --dry-run
 ```
 
-Con los recursos remotos provisionados, `bun run deploy:staging` y
-`bun run deploy:production` aplican las migraciones D1 pendientes, verifican el
+Con los recursos remotos provisionados, `bun run deploy:production` aplica las migraciones D1 pendientes, verifican el
 historial, reconstruyen el modo correcto y despliegan con su `--env`. También se
 pueden ejecutar por separado para diagnóstico:
 
 ```bash
-bun run db:migrations:apply:staging
-bun run db:migrations:check:staging
-bun scripts/cloudflare-seed.ts --target staging
 bun run db:migrations:apply:production
 bun run db:migrations:check:production
 bun scripts/cloudflare-seed.ts --target production
@@ -391,7 +384,6 @@ automática del paquete raíz no instala `backend` ni `frontend`:
 
 | Worker / rama | Build command | Deploy command |
 | --- | --- | --- |
-| Staging / `staging` | `bun run setup && bun run db:migrations:apply:staging && bun run db:migrations:check:staging && bun run build:staging` | `bun x --no-install wrangler deploy --env staging` |
 | Producción / `master` | `bun run setup && bun run db:migrations:apply:production && bun run db:migrations:check:production && bun run build:production` | `bun x --no-install wrangler deploy --env production` |
 
 Opcionalmente fija `BUN_VERSION=1.3.5`, `NODE_VERSION=22` y
@@ -410,17 +402,16 @@ Referencia: [configuración de Workers Builds](https://developers.cloudflare.com
 
 ### Estado (2026-09-12)
 
-- Las ramas `develop`, `staging` y `master` comparten la configuración versionada;
-  el entorno de despliegue determina las funcionalidades habilitadas.
-- **Workers Builds**: producción y staging están conectados a GitHub y despliegan
-  automáticamente desde `master` y `staging`, respectivamente. Configuración y
-  verificación en [Workers Builds](docs/workers-builds.md).
-- **Desplegados**: [producción](https://bebras-contest.bebrasbolivia.workers.dev) y
-  [staging](https://bebras-contest-staging.bebrasbolivia.workers.dev), con bases D1 y
-  buckets R2 Standard privados separados. Ambas bases tienen 3 administradores,
-  16.099 colegios, 0 maestros y 0 tareas al finalizar el bootstrap.
-- Credenciales iniciales en `.wrangler/credentials/production.json` y
-  `.wrangler/credentials/staging.json`, excluidas de Git. `SEED_ADMIN_PASSWORD`
+- Las ramas `develop` y `master` comparten la configuración versionada; el
+  entorno de despliegue determina las funcionalidades habilitadas. El entorno
+  staging de Cloudflare se retiró el 2026-10-18.
+- **Workers Builds**: producción está conectada a GitHub y despliega
+  automáticamente desde `master`. Configuración y verificación en
+  [Workers Builds](docs/workers-builds.md).
+- **Desplegado**: [producción](https://bebrasbolivia.org), con su base D1 y su
+  bucket R2 privado. La base tenía 3 administradores y 16.099 colegios al
+  finalizar el bootstrap.
+- Credenciales iniciales en `.wrangler/credentials/production.json`, excluidas de Git. `SEED_ADMIN_PASSWORD`
   corresponde a los tres admins (`marko@bebras.bo`, `steven@bebras.bo`, `vladimir@bebras.bo`).
   El bootstrap es aditivo y no restablece contraseñas existentes.
   Desde otro equipo, recuperar esas credenciales mediante un respaldo privado;

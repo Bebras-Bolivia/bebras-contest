@@ -3,16 +3,19 @@
 Repositorio: `Bebras-Bolivia/bebras-contest`. La aplicación GitHub **Cloudflare
 Workers and Pages** ya está instalada en la organización con acceso al repositorio.
 
-En cada Worker, abrir **Settings → Builds → Connect** y configurar:
+Solo hay un Worker desplegado: producción. El entorno staging de Cloudflare se
+retiró el 2026-10-18; lo de abajo sobre staging queda como historia.
 
-| Ajuste | Producción | Staging |
-| --- | --- | --- |
-| Worker | `bebras-contest` | `bebras-contest-staging` |
-| Rama de producción del build | `master` | `staging` |
-| Directorio raíz | `/` | `/` |
-| Build command | `bun run setup && bun run db:migrations:apply:production && bun run db:migrations:check:production && bun run build:production` | `bun run setup && bun run db:migrations:apply:staging && bun run db:migrations:check:staging && bun run build:staging` |
-| Deploy command | `bunx wrangler deploy --env production` | `bunx wrangler deploy --env staging` |
-| Non-production branch builds | Deshabilitado | Deshabilitado |
+En el Worker, abrir **Settings → Builds → Connect** y configurar:
+
+| Ajuste | Producción |
+| --- | --- |
+| Worker | `bebras-contest` |
+| Rama de producción del build | `master` |
+| Directorio raíz | `/` |
+| Build command | `bun run setup && bun run db:migrations:apply:production && bun run db:migrations:check:production && bun run build:production` |
+| Deploy command | `bunx wrangler deploy --env production` |
+| Non-production branch builds | Deshabilitado |
 
 Variables opcionales para fijar explícitamente las versiones del entorno de build:
 
@@ -41,19 +44,19 @@ aplican explícitamente con las migraciones versionadas, primero en local.
 
 ## Estado: conexión comprobada
 
-Ambos Workers despliegan solos desde GitHub. La conexión se hizo desde el
+El Worker de producción despliega solo desde GitHub. La conexión se hizo desde el
 Dashboard (la autorización de la cuenta de Git no tiene API) y sus triggers se
 ajustaron por API, porque **los valores que crea el Dashboard no sirven para este
 repositorio**. Los comandos de la tabla siguiente son la configuración versionada;
 cualquier cambio requiere volver a ejecutar el script de sincronización.
 
-| | Producción | Staging |
-| --- | --- | --- |
-| Trigger | `ccea49e5-0176-4f63-b2bf-4d15eaa6a792` | `ebcc05a1-0b7d-487c-beef-10df2e9071f8` |
-| Rama | `master` | `staging` |
-| Build versionado | `bun run setup && bun run db:migrations:apply:production && bun run db:migrations:check:production && bun run build:production` | `bun run setup && bun run db:migrations:apply:staging && bun run db:migrations:check:staging && bun run build:staging` |
-| Deploy | `bunx wrangler deploy --env production` | `bunx wrangler deploy --env staging` |
-| Tag del Worker | `4c3e208b37024d22b0bd4b9829cddef7` | `40c913ff795147878d4c502300477ade` |
+| | Producción |
+| --- | --- |
+| Trigger | `ccea49e5-0176-4f63-b2bf-4d15eaa6a792` |
+| Rama | `master` |
+| Build versionado | `bun run setup && bun run db:migrations:apply:production && bun run db:migrations:check:production && bun run build:production` |
+| Deploy | `bunx wrangler deploy --env production` |
+| Tag del Worker | `4c3e208b37024d22b0bd4b9829cddef7` |
 
 Repositorio `Bebras-Bolivia/bebras-contest` (id `1195777825`, org `295968330`),
 conexión `8c881761-84af-4865-bc97-d4a14b1266b2`, cuenta
@@ -116,11 +119,10 @@ modificar y consultar D1; si la migración o la comprobación falla, el build se
 detiene antes de desplegar el Worker.
 
 1. Crear la migración versionada y probarla sobre D1 local.
-2. Publicar en `staging`; Workers Builds aplica las migraciones de staging,
+2. Respaldar la D1 de producción.
+3. Fusionar a `master`; Workers Builds aplica esas migraciones en producción,
    verifica el historial y despliega.
-3. Validar el Worker alojado y la funcionalidad que depende del nuevo esquema.
-4. Fusionar el mismo commit a `master`; Workers Builds aplica esas migraciones en
-   producción, verifica el historial y despliega.
+4. Validar en producción la funcionalidad que depende del nuevo esquema.
 
 La migración debe ser compatible con el Worker anterior durante el intervalo
 entre cambiar D1 y desplegar código. Para retirar o renombrar columnas, usar una
@@ -129,8 +131,8 @@ destructiva junto con el código que empieza a depender de ella.
 
 ## Verificación al conectar
 
-1. Sólo `master` y `staging` disparan sus respectivos Workers; previews desactivados.
-2. Ejecutar un build para cada rama y comprobar el SHA desplegado.
+1. Solo `master` dispara el Worker; previews desactivados.
+2. Ejecutar un build y comprobar el SHA desplegado.
 3. Confirmar login y panel; producción conserva el recorte.
 4. Verificar que permanecen administradores/colegios y no se cargaron tareas.
 
@@ -144,8 +146,6 @@ Referencias:
 
 - Adaptar la suite E2E heredada a D1/workerd y Firebase; hoy todavía conserva
   partes del runner SQLite anterior.
-- Validar de extremo a extremo en staging el registro de maestro, selección de
-  colegio, documentos R2 y persistencia D1/R2 después de un redeploy.
 - Incorporar una comprobación operativa postdeploy de logs y acceso directo a
   rutas/endpoints restringidos con un usuario no administrador.
 - Medir requests, CPU, lecturas/escrituras D1 y operaciones R2 antes de una

@@ -19,11 +19,11 @@ test("targets locales explícitos y parámetros separados del SQL", () => {
   assert.ok(schoolStatements().length > 10_000);
 });
 
-test("bootstrap remoto explícito: staging/production, SQL escapado, límites y limpieza sin red", async () => {
+test("bootstrap remoto explícito: production, SQL escapado, límites y limpieza sin red", async () => {
   const value = "O'Brien?'); DROP TABLE User; --";
   const statement = insert("School", "codUe", { codUe: "001", name: value });
   assert.ok(remoteBootstrapSql(statement).includes("O''Brien?''"));
-  for (const target of ["staging", "production"]) {
+  for (const target of ["production"]) {
     const options = parseOptions(["--target", target]);
     assert.throws(() => parseOptions(["--target", target], true));
     await assert.rejects(executeStatements(options, [statement]));
