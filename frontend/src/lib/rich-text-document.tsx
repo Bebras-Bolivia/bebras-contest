@@ -2,7 +2,7 @@ import { Fragment, isValidElement, type ReactNode } from "react";
 import type { JSONContent } from "@tiptap/core";
 import { renderInlineText } from "@/lib/rich-text";
 import { clampTaskIndent } from "@/lib/task-blank";
-import { inlineImageHeight, isInlineImageSrc } from "@/lib/task-inline-image";
+import { inlineImageHeight, isInlineImageSrc } from "@/lib/inline-image-rules";
 
 const legacyMarks: Record<string, string> = {
   strong: "bold",

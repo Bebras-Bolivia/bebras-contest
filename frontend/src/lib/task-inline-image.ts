@@ -1,5 +1,13 @@
 import { Node as TiptapNode, type JSONContent } from "@tiptap/core";
 import type { Editor } from "@tiptap/react";
+import {
+  INLINE_IMAGE_HEIGHT,
+  MAX_SIDE,
+  inlineImageHeight,
+  isInlineImageSrc,
+} from "@/lib/inline-image-rules";
+
+export { INLINE_IMAGE_HEIGHT, inlineImageHeight, isInlineImageSrc };
 
 /**
  * Imagen chica dentro del texto, como los dibujos del cuadernillo («Alicia
@@ -7,25 +15,6 @@ import type { Editor } from "@tiptap/react";
  * pasar el backend al proyectar la tarea. Su alto va en `em`, relativo a la
  * letra, para que se vea igual en el editor y en la vista del estudiante.
  */
-const SAFE_SRC = /^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$/i;
-const MAX_SIDE = 256;
-export const INLINE_IMAGE_HEIGHT = { min: 1, max: 4, default: 1.8 };
-
-export function isInlineImageSrc(src: unknown): src is string {
-  return typeof src === "string" && SAFE_SRC.test(src);
-}
-
-export function inlineImageHeight(value: unknown) {
-  if (value === null || value === undefined || value === "")
-    return INLINE_IMAGE_HEIGHT.default;
-  const height = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(height)) return INLINE_IMAGE_HEIGHT.default;
-  return Math.min(
-    INLINE_IMAGE_HEIGHT.max,
-    Math.max(INLINE_IMAGE_HEIGHT.min, Math.round(height * 20) / 20),
-  );
-}
-
 export const TaskInlineImage = TiptapNode.create({
   name: "image",
   group: "inline",

@@ -6,6 +6,7 @@ import {
   ClockIcon,
   ListOrderedIcon,
   MonitorSmartphoneIcon,
+  ScaleIcon,
   UserIcon,
   SaveIcon,
   SendIcon,
@@ -180,6 +181,9 @@ export function ContestIntro({
           <Rule icon={MonitorSmartphoneIcon}>
             Úsalo en un solo dispositivo a la vez: si entras desde otro, este se
             cierra.
+          </Rule>
+          <Rule icon={ScaleIcon}>
+            Resuélvelo con honestidad: copiar o recibir ayuda no es ético.
           </Rule>
         </ul>
       </section>

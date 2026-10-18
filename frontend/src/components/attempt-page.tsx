@@ -1,6 +1,6 @@
 "use client";
 
-import { QuestionSkeleton } from "@/components/page-skeletons";
+import { IntroSkeleton, QuestionSkeleton } from "@/components/page-skeletons";
 import {
   useCallback,
   useEffect,
@@ -179,40 +179,92 @@ export function AttemptPage({
     }
   }, []);
 
-  const load = useCallback(async () => {
-    if (!sessionToken) {
-      setLoading(false);
-      return;
-    }
-    try {
-      const data = previewContestId
-        ? ((await getContestPreview(
-            previewContestId,
-            previewCategory,
-          )) as AttemptState)
-        : await getAttempt();
-      setAttempt(data);
-      syncClock(data.serverNow);
-      answersRef.current = data.answers ?? {};
-      setAnswers(answersRef.current);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "No se pudo cargar.";
+  const [leaving, setLeaving] = useState(false);
+  const previewCache = useRef(new Map<string, AttemptState>());
+  const settledCategory = useRef<string | null>(null);
 
-      if (message.includes("sesión")) {
-        forgetPlaySession();
-        setSessionLost(true);
-      } else {
-        toast.error(message);
+  const load = useCallback(
+    async (fromCache = false) => {
+      if (!sessionToken) {
+        setLoading(false);
+        return;
       }
-    } finally {
-      setLoading(false);
-    }
-  }, [sessionToken, previewContestId, previewCategory, syncClock]);
+      const cached =
+        fromCache && previewCategory
+          ? previewCache.current.get(previewCategory)
+          : undefined;
+      if (cached) {
+        setAttempt(cached);
+        answersRef.current = cached.answers ?? {};
+        setAnswers(answersRef.current);
+        settledCategory.current = previewCategory;
+        setLoading(false);
+        return;
+      }
+      try {
+        const data = previewContestId
+          ? ((await getContestPreview(
+              previewContestId,
+              previewCategory,
+            )) as AttemptState)
+          : await getAttempt();
+        if (previewContestId && data.category) {
+          previewCache.current.set(data.category, data);
+          settledCategory.current = data.category;
+        }
+        setAttempt(data);
+        syncClock(data.serverNow);
+        answersRef.current = data.answers ?? {};
+        setAnswers(answersRef.current);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "No se pudo cargar.";
+
+        if (message.includes("sesión")) {
+          forgetPlaySession();
+          setSessionLost(true);
+        } else {
+          toast.error(message);
+          if (previewContestId && settledCategory.current) {
+            setPreviewCategory(settledCategory.current);
+          }
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    [sessionToken, previewContestId, previewCategory, syncClock],
+  );
 
   useEffect(() => {
-    void load();
+    void load(true);
   }, [load]);
+
+  // Las demás categorías se bajan de fondo para que cambiar de pestaña sea
+  // instantáneo.
+  const categoryList = attempt?.categories;
+  useEffect(() => {
+    if (!previewContestId || !categoryList || categoryList.length < 2) return;
+    let active = true;
+    void (async () => {
+      for (const item of categoryList) {
+        if (!active) return;
+        if (previewCache.current.has(item)) continue;
+        try {
+          const data = (await getContestPreview(
+            previewContestId,
+            item,
+          )) as AttemptState;
+          if (active) previewCache.current.set(item, data);
+        } catch {
+          return;
+        }
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [previewContestId, categoryList]);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -615,30 +667,37 @@ export function AttemptPage({
     const url = new URL(window.location.href);
     url.searchParams.set("categoria", category);
     window.history.replaceState(window.history.state, "", url);
-    setPreviewCategory(category);
+    if (category === previewCategory) return;
+    setLeaving(true);
+    window.setTimeout(() => {
+      setPreviewCategory(category);
+      setLeaving(false);
+    }, 140);
   };
 
   const previewNotice = preview ? (
-    <div>
-      <Button asChild variant="outline" size="sm">
-        <a
-          href={`/desafios/editar?id=${previewContestId}${
-            previewCategory
-              ? `&categoria=${encodeURIComponent(previewCategory)}`
-              : ""
-          }`}
-        >
-          <ArrowLeftIcon data-icon="inline-start" />
-          Volver al desafío
-        </a>
-      </Button>
-    </div>
+    <Button
+      asChild
+      variant="outline"
+      size="icon-sm"
+      className="shrink-0"
+      title="Volver al desafío"
+    >
+      <a
+        aria-label="Volver al desafío"
+        href={`/desafios/editar?id=${previewContestId}${
+          previewCategory
+            ? `&categoria=${encodeURIComponent(previewCategory)}`
+            : ""
+        }`}
+      >
+        <ChevronLeftIcon />
+      </a>
+    </Button>
   ) : null;
 
   if (loading) {
-    return (
-      <QuestionSkeleton />
-    );
+    return <QuestionSkeleton />;
   }
 
   if (sessionLost) {
@@ -668,17 +727,19 @@ export function AttemptPage({
   }
 
   if (attempt.status === "pending") {
+    const shownCategory = previewCategory ?? attempt.category;
+    const switching = preview && shownCategory !== attempt.category;
     const previewTop = preview ? (
-      <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-3">
         {previewNotice}
         {(attempt.categories?.length ?? 0) > 1 && (
           <div
             role="tablist"
             aria-label="Categoría que vas a probar"
-            className="-mx-4 flex gap-5 overflow-x-auto px-4 shadow-[inset_0_-1px_0_var(--border)] sm:mx-0 sm:px-0"
+            className="flex min-w-0 flex-1 gap-5 overflow-x-auto shadow-[inset_0_-1px_0_var(--border)]"
           >
             {attempt.categories!.map((item) => {
-              const selected = item === attempt.category;
+              const selected = item === shownCategory;
               return (
                 <button
                   key={item}
@@ -748,15 +809,44 @@ export function AttemptPage({
       </Alert>
     ) : null;
 
+    if (preview) {
+      return (
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-8">
+          {previewTop}
+          {switching ? (
+            <div className="motion-safe:animate-in motion-safe:duration-200 motion-safe:fade-in-0">
+              <IntroSkeleton />
+            </div>
+          ) : (
+            <div
+              key={attempt.category}
+              className={cn(
+                "transition-opacity duration-150 motion-safe:animate-in motion-safe:duration-300 motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1",
+                leaving && "opacity-0",
+              )}
+            >
+              <ContestIntro
+                attempt={attempt}
+                notice={notice}
+                canStart={attempt.state === "abierta"}
+                starting={starting}
+                onStart={handleStart}
+              />
+            </div>
+          )}
+        </div>
+      );
+    }
+
     return (
       <ContestIntro
         attempt={attempt}
-        top={previewTop ?? studentExit}
+        top={studentExit}
         notice={notice}
         canStart={attempt.state === "abierta"}
         starting={starting}
         onStart={handleStart}
-        onLeave={preview ? undefined : leaveAttempt}
+        onLeave={leaveAttempt}
       />
     );
   }

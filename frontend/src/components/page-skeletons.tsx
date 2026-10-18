@@ -106,3 +106,24 @@ export function RowsSkeleton({
     </div>
   );
 }
+
+/** Portada de un desafío: categoría, título, datos y botón de empezar. */
+export function IntroSkeleton() {
+  return (
+    <div aria-busy className="flex w-full flex-col gap-6">
+      <span className="sr-only">Cargando la categoría...</span>
+      <Bar className="h-4 w-40 opacity-70" />
+      <Bar className="h-12 w-96 max-w-full" />
+      <div className="flex flex-col gap-2">
+        <Bar className="h-4 w-full max-w-xl" />
+        <Bar className="h-4 w-4/5 max-w-lg" />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {Array.from({ length: 3 }, (_, index) => (
+          <Bar key={index} className="h-20" />
+        ))}
+      </div>
+      <Bar className="h-11 w-44" />
+    </div>
+  );
+}
