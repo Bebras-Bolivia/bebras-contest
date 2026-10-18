@@ -2427,7 +2427,47 @@ const TASK_VISIBILITY = {
   privada: { isPractice: false, forTeachers: false },
 } as const;
 
+// La práctica es pública y la abren todos a la vez: lo que se lee de D1 se
+// guarda unos segundos por isolate. Un cambio de visibilidad tarda a lo más
+// ese tiempo en verse.
+const PRACTICE_TTL_MS = 30_000;
+let practiceListCache: {
+  loadedAt: number;
+  tasks: Awaited<ReturnType<typeof readPracticeTasks>>;
+} | null = null;
+const practiceTaskCache = new Map<
+  string,
+  { loadedAt: number; task: PlayTask | null }
+>();
+
 async function loadPracticeTasks() {
+  if (practiceListCache && Date.now() - practiceListCache.loadedAt < PRACTICE_TTL_MS) {
+    return practiceListCache.tasks;
+  }
+  const tasks = await readPracticeTasks();
+  practiceListCache = { loadedAt: Date.now(), tasks };
+  return tasks;
+}
+
+async function loadPracticeTask(id: string) {
+  const cached = practiceTaskCache.get(id);
+  if (cached && Date.now() - cached.loadedAt < PRACTICE_TTL_MS) {
+    return cached.task;
+  }
+  const raw = await prisma.taskDraft.findFirst({
+    where: { id, isPractice: true },
+  });
+  const task = raw ? (deserializeTask(raw) as PlayTask) : null;
+  practiceTaskCache.delete(id);
+  if (practiceTaskCache.size >= 24) {
+    const oldest = practiceTaskCache.keys().next().value;
+    if (oldest) practiceTaskCache.delete(oldest);
+  }
+  practiceTaskCache.set(id, { loadedAt: Date.now(), task });
+  return task;
+}
+
+async function readPracticeTasks() {
   const tasks = await prisma.taskDraft.findMany({
     where: { isPractice: true },
     select: {
@@ -2497,29 +2537,24 @@ app.get("/api/practice/tasks", async (req, res) => {
 });
 
 app.get("/api/practice/tasks/:id", async (req, res) => {
-  const raw = await prisma.taskDraft.findFirst({
-    where: { id: req.params.id, isPractice: true },
-  });
+  const task = await loadPracticeTask(String(req.params.id));
 
-  if (!raw) {
+  if (!task) {
     res.status(404).json({ message: "Tarea no encontrada." });
     return;
   }
 
-  res.json(renderSafeTask({ position: 0 }, deserializeTask(raw)));
+  res.json(renderSafeTask({ position: 0 }, task));
 });
 
 app.post("/api/practice/tasks/:id/check", async (req, res) => {
-  const raw = await prisma.taskDraft.findFirst({
-    where: { id: req.params.id, isPractice: true },
-  });
+  const task = await loadPracticeTask(String(req.params.id));
 
-  if (!raw) {
+  if (!task) {
     res.status(404).json({ message: "Tarea no encontrada." });
     return;
   }
 
-  const task = deserializeTask(raw);
   const payload = req.body?.payload;
   const error = validateTaskAnswer(task, payload);
   if (error) {
@@ -6427,7 +6462,7 @@ app.post("/api/play/practice/:code/enter", async (req, res) => {
   if (mine && playSessionIsLive(mine)) {
     res.status(409).json({
       message:
-        "Ya hay alguien con ese nombre resolviendo la práctica. Si eres tú, espera medio minuto e inténtalo otra vez.",
+        "Ya hay alguien con ese nombre resolviendo la práctica. Si eres tú, espera un minuto e inténtalo otra vez.",
     });
     return;
   }
@@ -7021,8 +7056,8 @@ function findLightTeamBySession(sessionToken: string) {
   });
 }
 
-const PLAY_SESSION_TTL_MS = 30000;
-const PLAY_HEARTBEAT_MS = 10000;
+const PLAY_SESSION_TTL_MS = 70000;
+const PLAY_HEARTBEAT_MS = 30000;
 
 type PlaySessionState = {
   sessionToken: string | null;

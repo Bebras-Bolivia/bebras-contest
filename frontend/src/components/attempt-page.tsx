@@ -556,7 +556,7 @@ export function AttemptPage({
       return;
     }
 
-    const id = setInterval(() => void beat(), 10000);
+    const id = setInterval(() => void beat(), 30000);
     return () => clearInterval(id);
   }, [sessionToken, sessionLost, preview]);
 
