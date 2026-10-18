@@ -19,7 +19,7 @@ import {
   type StoredContest,
 } from "@/lib/contest-schema";
 import { difficultyStyles } from "@/lib/difficulty";
-import { listTasks, mapTaskToHomeItem } from "@/lib/tasks-api";
+import { listTaskSummaries, mapTaskToHomeItem } from "@/lib/tasks-api";
 import {
   NO_FILTERS,
   matches as matchesFilters,
@@ -91,7 +91,7 @@ export function ContestQuestionsPage() {
   useEffect(() => {
     if (!contestId) return;
     let alive = true;
-    void Promise.all([getContest(contestId), listTasks()])
+    void Promise.all([getContest(contestId), listTaskSummaries()])
       .then(([loaded, tasks]) => {
         if (!alive) return;
         const initial = tasksByCategory(loaded);
@@ -276,9 +276,7 @@ export function ContestQuestionsPage() {
   }
 
   if (!contest) {
-    return (
-      <ListPageSkeleton label="Cargando preguntas..." />
-    );
+    return <ListPageSkeleton label="Cargando preguntas..." />;
   }
 
   if (!EDITABLE.includes(contest.state)) {
@@ -415,9 +413,7 @@ export function ContestQuestionsPage() {
                 type="button"
                 aria-pressed={type === value}
                 disabled={total === 0 && type !== value}
-                onClick={() =>
-                  change({ type: type === value ? "all" : value })
-                }
+                onClick={() => change({ type: type === value ? "all" : value })}
                 className={chipClass}
               >
                 {value === "all" ? "Todas" : answerTypeLabels[value]}

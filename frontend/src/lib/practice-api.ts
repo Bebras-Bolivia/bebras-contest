@@ -46,6 +46,32 @@ async function get<T>(path: string) {
   }
 }
 
+// La práctica también está publicada como archivos estáticos: se lee de ahí
+// sin gastar el Worker, y si falta o falla se pide a la API como siempre.
+const CDN_URL = (import.meta.env.PUBLIC_CDN_URL ?? "").replace(/\/$/, "");
+
+/** Igual que en el backend: sin tildes, para que la dirección no cambie. */
+function practiceFileName(name: string) {
+  return name
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+}
+
+async function published<T>(file: string, fallback: string) {
+  if (CDN_URL) {
+    try {
+      const response = await fetch(`${CDN_URL}/practice/${file}`, {
+        signal: AbortSignal.timeout(8000),
+      });
+      if (response.ok) return (await response.json()) as T;
+    } catch {
+      // Sigue con la API.
+    }
+  }
+  return get<T>(fallback);
+}
+
 /** Lo último que se cargó: al volver a una pantalla ya vista se muestra al instante. */
 let cachedCategories: PracticeCategory[] | null = null;
 const cachedTaskLists = new Map<string, PracticeTaskList>();
@@ -59,12 +85,16 @@ export function cachedPracticeTasks(category: string) {
 }
 
 export async function listPracticeCategories() {
-  cachedCategories = await get<PracticeCategory[]>("/api/practice/categories");
+  cachedCategories = await published<PracticeCategory[]>(
+    "categories.json",
+    "/api/practice/categories",
+  );
   return cachedCategories;
 }
 
 export async function listPracticeTasks(category: string) {
-  const list = await get<PracticeTaskList>(
+  const list = await published<PracticeTaskList>(
+    `tasks/${practiceFileName(category)}.json`,
     `/api/practice/tasks?category=${encodeURIComponent(category)}`,
   );
   cachedTaskLists.set(category, list);
@@ -72,7 +102,10 @@ export async function listPracticeTasks(category: string) {
 }
 
 export function getPracticeTask(id: string) {
-  return get<PlayTask>(`/api/practice/tasks/${id}`);
+  return published<PlayTask>(
+    `task/${encodeURIComponent(id)}.json`,
+    `/api/practice/tasks/${id}`,
+  );
 }
 
 export function checkPracticeAnswer(id: string, payload: unknown) {

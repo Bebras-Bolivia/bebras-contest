@@ -18,7 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
   getTask,
-  listTasks,
+  listTaskSummaries,
   mapTaskToHomeItem,
   previewTask,
   previewTaskDraft,
@@ -99,7 +99,8 @@ export function TaskTester() {
           return;
         }
 
-        const task = taskId ? await getTask(taskId) : (await listTasks())[0];
+        const firstId = taskId || (await listTaskSummaries())[0]?.id;
+        const task = firstId ? await getTask(firstId) : undefined;
         if (!task || !active) return;
         const preview = await previewTask(task.id, controller.signal);
         if (!active) return;
@@ -131,7 +132,7 @@ export function TaskTester() {
   useEffect(() => {
     if (!hasCurrent) return;
     let active = true;
-    void listTasks()
+    void listTaskSummaries()
       .then((tasks) => {
         if (!active) return;
         const items = tasks.map(mapTaskToHomeItem);

@@ -2,7 +2,10 @@ import { Fragment, isValidElement, type ReactNode } from "react";
 import type { JSONContent } from "@tiptap/core";
 import { renderInlineText } from "@/lib/rich-text";
 import { clampTaskIndent } from "@/lib/task-blank";
-import { inlineImageHeight, isInlineImageSrc } from "@/lib/inline-image-rules";
+import {
+  inlineImageHeight,
+  isRenderableInlineImageSrc,
+} from "@/lib/inline-image-rules";
 
 const legacyMarks: Record<string, string> = {
   strong: "bold",
@@ -76,7 +79,7 @@ export function renderRichTextDocument(
     if (node.type === "hardBreak") return <br key={key} />;
     if (node.type === "image") {
       const src = node.attrs?.src;
-      if (!isInlineImageSrc(src)) return null;
+      if (!isRenderableInlineImageSrc(src)) return null;
       const alt = typeof node.attrs?.alt === "string" ? node.attrs.alt : "";
       return (
         <img

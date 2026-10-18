@@ -24,6 +24,9 @@ const env = {
   ...firebaseEnv,
   PUBLIC_REGISTRATION_ONLY: "false",
   PUBLIC_API_BASE_URL: "",
+  // Práctica e imágenes publicadas en el bucket público (ver wrangler.jsonc).
+  PUBLIC_CDN_URL:
+    target === "production" ? "https://cdn.bebrasbolivia.org" : "",
 };
 for (const command of [
   ["bun", "run", "--cwd", "backend", "prisma:generate"],

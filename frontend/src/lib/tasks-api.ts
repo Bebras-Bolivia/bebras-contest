@@ -25,6 +25,14 @@ export function listTasks() {
   return request<StoredTask[]>("/api/tasks");
 }
 
+/**
+ * Las tareas sin enunciado, imágenes ni respuestas: lo que necesitan las
+ * listas. La tarea completa se pide con `getTask` al abrirla.
+ */
+export function listTaskSummaries() {
+  return request<StoredTask[]>("/api/tasks?resumen=1");
+}
+
 export function getTask(taskId: string) {
   return request<StoredTask>(`/api/tasks/${taskId}`);
 }

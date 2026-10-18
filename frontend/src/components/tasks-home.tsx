@@ -36,7 +36,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  listTasks,
+  listTaskSummaries,
   mapTaskToHomeItem,
   removeTask,
   setTaskVisibility,
@@ -216,7 +216,7 @@ export function TasksHome() {
   useEffect(() => {
     let active = true;
 
-    void listTasks()
+    void listTaskSummaries()
       .then((loadedTasks) => {
         if (!active) {
           return;

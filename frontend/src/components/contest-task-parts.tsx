@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { PencilIcon } from "lucide-react";
 
 import {
@@ -8,6 +9,7 @@ import {
   type TaskDifficulty,
 } from "@/lib/contest-schema";
 import { difficultyStyles } from "@/lib/difficulty";
+import { getTask } from "@/lib/tasks-api";
 import {
   parseMultipleChoiceCorrectness,
   type StoredTask,
@@ -26,6 +28,7 @@ import { TaskContentRenderer } from "@/components/task-content-renderer";
 import { InteractiveTryout } from "@/components/interactive-player";
 import { TaskExplanation } from "@/components/task-explanation";
 import { TaskOrigin } from "@/components/task-origin";
+import { RowsSkeleton } from "@/components/page-skeletons";
 
 export function difficultyOf(task: StoredTask, category: string) {
   return taskDifficultyForCategory(task.difficulties, category);
@@ -71,6 +74,23 @@ export function TaskPreviewDialog({
   const correct = task
     ? parseMultipleChoiceCorrectness(task.correctAnswerId).correctOptionIds
     : [];
+  // Las listas traen la tarea sin su contenido: se pide completa al abrirla.
+  const [full, setFull] = useState<StoredTask | null>(null);
+  useEffect(() => {
+    if (!task) return;
+    let active = true;
+    void getTask(task.id)
+      .then((loaded) => {
+        if (active) setFull(loaded);
+      })
+      .catch(() => {
+        if (active) setFull(task);
+      });
+    return () => {
+      active = false;
+    };
+  }, [task]);
+  const content = full && full.id === task?.id ? full : null;
 
   return (
     <Dialog
@@ -96,22 +116,28 @@ export function TaskPreviewDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
-          {task && (
+          {task && !content && (
+            <RowsSkeleton rows={5} label="Cargando la pregunta..." />
+          )}
+          {content && (
             <>
-              <TaskContentRenderer blocks={task.bodyBlocks} className="gap-4" />
-              {task.challengeBlocks.length > 0 && (
+              <TaskContentRenderer
+                blocks={content.bodyBlocks}
+                className="gap-4"
+              />
+              {content.challengeBlocks.length > 0 && (
                 <TaskContentRenderer
-                  blocks={task.challengeBlocks}
+                  blocks={content.challengeBlocks}
                   className="gap-4"
                 />
               )}
-              {task.answerType === "interactive" && (
-                <InteractiveTryout config={task.answerConfig} />
+              {content.answerType === "interactive" && (
+                <InteractiveTryout config={content.answerConfig} />
               )}
-              {task.answerType === "multiple_choice" &&
-                task.answers.length > 0 && (
+              {content.answerType === "multiple_choice" &&
+                content.answers.length > 0 && (
                   <ul className="flex flex-col gap-2">
-                    {task.answers.map((answer) => (
+                    {content.answers.map((answer) => (
                       <li
                         key={answer.id}
                         className={cn(
@@ -130,8 +156,8 @@ export function TaskPreviewDialog({
                     ))}
                   </ul>
                 )}
-              {task.explanationBlocks?.length > 0 && (
-                <TaskExplanation blocks={task.explanationBlocks} />
+              {content.explanationBlocks?.length > 0 && (
+                <TaskExplanation blocks={content.explanationBlocks} />
               )}
             </>
           )}

@@ -73,7 +73,7 @@ import {
   dragDropPrimaryPlacements,
   dragDropSignature,
 } from "@/lib/drag-drop-grading";
-import { createTask, listTasks, updateTask } from "@/lib/tasks-api";
+import { createTask, listTaskSummaries, updateTask } from "@/lib/tasks-api";
 import {
   clearTaskDraftForTest,
   readTaskDraftForTest,
@@ -172,7 +172,7 @@ async function automaticSourceCode(state: FormState, taskId?: string) {
   if (!country || !/^\d{4}$/.test(year)) return "";
   const prefix = `${year}-${country}-`;
   if (state.sourceTaskCode.startsWith(prefix)) return state.sourceTaskCode;
-  const tasks = await listTasks().catch(() => []);
+  const tasks = await listTaskSummaries().catch(() => []);
   const numbers = tasks
     .filter((task) => task.id !== taskId)
     .map((task) => task.sourceTaskCode ?? "")

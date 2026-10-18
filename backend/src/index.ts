@@ -1,5 +1,11 @@
 import { env } from "cloudflare:workers";
 import { httpServerHandler } from "cloudflare:node";
+import {
+  TASK_IMAGE_FILE,
+  externalizeTaskImages,
+  taskImageKey,
+  type ImageStore,
+} from "./lib/task-images";
 import express from "express";
 import multer from "multer";
 import { randomUUID } from "node:crypto";
@@ -83,6 +89,35 @@ function currentDate() {
     return new Date(e2eCurrentDate);
   }
   return new Date();
+}
+
+type PublicAssetsEnv = { PUBLIC_ASSETS?: R2Bucket; PUBLIC_ASSETS_URL?: string };
+
+function publicAssets() {
+  return env as Cloudflare.Env & PublicAssetsEnv;
+}
+
+/** El bucket público con su dominio propio, si este entorno lo tiene. */
+function publicStore(): ImageStore | null {
+  const assets = publicAssets();
+  const base = assets.PUBLIC_ASSETS_URL?.replace(/\/$/, "");
+  return assets.PUBLIC_ASSETS && base
+    ? { bucket: assets.PUBLIC_ASSETS, baseUrl: `${base}/task-images` }
+    : null;
+}
+
+/** Sin dominio propio (local, staging) las imágenes salen por el Worker. */
+function imageStore(req: express.Request): ImageStore | null {
+  const assets = publicAssets();
+  if (!assets.PUBLIC_ASSETS) return null;
+  const published = publicStore();
+  if (published) return published;
+  const host = req.get("host") ?? "";
+  const scheme = /^(localhost|127\.0\.0\.1)(:|$)/.test(host) ? "http" : "https";
+  return {
+    bucket: assets.PUBLIC_ASSETS,
+    baseUrl: `${scheme}://${host}/api/task-images`,
+  };
 }
 
 function computeContestState(
@@ -2484,29 +2519,20 @@ async function readPracticeTasks() {
   }));
 }
 
-app.get("/api/practice/categories", async (_req, res) => {
-  const tasks = await loadPracticeTasks();
+type PracticeRow = Awaited<ReturnType<typeof readPracticeTasks>>[number];
 
-  const categories = PRACTICE_CATEGORIES.map((category) => ({
+function practiceCategoriesPayload(tasks: PracticeRow[]) {
+  return PRACTICE_CATEGORIES.map((category) => ({
     name: category.name,
     age: category.age,
     count: tasks.filter((task) => taskMatchesCategory(task, category)).length,
   })).filter((category) => category.count > 0);
+}
 
-  res.json(categories);
-});
-
-app.get("/api/practice/tasks", async (req, res) => {
-  const categoryName =
-    typeof req.query.category === "string" ? req.query.category : "";
-  const category = PRACTICE_CATEGORIES.find((c) => c.name === categoryName);
-
-  if (!category) {
-    res.status(404).json({ message: "Categoría no encontrada." });
-    return;
-  }
-
-  const tasks = await loadPracticeTasks();
+function practiceListPayload(
+  category: (typeof PRACTICE_CATEGORIES)[number],
+  tasks: PracticeRow[],
+) {
   const range = category.ranges[0];
   const rank = { easy: 0, medium: 1, hard: 2 } as Record<string, number>;
   const orderOf = new Map(
@@ -2532,8 +2558,24 @@ app.get("/api/practice/tasks", async (req, res) => {
           numeric: true,
         }),
     );
+  return { category: category.name, age: category.age, tasks: rows };
+}
 
-  res.json({ category: category.name, age: category.age, tasks: rows });
+app.get("/api/practice/categories", async (_req, res) => {
+  res.json(practiceCategoriesPayload(await loadPracticeTasks()));
+});
+
+app.get("/api/practice/tasks", async (req, res) => {
+  const categoryName =
+    typeof req.query.category === "string" ? req.query.category : "";
+  const category = PRACTICE_CATEGORIES.find((c) => c.name === categoryName);
+
+  if (!category) {
+    res.status(404).json({ message: "Categoría no encontrada." });
+    return;
+  }
+
+  res.json(practiceListPayload(category, await loadPracticeTasks()));
 });
 
 app.get("/api/practice/tasks/:id", async (req, res) => {
@@ -2544,8 +2586,118 @@ app.get("/api/practice/tasks/:id", async (req, res) => {
     return;
   }
 
-  res.json(renderSafeTask({ position: 0 }, task));
+  res.json(
+    await externalizeTaskImages(
+      renderSafeTask({ position: 0 }, task),
+      imageStore(req),
+    ),
+  );
 });
+
+/** Sin tildes: el frontend arma la misma dirección. */
+function practiceFileName(name: string) {
+  return name
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+}
+
+/**
+ * La práctica también se publica como archivos en el bucket público: el sitio
+ * la lee de ahí sin pasar por el Worker. Se regenera cuando cambia el conjunto
+ * de tareas de práctica (huella de ids y fechas), por cron y al editar tareas.
+ */
+async function refreshPracticeSnapshot(force = false) {
+  const store = publicStore();
+  if (!store) return;
+  const blocked = String(env.REGISTRATION_ONLY) === "true";
+  const row = await db()
+    .prepare(
+      `SELECT group_concat("id" || ':' || "updatedAt", ',') AS "print"
+      FROM (SELECT "id", "updatedAt" FROM "TaskDraft" WHERE "isPractice" = 1 ORDER BY "id")`,
+    )
+    .first<{ print: string | null }>();
+  const print = blocked ? "bloqueada" : `v1|${row?.print ?? ""}`;
+  const current = await store.bucket.get("practice/huella.txt");
+  const previous = current ? await current.text() : "";
+  if (!force && previous === print) return;
+  // Solo se vuelve a escribir la tarea que cambió desde la última vez.
+  const unchanged = new Set(
+    force || !previous.startsWith("v1|") ? [] : previous.slice(3).split(","),
+  );
+
+  const json = (body: unknown) => ({
+    body: JSON.stringify(body),
+    options: {
+      httpMetadata: {
+        contentType: "application/json; charset=utf-8",
+        cacheControl: "public, max-age=60",
+      },
+    },
+  });
+  const keep = new Set<string>();
+  const put = async (key: string, body: unknown) => {
+    keep.add(key);
+    const file = json(body);
+    await store.bucket.put(key, file.body, file.options);
+  };
+
+  if (!blocked) {
+    const tasks = await readPracticeTasks();
+    await put("practice/categories.json", practiceCategoriesPayload(tasks));
+    for (const category of PRACTICE_CATEGORIES) {
+      await put(
+        `practice/tasks/${practiceFileName(category.name)}.json`,
+        practiceListPayload(category, tasks),
+      );
+    }
+    const stamps = new Map(
+      (row?.print ?? "")
+        .split(",")
+        .filter(Boolean)
+        .map((entry) => [entry.slice(0, entry.indexOf(":")), entry]),
+    );
+    for (const { id } of tasks) {
+      const key = `practice/task/${encodeURIComponent(id)}.json`;
+      if (unchanged.has(stamps.get(id) ?? "")) {
+        keep.add(key);
+        continue;
+      }
+      const raw = await prisma.taskDraft.findFirst({
+        where: { id, isPractice: true },
+      });
+      if (!raw) continue;
+      await put(
+        key,
+        await externalizeTaskImages(
+          renderSafeTask({ position: 0 }, deserializeTask(raw) as PlayTask),
+          store,
+        ),
+      );
+    }
+  }
+
+  let cursor: string | undefined;
+  do {
+    const page = await store.bucket.list({ prefix: "practice/", cursor });
+    const stale = page.objects
+      .map((object) => object.key)
+      .filter((key) => !keep.has(key) && key !== "practice/huella.txt");
+    if (stale.length) await store.bucket.delete(stale);
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+
+  await store.bucket.put("practice/huella.txt", print);
+}
+
+/** Tras editar tareas: la práctica publicada no debe quedar atrasada. */
+async function refreshPracticeSnapshotQuietly() {
+  try {
+    await refreshPracticeSnapshot();
+  } catch (error) {
+    console.error("No se pudo publicar la práctica", error);
+  }
+}
 
 app.post("/api/practice/tasks/:id/check", async (req, res) => {
   const task = await loadPracticeTask(String(req.params.id));
@@ -2565,8 +2717,35 @@ app.post("/api/practice/tasks/:id/check", async (req, res) => {
 
   res.json({
     correct,
-    explanationBlocks: task.explanationBlocks,
+    explanationBlocks: await externalizeTaskImages(
+      task.explanationBlocks,
+      imageStore(req),
+    ),
   });
+});
+
+app.get("/api/task-images/:file", async (req, res) => {
+  const file = String(req.params.file);
+  const bucket = publicAssets().PUBLIC_ASSETS;
+  const object =
+    bucket && TASK_IMAGE_FILE.test(file)
+      ? await bucket.get(taskImageKey(file))
+      : null;
+
+  if (!object) {
+    res.status(404).json({ message: "Imagen no encontrada." });
+    return;
+  }
+
+  res.setHeader(
+    "Content-Type",
+    object.httpMetadata?.contentType ?? "application/octet-stream",
+  );
+  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.send(Buffer.from(await object.arrayBuffer()));
 });
 
 app.get("/api/interactive/engines/:name/:file", async (req, res) => {
@@ -3056,7 +3235,43 @@ app.delete("/api/practices/:id", async (req, res) => {
 
 // Todas las tareas pesan decenas de MB (imágenes y tareas interactivas): se
 // leen y serializan de a pocas para no pasar el límite de memoria del Worker.
-app.get("/api/tasks", async (_req, res) => {
+app.get("/api/tasks", async (req, res) => {
+  // Las listas solo muestran datos de cada tarea: sin enunciados ni imágenes
+  // la respuesta baja de decenas de MB a unos KB.
+  if (req.query.resumen === "1") {
+    const rows = await prisma.taskDraft.findMany({
+      orderBy: { updatedAt: "desc" },
+      omit: {
+        bodyBlocks: true,
+        challengeBlocks: true,
+        answerConfig: true,
+        answerKey: true,
+        answers: true,
+        shortAnswer: true,
+        dragDropBackground: true,
+        dragDropItems: true,
+        explanationBlocks: true,
+      },
+    });
+    res.json(
+      rows.map((row) =>
+        deserializeTask({
+          ...row,
+          bodyBlocks: "[]",
+          challengeBlocks: "[]",
+          answerConfig: "{}",
+          answerKey: "{}",
+          answers: "[]",
+          shortAnswer: "",
+          dragDropBackground: "null",
+          dragDropItems: "[]",
+          explanationBlocks: "[]",
+        }),
+      ),
+    );
+    return;
+  }
+
   const ids = await prisma.taskDraft.findMany({
     orderBy: { updatedAt: "desc" },
     select: { id: true },
@@ -3119,6 +3334,7 @@ app.post("/api/tasks", async (req, res) => {
     },
   });
 
+  await refreshPracticeSnapshotQuietly();
   res.status(201).json(deserializeTask(task));
 });
 
@@ -3277,6 +3493,7 @@ app.put("/api/tasks/:id", async (req, res) => {
     },
   });
 
+  await refreshPracticeSnapshotQuietly();
   res.json(deserializeTask(task));
 });
 
@@ -3293,6 +3510,7 @@ app.patch("/api/tasks/:id/visibility", async (req, res) => {
     data: TASK_VISIBILITY[visibility as keyof typeof TASK_VISIBILITY],
     select: { id: true, isPractice: true, forTeachers: true },
   });
+  await refreshPracticeSnapshotQuietly();
   res.json(task);
 });
 
@@ -3305,6 +3523,7 @@ app.patch("/api/tasks/:id/practice", async (req, res) => {
     },
     select: { id: true, isPractice: true },
   });
+  await refreshPracticeSnapshotQuietly();
   res.json(task);
 });
 
@@ -3326,6 +3545,7 @@ app.delete("/api/tasks/:id", async (req, res) => {
     },
   });
 
+  await refreshPracticeSnapshotQuietly();
   res.status(204).send();
 });
 
@@ -3654,7 +3874,7 @@ app.get("/api/contests/:id/preview", async (req, res) => {
     showScoreOnSubmit: contest.showScoreOnSubmit,
     showFeedbackOnSubmit: contest.showFeedbackOnSubmit,
     showSolutionsOnSubmit: contest.showSolutionsOnSubmit,
-    tasks,
+    tasks: await externalizeTaskImages(tasks, imageStore(req)),
     answers: {},
     result: null,
   });
@@ -3719,7 +3939,7 @@ app.post("/api/contests/:id/preview/score", async (req, res) => {
     correctCount,
     answeredCount,
     taskCount: categoryTasks.length,
-    tasks,
+    tasks: await externalizeTaskImages(tasks, imageStore(req)),
   });
 });
 
@@ -7591,9 +7811,10 @@ const playAttemptHandler: express.RequestHandler = async (req, res) => {
     ? await prisma.result.findUnique({ where: { attemptId: attempt.id } })
     : null;
 
+  const projectedTasks = await externalizeTaskImages(tasks, imageStore(req));
   let tasksJson = sharedTasks;
   if (sharedTasksKey && !tasksJson) {
-    tasksJson = JSON.stringify(tasks);
+    tasksJson = JSON.stringify(projectedTasks);
     if (playTasksJsonCache.size >= 4) {
       const oldest = playTasksJsonCache.keys().next().value;
       if (oldest) playTasksJsonCache.delete(oldest);
@@ -7639,7 +7860,7 @@ const playAttemptHandler: express.RequestHandler = async (req, res) => {
     showTotalScore: visible.score,
     tasks: tasksJson
       ? (playTasksPlaceholder ||= `__bebras_play_tasks_${randomUUID()}__`)
-      : tasks,
+      : projectedTasks,
     answers,
     result: result
       ? {
@@ -7935,4 +8156,13 @@ app.use(async (error: unknown, req: express.Request, res: express.Response, next
 });
 
 app.listen(3000);
-export default httpServerHandler({ port: 3000 });
+const server = httpServerHandler({ port: 3000 });
+
+export default {
+  ...server,
+  // Cada cinco minutos: publica la práctica si cambió algo que no pasó por
+  // las rutas de tareas (scripts de carga, cambios directos en D1).
+  async scheduled(_controller: ScheduledController, _env: unknown, ctx: ExecutionContext) {
+    ctx.waitUntil(withRequestPrisma(() => refreshPracticeSnapshotQuietly()));
+  },
+};

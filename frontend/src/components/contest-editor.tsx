@@ -31,7 +31,7 @@ import {
   type QuestionDisplayMode,
   type StoredContest,
 } from "@/lib/contest-schema";
-import { listTasks } from "@/lib/tasks-api";
+import { listTaskSummaries } from "@/lib/tasks-api";
 import { PAPER_BLOCKED_INTERACTIVE } from "@/lib/interactive";
 import { type StoredTask } from "@/lib/task-schema";
 import { cn } from "@/lib/utils";
@@ -490,7 +490,7 @@ export function ContestEditor() {
 
     let alive = true;
 
-    void Promise.all([getContest(contestId), listTasks()])
+    void Promise.all([getContest(contestId), listTaskSummaries()])
       .then(([contest, tasks]) => {
         if (!alive) return;
         const loaded = formFromContest(contest);
@@ -648,9 +648,7 @@ export function ContestEditor() {
   }
 
   if (!form) {
-    return (
-      <FormPageSkeleton label="Cargando desafío..." />
-    );
+    return <FormPageSkeleton label="Cargando desafío..." />;
   }
 
   const update = (patch: Partial<Form>) =>
