@@ -2459,7 +2459,7 @@ async function loadPracticeTask(id: string) {
   });
   const task = raw ? (deserializeTask(raw) as PlayTask) : null;
   practiceTaskCache.delete(id);
-  if (practiceTaskCache.size >= 24) {
+  if (practiceTaskCache.size >= 12) {
     const oldest = practiceTaskCache.keys().next().value;
     if (oldest) practiceTaskCache.delete(oldest);
   }
@@ -3054,14 +3054,27 @@ app.delete("/api/practices/:id", async (req, res) => {
   res.status(204).end();
 });
 
+// Todas las tareas pesan decenas de MB (imágenes y tareas interactivas): se
+// leen y serializan de a pocas para no pasar el límite de memoria del Worker.
 app.get("/api/tasks", async (_req, res) => {
-  const tasks = await prisma.taskDraft.findMany({
-    orderBy: {
-      updatedAt: "desc",
-    },
+  const ids = await prisma.taskDraft.findMany({
+    orderBy: { updatedAt: "desc" },
+    select: { id: true },
   });
+  const parts: string[] = [];
+  for (let start = 0; start < ids.length; start += 8) {
+    const chunk = ids.slice(start, start + 8).map((row) => row.id);
+    const rows = await prisma.taskDraft.findMany({
+      where: { id: { in: chunk } },
+    });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    for (const id of chunk) {
+      const row = byId.get(id);
+      if (row) parts.push(JSON.stringify(deserializeTask(row)));
+    }
+  }
 
-  res.json(tasks.map(deserializeTask));
+  res.type("application/json").send(`[${parts.join(",")}]`);
 });
 
 app.get("/api/tasks/:id", async (req, res) => {
@@ -3346,16 +3359,7 @@ app.get("/api/contests/:id", async (req, res) => {
     where: {
       id: req.params.id,
     },
-    include: {
-      tasks: {
-        orderBy: {
-          position: "asc",
-        },
-        include: {
-          taskDraft: true,
-        },
-      },
-    },
+    include: { tasks: { include: { taskDraft: { select: taskSummarySelect } } } },
   });
 
   if (!contest) {
@@ -3576,12 +3580,23 @@ app.put("/api/contests/:id", async (req, res) => {
   res.json(deserializeContest(contest));
 });
 
-const contestPreviewInclude = {
-  tasks: {
-    orderBy: { position: "asc" as const },
-    include: { taskDraft: true },
-  },
-};
+/**
+ * Solo se leen las preguntas de la categoría que se prueba: el desafío entero,
+ * con sus imágenes y tareas interactivas, no cabe en la memoria del Worker.
+ */
+async function loadContestPreview(contestId: string, requested: unknown) {
+  const contest = await prisma.contest.findUnique({ where: { id: contestId } });
+  if (!contest) return null;
+  const category = previewCategory(contest, requested);
+  const categoryTasks = category
+    ? await prisma.contestTask.findMany({
+        where: { contestId, category },
+        orderBy: { position: "asc" },
+        include: { taskDraft: true },
+      })
+    : [];
+  return { contest, category, categoryTasks };
+}
 
 /** La categoría pedida, o la primera del desafío. */
 function previewCategory(contest: { categories: string }, requested: unknown) {
@@ -3597,18 +3612,17 @@ function previewCategory(contest: { categories: string }, requested: unknown) {
  * probarlo no deja rastro en los datos del concurso.
  */
 app.get("/api/contests/:id/preview", async (req, res) => {
-  const contest = await prisma.contest.findUnique({
-    where: { id: req.params.id },
-    include: contestPreviewInclude,
-  });
+  const preview = await loadContestPreview(
+    String(req.params.id),
+    req.query.categoria,
+  );
 
-  if (!contest) {
+  if (!preview) {
     res.status(404).json({ message: "Contest not found" });
     return;
   }
 
-  const category = previewCategory(contest, req.query.categoria);
-  const categoryTasks = tasksOfCategory(contest.tasks, category);
+  const { contest, category, categoryTasks } = preview;
   const tasks = categoryTasks.map((contestTask) =>
     renderSafeTask(
       contestTask,
@@ -3651,25 +3665,22 @@ app.get("/api/contests/:id/preview", async (req, res) => {
  * intento real, pero sin guardar nada.
  */
 app.post("/api/contests/:id/preview/score", async (req, res) => {
-  const contest = await prisma.contest.findUnique({
-    where: { id: req.params.id },
-    include: contestPreviewInclude,
-  });
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const preview = await loadContestPreview(
+    String(req.params.id),
+    body.category,
+  );
 
-  if (!contest) {
+  if (!preview) {
     res.status(404).json({ message: "Contest not found" });
     return;
   }
 
-  const body = (req.body ?? {}) as Record<string, unknown>;
   const answers = (
     body.answers && typeof body.answers === "object" ? body.answers : {}
   ) as Record<string, unknown>;
 
-  const categoryTasks = tasksOfCategory(
-    contest.tasks,
-    previewCategory(contest, body.category),
-  );
+  const { categoryTasks } = preview;
   let totalScore = initialScoreOf(categoryTasks);
   let correctCount = 0;
   let answeredCount = 0;
@@ -6753,7 +6764,7 @@ async function recomputeRanking(contestId: string) {
 type ContestTaskRow = Prisma.ContestTaskGetPayload<{
   include: { taskDraft: true };
 }>;
-type LoadedContestTask = ContestTaskRow & { play: PlayTask };
+type LoadedContestTask = Omit<ContestTaskRow, "taskDraft"> & { play: PlayTask };
 
 const CONTEST_TASKS_TTL_MS = 30_000;
 const contestTasksCache = new Map<
@@ -6785,9 +6796,10 @@ async function contestTasksFor(contest: { id: string; updatedAt: Date }) {
     orderBy: { position: "asc" },
     include: { taskDraft: true },
   });
-  const tasks = rows.map((row) => ({
+  // El borrador crudo no se guarda: duplicaría en memoria cada imagen.
+  const tasks = rows.map(({ taskDraft, ...row }) => ({
     ...row,
-    play: deserializeTask(row.taskDraft) as PlayTask,
+    play: deserializeTask(taskDraft) as PlayTask,
   }));
 
   contestTasksCache.delete(contest.id);
@@ -7054,6 +7066,87 @@ function findLightTeamBySession(sessionToken: string) {
     where: { sessionToken },
     include: playTeamLightInclude,
   });
+}
+
+type AnswerTeam = {
+  id: string;
+  sessionToken: string | null;
+  sessionSeenAt: Date | null;
+  grade: string | null;
+  attempt: {
+    id: string;
+    status: string;
+    mode: string;
+    endsAt: Date | null;
+  } | null;
+  group: {
+    contest: Parameters<typeof contestStateAt>[1] & {
+      id: string;
+      updatedAt: Date;
+      categories: string;
+    };
+  };
+};
+
+function sqlDate(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const date = new Date(value as string | number);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * Guardar una respuesta es lo más frecuente durante la prueba: equipo,
+ * intento y desafío salen de una sola sentencia en vez de las cuatro de Prisma.
+ */
+async function findAnswerTeamBySession(
+  sessionToken: string,
+): Promise<AnswerTeam | null> {
+  const row = await db()
+    .prepare(
+      `SELECT t."id", t."sessionToken", t."sessionSeenAt", t."grade",
+        a."id" AS "attemptId", a."status" AS "attemptStatus", a."mode" AS "attemptMode", a."endsAt" AS "attemptEndsAt",
+        c."id" AS "contestId", c."updatedAt", c."categories", c."publishedAt", c."suspendedAt",
+        c."consolidatedAt", c."resultsPublishedAt", c."registrationStartsAt", c."registrationEndsAt",
+        c."startsAt", c."endsAt", c."isPractice"
+      FROM "Team" t
+      JOIN "ContestGroup" g ON g."id" = t."groupId"
+      JOIN "Contest" c ON c."id" = g."contestId"
+      LEFT JOIN "Attempt" a ON a."teamId" = t."id"
+      WHERE t."sessionToken" = ?`,
+    )
+    .bind(sessionToken)
+    .first<Record<string, unknown>>();
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    sessionToken: (row.sessionToken as string | null) ?? null,
+    sessionSeenAt: sqlDate(row.sessionSeenAt),
+    grade: (row.grade as string | null) ?? null,
+    attempt: row.attemptId
+      ? {
+          id: String(row.attemptId),
+          status: String(row.attemptStatus),
+          mode: String(row.attemptMode),
+          endsAt: sqlDate(row.attemptEndsAt),
+        }
+      : null,
+    group: {
+      contest: {
+        id: String(row.contestId),
+        updatedAt: sqlDate(row.updatedAt) ?? new Date(0),
+        categories: String(row.categories ?? "[]"),
+        publishedAt: sqlDate(row.publishedAt),
+        suspendedAt: sqlDate(row.suspendedAt),
+        consolidatedAt: sqlDate(row.consolidatedAt),
+        resultsPublishedAt: sqlDate(row.resultsPublishedAt),
+        registrationStartsAt: sqlDate(row.registrationStartsAt),
+        registrationEndsAt: sqlDate(row.registrationEndsAt),
+        startsAt: sqlDate(row.startsAt),
+        endsAt: sqlDate(row.endsAt),
+        isPractice: Boolean(row.isPractice),
+      },
+    },
+  };
 }
 
 const PLAY_SESSION_TTL_MS = 70000;
@@ -7466,7 +7559,16 @@ const playAttemptHandler: express.RequestHandler = async (req, res) => {
   // Antes de empezar basta saber cuántas preguntas son: el enunciado completo
   // (con sus imágenes) pesa y la pantalla de espera se consulta seguido.
   const categoryTasks = tasksOfCategory(contestTasks, category);
-  const tasks = (attempt.status === "pending" ? [] : categoryTasks).map((contestTask) => {
+  // Sin orden al azar ni resultados por estudiante, las preguntas proyectadas
+  // son las mismas para toda la categoría: se arman y serializan una sola vez.
+  const sharedTasksKey =
+    attempt.status !== "pending" && !contest.shuffleOptions && !showResults
+      ? `${contest.id}:${contest.updatedAt.toISOString()}:${category}:${visible.solutions}`
+      : null;
+  const sharedTasks = sharedTasksKey
+    ? playTasksJsonCache.get(sharedTasksKey)
+    : undefined;
+  const tasks = (attempt.status === "pending" || sharedTasks ? [] : categoryTasks).map((contestTask) => {
     const task = contestTask.play;
     const safe: ReturnType<typeof renderSafeTask> & {
       correct?: boolean | null;
@@ -7489,7 +7591,17 @@ const playAttemptHandler: express.RequestHandler = async (req, res) => {
     ? await prisma.result.findUnique({ where: { attemptId: attempt.id } })
     : null;
 
-  res.json({
+  let tasksJson = sharedTasks;
+  if (sharedTasksKey && !tasksJson) {
+    tasksJson = JSON.stringify(tasks);
+    if (playTasksJsonCache.size >= 4) {
+      const oldest = playTasksJsonCache.keys().next().value;
+      if (oldest) playTasksJsonCache.delete(oldest);
+    }
+    playTasksJsonCache.set(sharedTasksKey, tasksJson);
+  }
+
+  const body = {
     contestTitle: contest.title,
     // Hora del servidor: la cuenta regresiva no depende del reloj del equipo.
     serverNow: currentDate().toISOString(),
@@ -7525,7 +7637,9 @@ const playAttemptHandler: express.RequestHandler = async (req, res) => {
     showFeedback: visible.feedback,
     showSolutions: visible.solutions,
     showTotalScore: visible.score,
-    tasks,
+    tasks: tasksJson
+      ? (playTasksPlaceholder ||= `__bebras_play_tasks_${randomUUID()}__`)
+      : tasks,
     answers,
     result: result
       ? {
@@ -7535,8 +7649,26 @@ const playAttemptHandler: express.RequestHandler = async (req, res) => {
           rankPosition: resultsPublished ? result.rankPosition : null,
         }
       : null,
-  });
+  };
+
+  if (!tasksJson) {
+    res.json(body);
+    return;
+  }
+  const json = JSON.stringify(body);
+  const at = json.indexOf(`"${playTasksPlaceholder}"`);
+  res
+    .type("application/json")
+    .send(
+      json.slice(0, at) +
+        tasksJson +
+        json.slice(at + playTasksPlaceholder.length + 2),
+    );
 };
+
+// Se crea en la primera petición: Workers no deja generar azar al cargar.
+let playTasksPlaceholder = "";
+const playTasksJsonCache = new Map<string, string>();
 
 app.get("/api/play/attempt", playAttemptHandler);
 app.get("/api/play/attempt/:personalCode", playAttemptHandler);
@@ -7549,10 +7681,10 @@ app.post("/api/play/answer", async (req, res) => {
   const taskId = typeof req.body?.taskId === "string" ? req.body.taskId : "";
   const payload = req.body?.payload ?? null;
 
-  const auth = await authorizePlay(
+  const auth = await authorizePlay<AnswerTeam>(
     req,
     personalCode,
-    findLightTeamBySession,
+    findAnswerTeamBySession,
     findLightTeamForPlay,
   );
 

@@ -170,6 +170,8 @@ export function AttemptPage({
   const saveQueues = useRef<Record<string, Promise<void>>>({});
   const answersRef = useRef<Record<string, unknown>>({});
   const submittedRef = useRef(false);
+  const lastSavedAt = useRef(0);
+  const skippedBeats = useRef(0);
   const automaticFinishAttemptedRef = useRef(false);
 
   const syncClock = useCallback((serverNow?: string) => {
@@ -362,6 +364,7 @@ export function AttemptPage({
       .then(() => saveAnswerWithRetry(taskId, payload, preview))
       .then(
         () => {
+          lastSavedAt.current = Date.now();
           failedSaves.current.delete(taskId);
           setUnsaved(failedSaves.current.size > 0);
         },
@@ -382,12 +385,38 @@ export function AttemptPage({
     if (saveTimers.current[taskId]) {
       clearTimeout(saveTimers.current[taskId]);
     }
-    const delay = remaining <= 10000 ? 0 : 500;
+    // Se espera a que deje de tocar la pregunta: arrastrar o escribir genera
+    // muchos cambios y basta con guardar el último.
+    const delay = remaining <= 10000 ? 0 : 2500;
     saveTimers.current[taskId] = setTimeout(() => {
       delete saveTimers.current[taskId];
       void queueSave(taskId, payload).catch(() => undefined);
     }, delay);
   };
+
+  const flushPendingSaves = () => {
+    for (const [taskId, timer] of Object.entries(saveTimers.current)) {
+      clearTimeout(timer);
+      delete saveTimers.current[taskId];
+      void queueSave(taskId, answersRef.current[taskId]).catch(
+        () => undefined,
+      );
+    }
+  };
+
+  const flushOnHide = useEffectEvent(() => {
+    if (document.visibilityState === "hidden") flushPendingSaves();
+  });
+
+  useEffect(() => {
+    const onHide = () => flushOnHide();
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", onHide);
+    };
+  }, []);
 
   const setAnswer = (taskId: string, payload: unknown) => {
     answersRef.current = { ...answersRef.current, [taskId]: payload };
@@ -528,6 +557,17 @@ export function AttemptPage({
   // El latido además avisa si el desafío se pausó, si cambió el plazo o si
   // el intento se cerró, y reintenta lo que no se pudo guardar.
   const beat = useEffectEvent(async () => {
+    // Guardar ya mantiene viva la sesión y avisa de pausas o cierres: mientras
+    // responde, el latido se salta, pero nunca más de dos veces seguidas.
+    if (
+      failedSaves.current.size === 0 &&
+      Date.now() - lastSavedAt.current < 25_000 &&
+      skippedBeats.current < 2
+    ) {
+      skippedBeats.current += 1;
+      return;
+    }
+    skippedBeats.current = 0;
     try {
       const state = await sendPlayHeartbeat();
       syncClock(state.serverNow);
@@ -935,6 +975,7 @@ export function AttemptPage({
   const goToTask = (index: number) => {
     const target = Math.min(Math.max(index, 0), attempt.tasks.length - 1);
     if (target === currentIndex) return;
+    flushPendingSaves();
     setDirection(target > currentIndex ? 1 : -1);
     setCurrentIndex(target);
     const top = questionTop.current;

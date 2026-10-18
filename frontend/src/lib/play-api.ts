@@ -191,6 +191,8 @@ export function saveAnswer(taskId: string, payload: unknown) {
   return playRequest<null>("/api/play/answer", {
     method: "POST",
     body: JSON.stringify({ taskId, payload }),
+    // Sigue aunque se cierre la pestaña justo después de responder.
+    keepalive: true,
   });
 }
 
