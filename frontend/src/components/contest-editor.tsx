@@ -34,6 +34,7 @@ import {
 import { listTaskSummaries } from "@/lib/tasks-api";
 import { PAPER_BLOCKED_INTERACTIVE } from "@/lib/interactive";
 import { type StoredTask } from "@/lib/task-schema";
+import { categoryStyle } from "@/components/category-logo";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -828,11 +829,10 @@ export function ContestEditor() {
                             ),
                       })
                     }
+                    style={selected ? categoryStyle(category) : undefined}
                     className={pillClass}
                   >
-                    {selected && (
-                      <CheckIcon className="size-3.5 text-primary" />
-                    )}
+                    {selected && <CheckIcon className="size-3.5" />}
                     {category}
                   </button>
                 );

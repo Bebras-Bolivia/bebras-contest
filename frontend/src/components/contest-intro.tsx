@@ -22,6 +22,7 @@ import {
 } from "@/lib/contest-schema";
 import { difficultyStyles } from "@/lib/difficulty";
 import type { AttemptState } from "@/lib/play-api";
+import { CategoryLogo } from "@/components/category-logo";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -102,41 +103,49 @@ export function ContestIntro({
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-8">
       {top}
 
-      <header className="flex flex-col gap-1">
+      <header className="flex items-center gap-5">
         {attempt.category && (
-          <span className="text-sm font-semibold tracking-wide text-primary uppercase">
-            Categoría {attempt.category}
-          </span>
+          <CategoryLogo
+            name={attempt.category}
+            className="h-24 w-28 sm:h-28 sm:w-32"
+          />
         )}
-        <h1 className="font-heading text-3xl font-semibold tracking-tight">
-          {attempt.contestTitle}
-        </h1>
-        {attempt.participant && (
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 text-sm text-muted-foreground">
-            <CircleCheckIcon
-              className="size-4 text-difficulty-easy"
-              aria-hidden="true"
-            />
-            <span>
-              Entraste como{" "}
-              <strong className="text-foreground">
-                {attempt.participant.members.join(" y ")}
-              </strong>
-              {attempt.participant.grade
-                ? ` · ${gradeLabel(attempt.participant.grade)}`
-                : ""}
+        <div className="flex min-w-0 flex-col gap-1">
+          {attempt.category && (
+            <span className="text-sm font-semibold tracking-wide text-primary uppercase">
+              Categoría {attempt.category}
             </span>
-            {onLeave && (
-              <button
-                type="button"
-                onClick={onLeave}
-                className="underline underline-offset-4 hover:text-foreground"
-              >
-                ¿No eres tú? Salir
-              </button>
-            )}
-          </p>
-        )}
+          )}
+          <h1 className="font-heading text-3xl font-semibold tracking-tight">
+            {attempt.contestTitle}
+          </h1>
+          {attempt.participant && (
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 text-sm text-muted-foreground">
+              <CircleCheckIcon
+                className="size-4 text-difficulty-easy"
+                aria-hidden="true"
+              />
+              <span>
+                Entraste como{" "}
+                <strong className="text-foreground">
+                  {attempt.participant.members.join(" y ")}
+                </strong>
+                {attempt.participant.grade
+                  ? ` · ${gradeLabel(attempt.participant.grade)}`
+                  : ""}
+              </span>
+              {onLeave && (
+                <button
+                  type="button"
+                  onClick={onLeave}
+                  className="underline underline-offset-4 hover:text-foreground"
+                >
+                  ¿No eres tú? Salir
+                </button>
+              )}
+            </p>
+          )}
+        </div>
       </header>
 
       <div className="grid gap-3 sm:grid-cols-3">

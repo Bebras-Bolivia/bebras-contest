@@ -14,6 +14,7 @@ import {
 import { formatCountdown, useNow } from "@/lib/countdown";
 import type { AttemptState } from "@/lib/play-api";
 import { cn } from "@/lib/utils";
+import { CategoryLogo } from "@/components/category-logo";
 import { TaskExplanation } from "@/components/task-explanation";
 import {
   Collapsible,
@@ -133,7 +134,12 @@ export function ContestFinish({
       {top}
 
       <section className="flex flex-col items-center gap-3 pt-4 text-center">
-        {outOfTime ? (
+        {attempt.category ? (
+          <CategoryLogo
+            name={attempt.category}
+            className="h-28 w-32 motion-safe:animate-in motion-safe:zoom-in-0 motion-safe:duration-500 motion-safe:ease-[cubic-bezier(0.34,1.56,0.64,1)]"
+          />
+        ) : outOfTime ? (
           <ClockIcon
             aria-hidden="true"
             className="size-16 text-muted-foreground motion-safe:animate-in motion-safe:zoom-in-0 motion-safe:duration-500 motion-safe:ease-[cubic-bezier(0.34,1.56,0.64,1)]"

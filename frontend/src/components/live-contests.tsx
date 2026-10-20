@@ -19,6 +19,7 @@ import { getToken, getUser, isApproved } from "@/lib/auth";
 import type { ContestState } from "@/lib/contest-schema";
 import { rememberCount, rememberedCount } from "@/lib/remembered-count";
 import { enter } from "@/lib/surface";
+import { categoryStyle } from "@/components/category-logo";
 import { cn } from "@/lib/utils";
 
 const COUNT_KEY = "portada:desafios";
@@ -526,7 +527,12 @@ function ContestCard({
             <Badge variant="outline">Todas las categorías</Badge>
           ) : (
             contest.categories.map((category) => (
-              <Badge key={category} variant="outline">
+              <Badge
+                key={category}
+                variant="outline"
+                data-category=""
+                style={categoryStyle(category)}
+              >
                 {category}
               </Badge>
             ))

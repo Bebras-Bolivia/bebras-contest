@@ -11,6 +11,7 @@ import {
   type PracticeTaskList,
 } from "@/lib/practice-api";
 import { practiceOrigin, practiceTaskHref } from "@/lib/practice-navigation";
+import { CategoryLogo } from "@/components/category-logo";
 import { cn } from "@/lib/utils";
 import { surface, surfaceLink } from "@/lib/surface";
 
@@ -134,25 +135,31 @@ export function PracticeList() {
     <div className="flex flex-col gap-6">
       <div
         className={cn(
-          "flex flex-col gap-1",
+          "flex items-center gap-5",
           !instant &&
             "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300",
         )}
       >
-        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-          {data.category}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          {data.age}
-          {data.tasks.length > 0 &&
-            ` · ${data.tasks.length} ${data.tasks.length === 1 ? "desafío" : "desafíos"}`}
-          {solved > 0 && (
-            <span className="text-foreground">
-              {" "}
-              · {solved} {solved === 1 ? "resuelto" : "resueltos"}
-            </span>
-          )}
-        </p>
+        <CategoryLogo
+          name={data.category}
+          className="h-24 w-28 sm:h-28 sm:w-32"
+        />
+        <div className="flex flex-col gap-1">
+          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+            {data.category}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {data.age}
+            {data.tasks.length > 0 &&
+              ` · ${data.tasks.length} ${data.tasks.length === 1 ? "desafío" : "desafíos"}`}
+            {solved > 0 && (
+              <span className="text-foreground">
+                {" "}
+                · {solved} {solved === 1 ? "resuelto" : "resueltos"}
+              </span>
+            )}
+          </p>
+        </div>
       </div>
 
       {data.tasks.length === 0 ? (

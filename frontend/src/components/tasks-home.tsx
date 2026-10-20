@@ -66,6 +66,7 @@ import {
   writeFilters,
   type Filters,
 } from "@/lib/task-filters";
+import { categorySoftStyle, categoryStyle } from "@/components/category-logo";
 import { cn } from "@/lib/utils";
 
 const chipClass =
@@ -426,6 +427,11 @@ export function TasksHome() {
                       disabled={count === 0 && !active}
                       onClick={() =>
                         chooseFilters({ age: active ? "all" : category.name })
+                      }
+                      style={
+                        active
+                          ? categoryStyle(category.name)
+                          : categorySoftStyle(category.name)
                       }
                       className={chipClass}
                     >

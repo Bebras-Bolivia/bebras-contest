@@ -10,6 +10,7 @@ import {
   type PracticeCategory,
 } from "@/lib/practice-api";
 import { ApiError } from "@/lib/api-client";
+import { CategoryLogo, categoryColor } from "@/components/category-logo";
 import { cn } from "@/lib/utils";
 import { surface, surfaceLink } from "@/lib/surface";
 import {
@@ -127,26 +128,26 @@ export function PracticeCategories() {
         <a
           key={category.name}
           href={practiceCategoryHref(category.name, origin)}
-          style={instant ? undefined : { animationDelay: `${index * 60}ms` }}
+          style={{
+            borderBottom: `4px solid ${categoryColor(category.name)}`,
+            ...(instant ? {} : { animationDelay: `${index * 60}ms` }),
+          }}
           className={cn(
             surfaceLink,
-            "group flex items-center gap-4 p-3 pr-4",
+            "group flex items-center gap-5 p-4 pr-5",
             !instant &&
               "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 motion-safe:fill-mode-both",
           )}
         >
-          <span className="flex size-16 shrink-0 flex-col items-center justify-center bg-background transition-colors duration-200 group-hover:text-primary">
-            <span className="text-lg leading-none font-bold tabular-nums">
-              {category.age.replace(/\s*años?$/i, "").replace("-", "–")}
-            </span>
-            <span className="mt-1 text-[0.7rem] text-muted-foreground">
-              años
-            </span>
-          </span>
+          <CategoryLogo
+            name={category.name}
+            className="h-20 w-24 transition-transform duration-200 group-hover:scale-105 motion-reduce:transition-none"
+          />
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="text-lg font-semibold">{category.name}</span>
             <span className="text-sm text-muted-foreground">
-              {category.count} {category.count === 1 ? "desafío" : "desafíos"}
+              {category.age} · {category.count}{" "}
+              {category.count === 1 ? "desafío" : "desafíos"}
             </span>
           </span>
           <ArrowRightIcon className="size-5 shrink-0 text-muted-foreground transition-[color,transform] duration-200 group-hover:translate-x-1 group-hover:text-primary motion-reduce:transition-none" />

@@ -44,6 +44,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { categoryStyle } from "@/components/category-logo";
 import { cn } from "@/lib/utils";
 
 type ConfirmAction = "suspend" | "resume" | "consolidate" | "delete";
@@ -336,6 +337,10 @@ export function ContestsHome() {
                         key={category}
                         variant="outline"
                         title={`${total} ${total === 1 ? "pregunta" : "preguntas"}`}
+                        data-category={total === 0 ? undefined : ""}
+                        style={
+                          total === 0 ? undefined : categoryStyle(category)
+                        }
                         className={cn(
                           "gap-1.5",
                           total === 0 &&

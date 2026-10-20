@@ -9,13 +9,17 @@ import { type CategoryItem, type DifficultyKey } from "@/lib/task-schema";
  * (Origen del listado: el CMS, bebras-bolivia/cms/content/current/data/categories.json.)
  */
 export const BEBRAS_CATEGORIES = [
-  { name: "Guacamayo", ageRange: "5–8" },
-  { name: "Capibara", ageRange: "8–10" },
-  { name: "Titi", ageRange: "10–12" },
-  { name: "Jucumari", ageRange: "12–14" },
-  { name: "Yaguareté", ageRange: "14–16" },
-  { name: "Kuntur", ageRange: "17–18" },
-] as const satisfies ReadonlyArray<{ name: string; ageRange: DifficultyKey }>;
+  { name: "Guacamayo", slug: "guacamayo", ageRange: "5–8" },
+  { name: "Capibara", slug: "capibara", ageRange: "8–10" },
+  { name: "Titi", slug: "titi", ageRange: "10–12" },
+  { name: "Jucumari", slug: "jucumari", ageRange: "12–14" },
+  { name: "Yaguareté", slug: "yaguarete", ageRange: "14–16" },
+  { name: "Kuntur", slug: "kuntur", ageRange: "17–18" },
+] as const satisfies ReadonlyArray<{
+  name: string;
+  slug: string;
+  ageRange: DifficultyKey;
+}>;
 
 function ageLabel(ageRange: string) {
   return `${ageRange.replace("–", "-")} años`;

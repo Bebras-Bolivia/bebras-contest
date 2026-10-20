@@ -64,6 +64,18 @@
   --difficulty-medium-foreground: var(--secondary-foreground);
   --difficulty-hard: var(--primary);
   --difficulty-hard-foreground: var(--primary-foreground);
+  --category-guacamayo: #e83b3b;
+  --category-capibara: #f8ae31;
+  --category-titi: #1b8f60;
+  --category-jucumari: #17808f;
+  --category-yaguarete: #324c87;
+  --category-kuntur: #6b3fa0;
+  --category-guacamayo-foreground: #ffffff;
+  --category-capibara-foreground: #ffffff;
+  --category-titi-foreground: #ffffff;
+  --category-jucumari-foreground: #ffffff;
+  --category-yaguarete-foreground: #ffffff;
+  --category-kuntur-foreground: #ffffff;
 }
 
 .dark {
@@ -266,7 +278,8 @@
     box-shadow: none;
   }
 
-  [data-slot="badge"][data-variant="secondary"] {
+  [data-slot="badge"][data-variant="secondary"],
+  [data-slot="badge"][data-category] {
     border-color: transparent !important;
   }
 
