@@ -1436,6 +1436,7 @@ export const ContestScalarFieldEnum = {
   registrationEndsAt: 'registrationEndsAt',
   startsAt: 'startsAt',
   endsAt: 'endsAt',
+  schedules: 'schedules',
   scoring: 'scoring',
   questionDisplayMode: 'questionDisplayMode',
   allowPairs: 'allowPairs',

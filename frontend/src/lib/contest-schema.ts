@@ -185,6 +185,11 @@ export function taskDifficultyForCategory(
 
 export type QuestionDisplayMode = "one_by_one" | "all";
 
+export type CategorySchedules = Record<
+  string,
+  { startsAt: string; endsAt: string }
+>;
+
 export type StoredContest = {
   id: string;
   title: string;
@@ -195,6 +200,7 @@ export type StoredContest = {
   /** El calendario se define cuando el organizador quiere; sin él no se publica. */
   startsAt: string | null;
   endsAt: string | null;
+  schedules: CategorySchedules;
   /** Cuándo se publican solos los resultados; sin fecha, al cerrar la rendición. */
   resultsAt: string | null;
   /** Hasta cuándo sale con sus resultados en la portada; sin fecha, 7 días. */
@@ -230,6 +236,7 @@ export type ContestDraftInput = {
   registrationEndsAt: string;
   startsAt: string;
   endsAt: string;
+  schedules?: CategorySchedules;
   resultsAt: string;
   resultsUntil: string;
   scoring: ContestScoring;

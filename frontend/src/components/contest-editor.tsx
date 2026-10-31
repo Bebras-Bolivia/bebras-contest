@@ -7,6 +7,7 @@ import {
   ArrowUpIcon,
   BarChart3Icon,
   CheckIcon,
+  ChevronLeftIcon,
   PlayIcon,
   PlusIcon,
   RotateCcwIcon,
@@ -16,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { getContest, publishContest, updateContest } from "@/lib/contests-api";
+import { safeReturnTo } from "@/lib/site-navigation";
 import {
   BEBRAS_SCORING,
   CATEGORY_NAMES,
@@ -40,6 +42,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DateTimeField, parseDateTimeLocal } from "@/components/datetime-field";
 import { FormSection } from "@/components/form-section";
+import { FieldHint } from "@/components/field-hint";
 import {
   DifficultyTag,
   TaskPreviewDialog,
@@ -54,6 +57,8 @@ type Form = {
   registrationEndsAt: string;
   startsAt: string;
   endsAt: string;
+  scheduleMode: "single" | "category";
+  schedules: Record<string, { startsAt: string; endsAt: string }>;
   resultsAt: string;
   resultsUntil: string;
   scoring: ContestScoring;
@@ -91,6 +96,16 @@ function formFromContest(contest: StoredContest): Form {
     tasks[task.category] = [...(tasks[task.category] ?? []), task.taskId];
   }
 
+  const schedules = Object.fromEntries(
+    Object.entries(contest.schedules ?? {}).map(([category, window]) => [
+      category,
+      {
+        startsAt: localValue(window.startsAt),
+        endsAt: localValue(window.endsAt),
+      },
+    ]),
+  );
+
   return {
     title: contest.title,
     categories: contest.categories,
@@ -99,6 +114,8 @@ function formFromContest(contest: StoredContest): Form {
     registrationEndsAt: localValue(contest.registrationEndsAt),
     startsAt: localValue(contest.startsAt),
     endsAt: localValue(contest.endsAt),
+    scheduleMode: Object.keys(schedules).length > 0 ? "category" : "single",
+    schedules,
     resultsAt: localValue(contest.resultsAt),
     resultsUntil: localValue(contest.resultsUntil),
     scoring: contest.scoring ?? defaultContestScoring(),
@@ -117,6 +134,7 @@ function formFromContest(contest: StoredContest): Form {
 
 function toPayload(form: Form): ContestDraftInput {
   const iso = (value: string) => (value ? fromDatetimeLocalValue(value) : "");
+  const byCategory = form.scheduleMode === "category";
 
   return {
     title: form.title.trim(),
@@ -124,8 +142,26 @@ function toPayload(form: Form): ContestDraftInput {
     durationMinutes: form.durationMinutes,
     registrationStartsAt: iso(form.registrationStartsAt),
     registrationEndsAt: iso(form.registrationEndsAt),
-    startsAt: iso(form.startsAt),
-    endsAt: iso(form.endsAt),
+    startsAt: byCategory ? "" : iso(form.startsAt),
+    endsAt: byCategory ? "" : iso(form.endsAt),
+    schedules: byCategory
+      ? Object.fromEntries(
+          form.categories.flatMap((category) => {
+            const window = form.schedules[category];
+            return window && (window.startsAt || window.endsAt)
+              ? [
+                  [
+                    category,
+                    {
+                      startsAt: iso(window.startsAt),
+                      endsAt: iso(window.endsAt),
+                    },
+                  ],
+                ]
+              : [];
+          }),
+        )
+      : {},
     resultsAt: iso(form.resultsAt),
     resultsUntil: iso(form.resultsUntil),
     scoring: form.scoring,
@@ -146,6 +182,93 @@ function toPayload(form: Form): ContestDraftInput {
 
 function isBefore(left: string, right: string) {
   return new Date(left).getTime() < new Date(right).getTime();
+}
+
+function runWindows(form: Form) {
+  return form.scheduleMode === "category"
+    ? form.categories.map((category) => ({
+        label: category,
+        startsAt: form.schedules[category]?.startsAt ?? "",
+        endsAt: form.schedules[category]?.endsAt ?? "",
+      }))
+    : [{ label: "la rendición", startsAt: form.startsAt, endsAt: form.endsAt }];
+}
+
+function runSpan(form: Form) {
+  const windows = runWindows(form).filter(
+    (window) => window.startsAt && window.endsAt,
+  );
+
+  if (windows.length === 0) return { startsAt: "", endsAt: "" };
+
+  return {
+    startsAt: windows.reduce((first, window) =>
+      isBefore(window.startsAt, first.startsAt) ? window : first,
+    ).startsAt,
+    endsAt: windows.reduce((last, window) =>
+      isBefore(last.endsAt, window.endsAt) ? window : last,
+    ).endsAt,
+  };
+}
+
+function plusMinutes(value: string, minutes: number) {
+  const date = parseDateTimeLocal(value);
+  return date
+    ? toDatetimeLocalValue(
+        new Date(date.getTime() + minutes * 60_000).toISOString(),
+      )
+    : "";
+}
+
+type RunWindow = { startsAt: string; endsAt: string };
+
+function withAutoClose(
+  previous: RunWindow,
+  window: RunWindow,
+  previousMinutes: number,
+  minutes: number,
+): RunWindow {
+  const startMoved = previous.startsAt !== window.startsAt;
+  if (!window.startsAt || minutes <= 0) return window;
+  if (!startMoved && previousMinutes === minutes) return window;
+  if (window.endsAt !== previous.endsAt) return window;
+  const wasAuto =
+    !previous.endsAt ||
+    previous.endsAt === plusMinutes(previous.startsAt, previousMinutes);
+  return wasAuto
+    ? { ...window, endsAt: plusMinutes(window.startsAt, minutes) }
+    : window;
+}
+
+function withRun(form: Form, patch: Partial<Form>): Form {
+  const next = { ...form, ...patch };
+  const single = withAutoClose(
+    { startsAt: form.startsAt, endsAt: form.endsAt },
+    { startsAt: next.startsAt, endsAt: next.endsAt },
+    form.durationMinutes,
+    next.durationMinutes,
+  );
+  next.startsAt = single.startsAt;
+  next.endsAt = single.endsAt;
+  next.schedules = Object.fromEntries(
+    Object.entries(next.schedules).map(([category, window]) => [
+      category,
+      withAutoClose(
+        form.schedules[category] ?? { startsAt: "", endsAt: "" },
+        window,
+        form.durationMinutes,
+        next.durationMinutes,
+      ),
+    ]),
+  );
+  const before = runSpan(form).endsAt;
+  const after = runSpan(next).endsAt;
+
+  if (after !== before && (!form.resultsAt || form.resultsAt === before)) {
+    next.resultsAt = after;
+  }
+
+  return next;
 }
 
 function windowProblems(
@@ -199,11 +322,13 @@ function WindowField({
   disabled,
   startLabel = "Inicio",
   endLabel = "Cierre",
+  category,
   onChange,
 }: {
   id: string;
   title: string;
-  help: string;
+  category?: string;
+  help?: string;
   startsAt: string;
   endsAt: string;
   minDate?: Date | null;
@@ -215,56 +340,103 @@ function WindowField({
 }) {
   const length = formatLength(startsAt, endsAt);
   const start = parseDateTimeLocal(startsAt);
-  const end = parseDateTimeLocal(endsAt);
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h3 className="text-sm font-semibold">{title}</h3>
-        {length ? (
-          <span className="text-sm text-muted-foreground">Dura {length}</span>
-        ) : (
-          !disabled &&
-          (startsAt || endsAt) && (
+        <div className="flex items-center gap-1.5">
+          {category ? (
+            <h3
+              aria-label={title}
+              style={categoryStyle(category)}
+              className="px-2.5 py-1 text-sm font-semibold"
+            >
+              {category}
+            </h3>
+          ) : (
+            <h3 className="text-sm font-semibold">{title}</h3>
+          )}
+          {help && <FieldHint>{help}</FieldHint>}
+        </div>
+        <div className="flex items-baseline gap-3 text-sm text-muted-foreground">
+          {length && <span>Dura {length}</span>}
+          {!disabled && (startsAt || endsAt) && (
             <button
               type="button"
               onClick={() => onChange("", "")}
-              className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+              className="underline-offset-4 hover:text-foreground hover:underline"
             >
               Quitar fechas
             </button>
-          )
-        )}
+          )}
+        </div>
       </div>
-      <p className="-mt-2 text-sm text-muted-foreground">{help}</p>
-      <div className="grid min-w-0 gap-3 sm:grid-cols-[4rem_minmax(0,1fr)] sm:items-center">
-        <label htmlFor={id} className="text-sm">
-          {startLabel}
-        </label>
-        <DateTimeField
-          id={id}
-          label={`${title}, ${startLabel.toLowerCase()}`}
-          value={startsAt}
-          minDate={minDate}
-          maxDate={end ?? maxDate}
-          disabled={disabled}
-          allowClear
-          onChange={(value) => onChange(value, endsAt)}
-        />
-        <label htmlFor={`${id}-end`} className="text-sm">
-          {endLabel}
-        </label>
-        <DateTimeField
-          id={`${id}-end`}
-          label={`${title}, ${endLabel.toLowerCase()}`}
-          value={endsAt}
-          fallbackHour={18}
-          minDate={start ?? minDate}
-          maxDate={maxDate}
-          disabled={disabled}
-          allowClear
-          onChange={(value) => onChange(startsAt, value)}
-        />
+      <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label htmlFor={id} className="text-sm text-muted-foreground">
+            {startLabel}
+          </label>
+          <DateTimeField
+            id={id}
+            label={`${title}, ${startLabel.toLowerCase()}`}
+            value={startsAt}
+            minDate={minDate}
+            maxDate={maxDate}
+            disabled={disabled}
+            onChange={(value) => onChange(value, endsAt)}
+          />
+        </div>
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label
+            htmlFor={`${id}-end`}
+            className="text-sm text-muted-foreground"
+          >
+            {endLabel}
+          </label>
+          <DateTimeField
+            id={`${id}-end`}
+            label={`${title}, ${endLabel.toLowerCase()}`}
+            value={endsAt}
+            fallbackHour={18}
+            minDate={start ?? minDate}
+            maxDate={maxDate}
+            disabled={disabled}
+            onChange={(value) => onChange(startsAt, value)}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Reveal({
+  open,
+  className,
+  children,
+}: {
+  open: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      inert={!open}
+      aria-hidden={!open}
+      className={cn(
+        "grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none",
+        open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+      )}
+    >
+      <div className="min-h-0 overflow-hidden">
+        <div
+          className={cn(
+            "transition-transform duration-300 ease-out motion-reduce:transition-none",
+            open ? "translate-y-0" : "-translate-y-2",
+            className,
+          )}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -403,7 +575,18 @@ function ContestSummary({
             )}
           </SummaryRow>
           <SummaryRow label="Rendición">
-            {period(form.startsAt, form.endsAt, "Sin fechas")}
+            {form.scheduleMode === "category"
+              ? form.categories.map((category) => (
+                  <p key={category}>
+                    {category}:{" "}
+                    {period(
+                      form.schedules[category]?.startsAt ?? "",
+                      form.schedules[category]?.endsAt ?? "",
+                      "sin fechas",
+                    )}
+                  </p>
+                ))
+              : period(form.startsAt, form.endsAt, "Sin fechas")}
           </SummaryRow>
           <SummaryRow label="Resultados">
             {form.resultsAt
@@ -473,6 +656,13 @@ export function ContestEditor() {
       : (new URLSearchParams(window.location.search).get("categoria") ?? ""),
   );
   const [preview, setPreview] = useState<StoredTask | null>(null);
+  const [backHref] = useState(() =>
+    typeof window === "undefined"
+      ? "/desafios"
+      : (safeReturnTo(
+          new URLSearchParams(window.location.search).get("volver"),
+        ) ?? "/desafios"),
+  );
   const [scoringOpen, setScoringOpen] = useState(false);
   const [busy, setBusy] = useState<"saving" | "publishing" | null>(null);
   const [tried, setTried] = useState(false);
@@ -530,12 +720,12 @@ export function ContestEditor() {
     [bank],
   );
 
-  const problems = useMemo(() => {
+  const dateProblems = useMemo(() => {
     if (!form) return [];
     const list: string[] = [];
-
-    if (!form.title.trim()) list.push("Falta el nombre del desafío.");
-    if (form.categories.length === 0) list.push("Falta elegir una categoría.");
+    const windows = runWindows(form);
+    const span = runSpan(form);
+    const byCategory = form.scheduleMode === "category";
 
     list.push(
       ...windowProblems(
@@ -543,26 +733,39 @@ export function ContestEditor() {
         form.registrationStartsAt,
         form.registrationEndsAt,
       ),
-      ...windowProblems("la rendición", form.startsAt, form.endsAt),
+      ...windows.flatMap((window) =>
+        windowProblems(window.label, window.startsAt, window.endsAt),
+      ),
     );
 
-    if (
-      form.registrationEndsAt &&
-      form.startsAt &&
-      !isBefore(form.registrationEndsAt, form.startsAt)
-    ) {
-      list.push("La inscripción tiene que cerrar antes de la rendición.");
+    const clash = form.registrationEndsAt
+      ? windows.find(
+          (window) =>
+            window.startsAt &&
+            isBefore(window.startsAt, form.registrationEndsAt),
+        )
+      : undefined;
+    if (clash) {
+      list.push(
+        byCategory
+          ? `La inscripción tiene que cerrar antes de que empiece ${clash.label}.`
+          : "La inscripción tiene que cerrar antes de la rendición.",
+      );
     }
 
     if (
       form.resultsAt &&
-      form.endsAt &&
-      isBefore(form.resultsAt, form.endsAt)
+      span.endsAt &&
+      isBefore(form.resultsAt, span.endsAt)
     ) {
-      list.push("Los resultados no pueden publicarse antes del cierre.");
+      list.push(
+        byCategory
+          ? "Los resultados no pueden publicarse antes de que cierre la última categoría."
+          : "Los resultados no pueden publicarse antes del cierre.",
+      );
     }
 
-    const resultsFrom = form.resultsAt || form.endsAt;
+    const resultsFrom = form.resultsAt || span.endsAt;
     if (
       form.resultsUntil &&
       resultsFrom &&
@@ -572,6 +775,23 @@ export function ContestEditor() {
         "Los resultados tienen que mostrarse hasta después de publicarse.",
       );
     }
+
+    return list;
+  }, [form]);
+
+  const [shownDateProblems, setShownDateProblems] = useState<string[]>([]);
+  if (dateProblems.length > 0 && shownDateProblems !== dateProblems) {
+    setShownDateProblems(dateProblems);
+  }
+
+  const problems = useMemo(() => {
+    if (!form) return [];
+    const list: string[] = [];
+
+    if (!form.title.trim()) list.push("Falta el nombre del desafío.");
+    if (form.categories.length === 0) list.push("Falta elegir una categoría.");
+
+    list.push(...dateProblems);
 
     if (!Number.isInteger(form.durationMinutes) || form.durationMinutes <= 0) {
       list.push("Falta la duración por equipo.");
@@ -598,7 +818,7 @@ export function ContestEditor() {
     }
 
     return list;
-  }, [form, tasksById]);
+  }, [form, tasksById, dateProblems]);
 
   const publishProblems = useMemo(() => {
     if (!form) return [];
@@ -611,14 +831,21 @@ export function ContestEditor() {
       list.push(`Faltan preguntas en ${empty.join(", ")}.`);
     }
 
-    const start = parseDateTimeLocal(form.startsAt);
-    const end = parseDateTimeLocal(form.endsAt);
-    if (
-      start &&
-      end &&
-      (end.getTime() - start.getTime()) / 60_000 < form.durationMinutes
-    ) {
-      list.push("La rendición dura menos que el tiempo de cada equipo.");
+    const short = runWindows(form).find((window) => {
+      const start = parseDateTimeLocal(window.startsAt);
+      const end = parseDateTimeLocal(window.endsAt);
+      return (
+        start &&
+        end &&
+        (end.getTime() - start.getTime()) / 60_000 < form.durationMinutes
+      );
+    });
+    if (short) {
+      list.push(
+        form.scheduleMode === "category"
+          ? `La rendición de ${short.label} dura menos que el tiempo de cada equipo.`
+          : "La rendición dura menos que el tiempo de cada equipo.",
+      );
     }
 
     return list;
@@ -654,6 +881,34 @@ export function ContestEditor() {
 
   const update = (patch: Partial<Form>) =>
     setForm((current) => (current ? { ...current, ...patch } : current));
+
+  const updateRun = (patch: Partial<Form>) =>
+    setForm((current) => (current ? withRun(current, patch) : current));
+
+  const byCategory = form.scheduleMode === "category";
+  const span = runSpan(form);
+
+  const setScheduleMode = (mode: Form["scheduleMode"]) => {
+    if (mode === form.scheduleMode) return;
+    if (mode === "category") {
+      const schedules = { ...form.schedules };
+      for (const category of form.categories) {
+        if (!schedules[category]?.startsAt && !schedules[category]?.endsAt) {
+          schedules[category] = {
+            startsAt: form.startsAt,
+            endsAt: form.endsAt,
+          };
+        }
+      }
+      updateRun({ scheduleMode: mode, schedules });
+    } else {
+      updateRun({
+        scheduleMode: mode,
+        startsAt: span.startsAt,
+        endsAt: span.endsAt,
+      });
+    }
+  };
 
   const activeIds = form.tasks[activeCategory] ?? [];
   const activeTasks = activeIds
@@ -773,27 +1028,26 @@ export function ContestEditor() {
           onChange={(event) => update({ title: event.target.value })}
           className="w-full border-b-2 border-border/20 bg-transparent py-2 font-heading text-2xl font-semibold transition-colors outline-none placeholder:text-muted-foreground/60 focus-visible:border-primary disabled:opacity-100"
         />
-        <p className="text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">
+        <div className="flex items-center gap-1.5 text-sm">
+          <span className="font-medium">
             {CONTEST_STATE_LABELS[contestState]}
           </span>
-          {" · "}
-          {locked ? (
-            <>
-              Ya empezó, así que no se puede cambiar.{" "}
-              <a
-                href={`/desafios/resultados?id=${contestId}`}
-                className="text-foreground underline underline-offset-4"
-              >
-                Ver resultados
-              </a>
-            </>
-          ) : contestState === "borrador" ? (
-            "Nadie lo ve hasta que lo publiques."
-          ) : (
-            "Los maestros ya pueden inscribir a sus estudiantes."
+          <FieldHint>
+            {locked
+              ? "Ya empezó, así que no se puede cambiar."
+              : contestState === "borrador"
+                ? "Nadie lo ve hasta que lo publiques."
+                : "Los maestros ya pueden inscribir a sus estudiantes."}
+          </FieldHint>
+          {locked && (
+            <a
+              href={`/desafios/resultados?id=${contestId}`}
+              className="ml-2 underline underline-offset-4"
+            >
+              Ver resultados
+            </a>
           )}
-        </p>
+        </div>
       </div>
 
       {locked ? (
@@ -986,38 +1240,96 @@ export function ContestEditor() {
           )}
 
           <FormSection title="Fechas">
-            <div className="grid gap-8 lg:grid-cols-2">
+            <div className="flex max-w-3xl min-w-0 flex-col gap-8">
               <WindowField
                 id="contest-registration"
                 title="Inscripción"
                 help="Sin fechas, los maestros pueden inscribir desde que publicas hasta que empieza la rendición."
                 startsAt={form.registrationStartsAt}
                 endsAt={form.registrationEndsAt}
-                maxDate={parseDateTimeLocal(form.startsAt)}
+                maxDate={parseDateTimeLocal(span.startsAt)}
                 disabled={locked}
                 onChange={(registrationStartsAt, registrationEndsAt) =>
                   update({ registrationStartsAt, registrationEndsAt })
                 }
               />
-              <WindowField
-                id="contest-run"
-                title="Rendición"
-                help="Sin fechas todavía nadie puede rendir. Puedes ponerlas después de publicar."
-                startsAt={form.startsAt}
-                endsAt={form.endsAt}
-                minDate={parseDateTimeLocal(form.registrationEndsAt)}
-                disabled={locked}
-                onChange={(startsAt, endsAt) => update({ startsAt, endsAt })}
-              />
-            </div>
-            <div className="lg:w-1/2 lg:pr-4">
+              <div className="flex min-w-0 flex-col">
+                {(form.categories.length > 1 || byCategory) && (
+                  <div className="flex items-center gap-1.5 pb-4">
+                    <div
+                      role="group"
+                      aria-label="Horario de la rendición"
+                      className="flex flex-wrap gap-1.5"
+                    >
+                      <button
+                        type="button"
+                        aria-pressed={!byCategory}
+                        disabled={locked}
+                        onClick={() => setScheduleMode("single")}
+                        className={pillClass}
+                      >
+                        Todas a la vez
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={byCategory}
+                        disabled={locked}
+                        onClick={() => setScheduleMode("category")}
+                        className={pillClass}
+                      >
+                        Por categoría
+                      </button>
+                    </div>
+                    <FieldHint>
+                      Por categoría, cada una rinde en su horario y pueden
+                      pisarse. Una categoría sin fechas todavía no puede rendir.
+                    </FieldHint>
+                  </div>
+                )}
+                <Reveal open={!byCategory}>
+                  <WindowField
+                    id="contest-run"
+                    title="Rendición"
+                    help="Sin fechas todavía nadie puede rendir. Puedes ponerlas después de publicar."
+                    startsAt={form.startsAt}
+                    endsAt={form.endsAt}
+                    minDate={parseDateTimeLocal(form.registrationEndsAt)}
+                    disabled={locked}
+                    onChange={(startsAt, endsAt) =>
+                      updateRun({ startsAt, endsAt })
+                    }
+                  />
+                </Reveal>
+                <Reveal open={byCategory} className="flex flex-col gap-6">
+                  {form.categories.map((category) => (
+                    <WindowField
+                      key={category}
+                      id={`contest-run-${category}`}
+                      title={`Rendición de ${category}`}
+                      category={category}
+                      startsAt={form.schedules[category]?.startsAt ?? ""}
+                      endsAt={form.schedules[category]?.endsAt ?? ""}
+                      minDate={parseDateTimeLocal(form.registrationEndsAt)}
+                      disabled={locked}
+                      onChange={(startsAt, endsAt) =>
+                        updateRun({
+                          schedules: {
+                            ...form.schedules,
+                            [category]: { startsAt, endsAt },
+                          },
+                        })
+                      }
+                    />
+                  ))}
+                </Reveal>
+              </div>
               <WindowField
                 id="contest-results"
                 title="Resultados"
-                help="Desde: se publican solos y el desafío aparece con sus resultados en la página principal (sin fecha, al cerrar la rendición). Hasta: deja de salir ahí (sin fecha, 7 días después). Cada estudiante los sigue viendo con su código."
+                help={`Desde: se publican solos y el desafío aparece con sus resultados en la página principal. Se pone sola al cierre de ${byCategory ? "la última categoría" : "la rendición"} y la puedes cambiar. Hasta: deja de salir ahí (sin fecha, 7 días después). Cada estudiante los sigue viendo con su código.`}
                 startsAt={form.resultsAt}
                 endsAt={form.resultsUntil}
-                minDate={parseDateTimeLocal(form.endsAt)}
+                minDate={parseDateTimeLocal(span.endsAt)}
                 disabled={locked}
                 startLabel="Desde"
                 endLabel="Hasta"
@@ -1034,12 +1346,26 @@ export function ContestEditor() {
                 value={form.durationMinutes || ""}
                 disabled={locked}
                 onChange={(event) =>
-                  update({ durationMinutes: Number(event.target.value || 0) })
+                  updateRun({
+                    durationMinutes: Number(event.target.value || 0),
+                  })
                 }
                 className="h-8 w-16 border-2 border-border/20 bg-transparent px-2 text-sm tabular-nums outline-none focus-visible:border-primary disabled:opacity-50"
               />
               minutos, desde que toca «Empezar».
             </label>
+            <Reveal open={dateProblems.length > 0}>
+              <ul className="flex flex-col gap-1 text-sm text-destructive">
+                {shownDateProblems.map((problem) => (
+                  <li
+                    key={problem}
+                    className="duration-300 animate-in fade-in slide-in-from-top-1 motion-reduce:animate-none"
+                  >
+                    {problem}
+                  </li>
+                ))}
+              </ul>
+            </Reveal>
           </FormSection>
 
           <FormSection title="Cómo se rinde">
@@ -1118,6 +1444,7 @@ export function ContestEditor() {
                       <td className="py-3 pr-4">{label}</td>
                       <td className="px-2 py-3 text-center">
                         <Checkbox
+                          className="mx-auto"
                           aria-label={`${label}, al entregar su prueba`}
                           checked={form[onSubmit]}
                           disabled={locked}
@@ -1132,6 +1459,7 @@ export function ContestEditor() {
                       </td>
                       <td className="px-2 py-3 text-center">
                         <Checkbox
+                          className="mx-auto"
                           aria-label={`${label}, al publicar los resultados`}
                           checked={form[onResults] || form[onSubmit]}
                           disabled={locked || form[onSubmit]}
@@ -1152,15 +1480,18 @@ export function ContestEditor() {
           </FormSection>
 
           <FormSection title="Puntaje">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground">
-                {isStandardScoring(form.scoring) ? "Los de Bebras: " : ""}
-                {DIFFICULTY_KEYS.map(
-                  (key) =>
-                    `${BEBRAS_SCORING[key].label} +${form.scoring[key].correct} / ${form.scoring[key].wrong}`,
-                ).join(" · ")}
-                . Sin responder, 0.
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+                {DIFFICULTY_KEYS.map((key) => (
+                  <span key={key} className="flex items-center gap-2">
+                    <DifficultyTag difficulty={key} />
+                    <span className="tabular-nums">
+                      +{form.scoring[key].correct} / {form.scoring[key].wrong}
+                    </span>
+                  </span>
+                ))}
+                <span className="text-muted-foreground">Sin responder, 0</span>
+              </div>
               {!locked && (
                 <button
                   type="button"
@@ -1171,53 +1502,76 @@ export function ContestEditor() {
                 </button>
               )}
             </div>
-            {scoringOpen && !locked && (
-              <div className="flex flex-col gap-3">
-                {DIFFICULTY_KEYS.map((key) => (
-                  <div key={key} className="flex items-center gap-3 text-sm">
-                    <span className="w-16">{BEBRAS_SCORING[key].label}</span>
-                    acierta
-                    <ScoreInput
-                      label={`Puntaje si acierta en ${BEBRAS_SCORING[key].label.toLowerCase()}`}
-                      value={form.scoring[key].correct}
-                      disabled={locked}
-                      onChange={(correct) =>
-                        update({
-                          scoring: {
-                            ...form.scoring,
-                            [key]: { ...form.scoring[key], correct },
-                          },
-                        })
-                      }
-                    />
-                    falla
-                    <ScoreInput
-                      label={`Puntaje si falla en ${BEBRAS_SCORING[key].label.toLowerCase()}`}
-                      value={form.scoring[key].wrong}
-                      disabled={locked}
-                      onChange={(wrong) =>
-                        update({
-                          scoring: {
-                            ...form.scoring,
-                            [key]: { ...form.scoring[key], wrong },
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                ))}
-                {!isStandardScoring(form.scoring) && (
-                  <button
-                    type="button"
-                    onClick={() => update({ scoring: defaultContestScoring() })}
-                    className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-                  >
-                    <RotateCcwIcon className="size-3.5" />
-                    Volver a los de Bebras
-                  </button>
-                )}
+            <Reveal open={scoringOpen && !locked}>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[22rem] text-sm">
+                  <thead>
+                    <tr className="text-left text-muted-foreground">
+                      <th className="py-2 pr-4 font-normal" />
+                      <th className="w-28 px-2 py-2 text-center font-normal">
+                        Acierta
+                      </th>
+                      <th className="w-28 px-2 py-2 text-center font-normal">
+                        Falla
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {DIFFICULTY_KEYS.map((key) => (
+                      <tr key={key} className="border-t">
+                        <td className="py-3 pr-4">
+                          <DifficultyTag difficulty={key} />
+                        </td>
+                        <td className="px-2 py-3">
+                          <div className="flex justify-center">
+                            <ScoreInput
+                              label={`Puntaje si acierta en ${BEBRAS_SCORING[key].label.toLowerCase()}`}
+                              value={form.scoring[key].correct}
+                              disabled={locked}
+                              onChange={(correct) =>
+                                update({
+                                  scoring: {
+                                    ...form.scoring,
+                                    [key]: { ...form.scoring[key], correct },
+                                  },
+                                })
+                              }
+                            />
+                          </div>
+                        </td>
+                        <td className="px-2 py-3">
+                          <div className="flex justify-center">
+                            <ScoreInput
+                              label={`Puntaje si falla en ${BEBRAS_SCORING[key].label.toLowerCase()}`}
+                              value={form.scoring[key].wrong}
+                              disabled={locked}
+                              onChange={(wrong) =>
+                                update({
+                                  scoring: {
+                                    ...form.scoring,
+                                    [key]: { ...form.scoring[key], wrong },
+                                  },
+                                })
+                              }
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            )}
+              {!isStandardScoring(form.scoring) && (
+                <button
+                  type="button"
+                  onClick={() => update({ scoring: defaultContestScoring() })}
+                  className="mt-2 flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+                >
+                  <RotateCcwIcon className="size-3.5" />
+                  Volver a los de Bebras
+                </button>
+              )}
+            </Reveal>
           </FormSection>
         </>
       )}
@@ -1225,9 +1579,10 @@ export function ContestEditor() {
       <div className="sticky bottom-0 z-10 -mx-4 flex items-center justify-end gap-3 border-t bg-background px-4 py-3 sm:mx-0 sm:px-0">
         {barMessage && (
           <p
+            key={barMessage.text}
             role={barMessage.tone === "error" ? "alert" : "status"}
             className={cn(
-              "mr-auto min-w-0 truncate text-sm",
+              "mr-auto min-w-0 truncate text-sm duration-300 animate-in fade-in slide-in-from-bottom-1 motion-reduce:animate-none",
               barMessage.tone === "error"
                 ? "font-medium text-destructive"
                 : "text-muted-foreground",
@@ -1242,6 +1597,12 @@ export function ContestEditor() {
             )}
           </p>
         )}
+        <Button asChild variant="outline">
+          <a href={backHref}>
+            <ChevronLeftIcon data-icon="inline-start" />
+            Volver
+          </a>
+        </Button>
         {locked ? (
           <Button asChild variant="outline">
             <a href={`/desafios/resultados?id=${contestId}`}>

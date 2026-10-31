@@ -27,8 +27,9 @@ import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import {
   BracketsIcon,
   CheckIcon,
-  LightbulbIcon,
+  ChevronLeftIcon,
   Grid3x3Icon,
+  LightbulbIcon,
   ListChecksIcon,
   MousePointerClickIcon,
   MoveIcon,
@@ -1803,6 +1804,12 @@ export function TaskUploadForm({
       <div className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-2 border-t bg-background px-4 py-3 sm:mx-0 sm:px-0">
         <div className="flex items-center justify-end gap-3">
           <FormProblem errors={errors} />
+          <Button asChild variant="outline">
+            <a href={returnTo ?? "/tareas"}>
+              <ChevronLeftIcon data-icon="inline-start" />
+              Volver
+            </a>
+          </Button>
           {/* Probar lleva lo que hay en pantalla, guardado o no: el probador
               recibe el borrador entero y lo corrige sin tocar la base. */}
           <Button type="button" variant="outline" onClick={handleTestDraft}>

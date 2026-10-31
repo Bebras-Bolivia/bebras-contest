@@ -335,6 +335,149 @@ export function contestStateAt(
   return { state: "abierta", isOpen: true };
 }
 
+export type CategorySchedules = Record<
+  string,
+  { startsAt: Date; endsAt: Date }
+>;
+
+export function parseCategorySchedules(
+  value: string | null | undefined,
+): CategorySchedules {
+  const raw = parseJsonValue<Record<string, unknown>>(value ?? "{}", {});
+  const schedules: CategorySchedules = {};
+
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return schedules;
+  }
+
+  for (const [category, entry] of Object.entries(raw)) {
+    if (!entry || typeof entry !== "object") continue;
+    const { startsAt, endsAt } = entry as Record<string, unknown>;
+    const start = new Date(String(startsAt));
+    const end = new Date(String(endsAt));
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) continue;
+    schedules[category] = { startsAt: start, endsAt: end };
+  }
+
+  return schedules;
+}
+
+export function parseCategorySchedulesInput(
+  value: unknown,
+  categories: string[],
+): CategorySchedules {
+  const schedules: CategorySchedules = {};
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return schedules;
+  }
+
+  const raw = value as Record<string, unknown>;
+
+  for (const category of categories) {
+    const entry = raw[category];
+    if (!entry || typeof entry !== "object") continue;
+    const { startsAt, endsAt } = entry as Record<string, unknown>;
+    const hasStart = typeof startsAt === "string" && startsAt.trim() !== "";
+    const hasEnd = typeof endsAt === "string" && endsAt.trim() !== "";
+
+    if (!hasStart && !hasEnd) continue;
+
+    if (hasStart !== hasEnd) {
+      throw new Error(
+        `El horario de ${category} necesita su inicio y su cierre, o ninguno de los dos.`,
+      );
+    }
+
+    const start = new Date(startsAt as string);
+    const end = new Date(endsAt as string);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      throw new Error(`El horario de ${category} no tiene una fecha válida.`);
+    }
+
+    if (end <= start) {
+      throw new Error(
+        `En ${category}, el cierre tiene que ser posterior al inicio.`,
+      );
+    }
+
+    schedules[category] = { startsAt: start, endsAt: end };
+  }
+
+  return schedules;
+}
+
+export function serializeCategorySchedules(schedules: CategorySchedules) {
+  return JSON.stringify(
+    Object.fromEntries(
+      Object.entries(schedules).map(([category, window]) => [
+        category,
+        {
+          startsAt: window.startsAt.toISOString(),
+          endsAt: window.endsAt.toISOString(),
+        },
+      ]),
+    ),
+  );
+}
+
+export function schedulesSpan(schedules: CategorySchedules) {
+  const windows = Object.values(schedules);
+
+  if (windows.length === 0) {
+    return { startsAt: null, endsAt: null };
+  }
+
+  return {
+    startsAt: new Date(
+      Math.min(...windows.map((window) => window.startsAt.getTime())),
+    ),
+    endsAt: new Date(
+      Math.max(...windows.map((window) => window.endsAt.getTime())),
+    ),
+  };
+}
+
+export function contestForCategory<
+  T extends {
+    schedules?: string | null;
+    startsAt: Date | null;
+    endsAt: Date | null;
+  },
+>(contest: T, category: string | null): T {
+  const schedules = parseCategorySchedules(contest.schedules);
+
+  if (Object.keys(schedules).length === 0) {
+    return contest;
+  }
+
+  const window = category ? schedules[category] : undefined;
+  return {
+    ...contest,
+    startsAt: window?.startsAt ?? null,
+    endsAt: window?.endsAt ?? null,
+  };
+}
+
+export function shiftCategorySchedules(
+  schedules: CategorySchedules,
+  suspendedAt: Date,
+  pausedMs: number,
+): CategorySchedules {
+  return Object.fromEntries(
+    Object.entries(schedules).map(([category, window]) => [
+      category,
+      window.endsAt > suspendedAt
+        ? {
+            startsAt: window.startsAt,
+            endsAt: new Date(window.endsAt.getTime() + pausedMs),
+          }
+        : window,
+    ]),
+  );
+}
+
 /** Desde cuándo y hasta cuándo un desafío muestra sus resultados. */
 export function resultsWindow(contest: {
   endsAt: Date | null;

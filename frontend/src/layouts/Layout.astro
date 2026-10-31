@@ -11,6 +11,7 @@ interface Props {
   title?: string;
   heading?: string;
   backHref?: string;
+  backInPage?: boolean;
   requireAuth?: boolean;
   allowMaestro?: boolean;
   enableClientRouting?: boolean;
@@ -21,12 +22,16 @@ const {
   title = "Bebras",
   heading,
   backHref,
+  backInPage = false,
   requireAuth = false,
   allowMaestro = false,
   enableClientRouting = true,
   deferChrome = false,
 } = Astro.props;
 const registrationRestricted = isRegistrationRestrictedPath(Astro.url.pathname);
+const practiceBack =
+  Astro.url.pathname === "/practica/categoria" ||
+  Astro.url.pathname === "/practica/tarea";
 
 const pageOut = {
   name: "bebras-page-out",
@@ -71,14 +76,45 @@ const pageFade = {
       )
     }
     <div class="flex min-h-screen flex-col">
-      <SiteHeader heading={heading} backHref={backHref} hidden={deferChrome} />
+      <SiteHeader heading={heading} hidden={deferChrome} />
       <div
-        class="min-h-dvh flex-1"
+        class="flex-1"
         data-page-content
         transition:name="app-content"
         transition:animate={pageFade}
       >
         <slot />
+        {
+          backHref && !backInPage && (
+            <div class="mx-auto flex w-full max-w-6xl justify-end px-4 pb-10 sm:px-6 lg:px-8">
+              <a
+                href={backHref}
+                data-back-link
+                data-practice-back={practiceBack ? "" : undefined}
+                data-slot="button"
+                data-variant="outline"
+                class="inline-flex h-10 items-center gap-1.5 border bg-background px-4 pl-3 text-sm font-semibold transition-all outline-none hover:bg-accent hover:text-background focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  class="size-4 shrink-0"
+                >
+                  <path d="m15 18-6-6 6-6" />
+                </svg>
+                Volver
+              </a>
+            </div>
+          )
+        }
       </div>
       <SiteFooter hidden={deferChrome} />
     </div>

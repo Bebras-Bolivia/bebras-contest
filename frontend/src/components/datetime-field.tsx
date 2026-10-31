@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect, useState, type Ref } from "react";
+import { useEffect, useState, type KeyboardEvent, type Ref } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { CalendarIcon, Clock8Icon, XIcon } from "lucide-react";
+import { CalendarIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
@@ -15,6 +13,9 @@ import {
 } from "@/components/ui/popover";
 import { toDatetimeLocalValue } from "@/lib/contest-schema";
 import { cn } from "@/lib/utils";
+
+const fieldClass =
+  "h-10 border-2 border-border/20 bg-background px-3 text-sm transition-colors outline-none hover:border-border/40 focus-visible:border-primary disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive";
 
 export function parseDateTimeLocal(value: string) {
   if (!value) {
@@ -25,6 +26,10 @@ export function parseDateTimeLocal(value: string) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function pad(value: number) {
+  return String(value).padStart(2, "0");
+}
+
 export function toTimeValue(value: string) {
   const date = parseDateTimeLocal(value);
 
@@ -32,9 +37,36 @@ export function toTimeValue(value: string) {
     return "";
   }
 
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${hours}:${minutes}`;
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function parseTimeInput(text: string) {
+  const clean = text
+    .trim()
+    .toLowerCase()
+    .replace(/[\s.]/g, "")
+    .replace(/(h|hrs?)$/, "");
+  const withSeparator = clean.match(/^(\d{1,2})(?::(\d{1,2}))?$/);
+  const digitsOnly = clean.match(/^\d{3,4}$/);
+  let hours: number;
+  let minutes: number;
+
+  if (withSeparator) {
+    hours = Number(withSeparator[1]);
+    minutes = Number(withSeparator[2] ?? 0);
+  } else if (digitsOnly) {
+    const digits = clean.padStart(4, "0");
+    hours = Number(digits.slice(0, 2));
+    minutes = Number(digits.slice(2));
+  } else {
+    return null;
+  }
+
+  if (hours > 23 || minutes > 59) {
+    return null;
+  }
+
+  return `${pad(hours)}:${pad(minutes)}`;
 }
 
 function withDate(
@@ -84,6 +116,71 @@ function isSameDay(a: Date, b: Date) {
   );
 }
 
+function TimeField({
+  id,
+  label,
+  value,
+  min,
+  max,
+  disabled,
+  invalid,
+  describedBy,
+  onCommit,
+}: {
+  id?: string;
+  label: string;
+  value: string;
+  min?: string;
+  max?: string;
+  disabled: boolean;
+  invalid: boolean;
+  describedBy?: string;
+  onCommit: (time: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  const commit = () => {
+    const parsed = parseTimeInput(draft);
+    if (!parsed) {
+      setDraft(value);
+      return;
+    }
+    const next = min && parsed < min ? min : max && parsed > max ? max : parsed;
+    setDraft(next);
+    if (next !== value) onCommit(next);
+  };
+
+  return (
+    <input
+      id={id}
+      aria-label={label}
+      aria-invalid={invalid}
+      aria-describedby={describedBy}
+      autoComplete="off"
+      inputMode="numeric"
+      placeholder="HH:MM"
+      className={cn(
+        fieldClass,
+        "w-24 shrink-0 tabular-nums placeholder:text-muted-foreground",
+      )}
+      disabled={disabled}
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          commit();
+        }
+      }}
+      onBlur={commit}
+    />
+  );
+}
+
 export function DateTimeField({
   id,
   value,
@@ -96,7 +193,6 @@ export function DateTimeField({
   invalid = false,
   describedBy,
   dateRef,
-  allowClear = false,
 }: {
   id?: string;
   value: string;
@@ -109,17 +205,11 @@ export function DateTimeField({
   invalid?: boolean;
   describedBy?: string;
   dateRef?: Ref<HTMLButtonElement>;
-  allowClear?: boolean;
 }) {
   const date = parseDateTimeLocal(value);
   const dateLabel = date
-    ? format(date, "d 'de' MMMM 'de' yyyy", { locale: es })
+    ? format(date, "d MMM yyyy", { locale: es })
     : "Elige un día";
-  const [timeDraft, setTimeDraft] = useState(toTimeValue(value));
-
-  useEffect(() => {
-    setTimeDraft(toTimeValue(value));
-  }, [value]);
 
   const timeMin =
     date && minDate && isSameDay(date, minDate)
@@ -131,26 +221,26 @@ export function DateTimeField({
       : undefined;
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row">
+    <div className="flex min-w-0 gap-2">
       <Popover>
         <PopoverTrigger asChild>
-          <Button
+          <button
             ref={dateRef}
             id={id}
             type="button"
-            variant="outline"
             disabled={disabled}
             aria-invalid={invalid}
             aria-describedby={describedBy}
             aria-label={`${label}, día`}
             className={cn(
-              "w-full justify-start text-left font-normal sm:flex-1",
+              fieldClass,
+              "flex min-w-0 flex-1 items-center gap-2 text-left",
               !date && "text-muted-foreground",
             )}
           >
-            <CalendarIcon data-icon="inline-start" />
+            <CalendarIcon className="size-4 shrink-0" />
             {dateLabel}
-          </Button>
+          </button>
         </PopoverTrigger>
         <PopoverContent
           data-calendar-popover
@@ -176,48 +266,17 @@ export function DateTimeField({
           />
         </PopoverContent>
       </Popover>
-      <div className="relative sm:w-36">
-        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center justify-center pl-3 text-muted-foreground">
-          <Clock8Icon className="size-4" />
-        </div>
-        <Input
-          id={id ? `${id}-time` : undefined}
-          aria-label={`${label}, hora`}
-          aria-invalid={invalid}
-          aria-describedby={describedBy}
-          className="peer appearance-none bg-background pl-9 [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
-          type="time"
-          disabled={disabled || !date}
-          min={timeMin}
-          max={timeMax}
-          value={timeDraft}
-          onChange={(event) => {
-            const nextValue = event.target.value;
-            setTimeDraft(nextValue);
-
-            // Al teclear, el input de hora pasa por valores vacios antes de
-            // completarse. Propagarlos borraria tambien el dia, asi que solo
-            // sube al formulario una hora completa; para vaciar el campo esta
-            // el boton Quitar.
-            if (nextValue) {
-              onChange(withTime(value, nextValue));
-            }
-          }}
-          onBlur={() => setTimeDraft(toTimeValue(value))}
-        />
-      </div>
-      {allowClear && date && (
-        <Button
-          type="button"
-          variant="outline"
-          disabled={disabled}
-          aria-label={`Quitar ${label.toLowerCase()}`}
-          onClick={() => onChange("")}
-        >
-          <XIcon data-icon="inline-start" />
-          Quitar
-        </Button>
-      )}
+      <TimeField
+        id={id ? `${id}-time` : undefined}
+        label={`${label}, hora`}
+        value={toTimeValue(value)}
+        min={timeMin}
+        max={timeMax}
+        disabled={disabled || !date}
+        invalid={invalid}
+        describedBy={describedBy}
+        onCommit={(time) => onChange(withTime(value, time))}
+      />
     </div>
   );
 }

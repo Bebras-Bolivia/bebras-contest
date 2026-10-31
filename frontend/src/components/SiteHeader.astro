@@ -1,7 +1,6 @@
 ---
 interface Props {
   heading?: string;
-  backHref?: string;
   hidden?: boolean;
 }
 
@@ -10,11 +9,9 @@ import { MobileNavigation } from "./mobile-navigation";
 import { SITE_NAV_ITEMS } from "../lib/site-navigation";
 import { REGISTRATION_ONLY } from "../lib/registration-only";
 
-const { heading, backHref, hidden = false } = Astro.props;
+const { heading, hidden = false } = Astro.props;
 const pathname = Astro.url.pathname;
 const isPractice = pathname.startsWith("/practica");
-const hasContextualPracticeBack =
-  pathname === "/practica/categoria" || pathname === "/practica/tarea";
 
 const isHome = pathname === "/";
 const linkClass = (active: boolean) => [
@@ -68,36 +65,7 @@ const links = SITE_NAV_ITEMS.filter((item) => item.role !== "public").map(
       {
         heading && (
           <div class="flex min-w-0 items-center border-l pl-3">
-            {backHref ? (
-              <a
-                href={backHref}
-                data-back-link
-                data-practice-back={hasContextualPracticeBack ? "" : undefined}
-                class="group flex min-w-0 items-center gap-2 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-              >
-                <span class="sr-only">Volver: </span>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  aria-hidden="true"
-                  class="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary"
-                >
-                  <path d="m15 18-6-6 6-6" />
-                </svg>
-                <span class="truncate text-sm font-medium transition-colors group-hover:text-primary">
-                  {heading}
-                </span>
-              </a>
-            ) : (
-              <span class="truncate text-sm font-medium">{heading}</span>
-            )}
+            <span class="truncate text-sm font-medium">{heading}</span>
           </div>
         )
       }

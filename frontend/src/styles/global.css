@@ -208,6 +208,11 @@
     box-shadow: 0 10px 24px -8px rgba(0, 0, 0, 0.22);
   }
 
+  [data-slot="tooltip-content"] {
+    border-color: color-mix(in srgb, var(--border) 20%, transparent) !important;
+    box-shadow: 0 10px 28px -10px rgba(0, 0, 0, 0.25);
+  }
+
   [data-slot="input"]:focus-visible,
   [data-slot="input-group"]:focus-within,
   [data-slot="textarea"]:focus-visible {

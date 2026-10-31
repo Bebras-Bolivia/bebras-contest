@@ -24,6 +24,7 @@ import {
   BEBRAS_CATEGORIES,
   SCHOOL_GRADES,
   contestCategories,
+  contestForCategory,
   contestHasEnded,
   contestRules,
   contestStateAt,
@@ -34,11 +35,16 @@ import {
   isDifficultyKey,
   normalizeCategories,
   paperBlockedReason,
+  parseCategorySchedules,
+  parseCategorySchedulesInput,
   parseContestScoring,
   parseGrade,
   registrationOpenAt,
   resultsWindow,
+  schedulesSpan,
   scoresForDifficulty,
+  serializeCategorySchedules,
+  shiftCategorySchedules,
   teamCategory,
   type ContestScoring,
 } from "./lib/contest-rules";
@@ -997,6 +1003,7 @@ function deserializeContest(contest: {
   registrationEndsAt: Date | null;
   startsAt: Date | null;
   endsAt: Date | null;
+  schedules?: string | null;
   scoring?: string | null;
   questionDisplayMode: string;
   allowPairs: boolean;
@@ -1049,6 +1056,17 @@ function deserializeContest(contest: {
     registrationEndsAt: contest.registrationEndsAt?.toISOString() ?? null,
     startsAt: contest.startsAt?.toISOString() ?? null,
     endsAt: contest.endsAt?.toISOString() ?? null,
+    schedules: Object.fromEntries(
+      Object.entries(parseCategorySchedules(contest.schedules))
+        .filter(([category]) => categories.includes(category))
+        .map(([category, window]) => [
+          category,
+          {
+            startsAt: window.startsAt.toISOString(),
+            endsAt: window.endsAt.toISOString(),
+          },
+        ]),
+    ),
     initialScores: Object.fromEntries(
       categories.map((category) => [
         category,
@@ -1151,10 +1169,19 @@ function parseContestPayload(body: Record<string, unknown>) {
   };
 
   // Las fechas son opcionales, también al publicar; solo tienen que cuadrar.
-  const startsAt = body.startsAt
-    ? parseDateInput(body.startsAt, "startsAt")
-    : null;
-  const endsAt = body.endsAt ? parseDateInput(body.endsAt, "endsAt") : null;
+  const schedules = parseCategorySchedulesInput(body.schedules, categories);
+  const span = schedulesSpan(schedules);
+  const bySchedules = Object.keys(schedules).length > 0;
+  const startsAt = bySchedules
+    ? span.startsAt
+    : body.startsAt
+      ? parseDateInput(body.startsAt, "startsAt")
+      : null;
+  const endsAt = bySchedules
+    ? span.endsAt
+    : body.endsAt
+      ? parseDateInput(body.endsAt, "endsAt")
+      : null;
   const registrationStartsAt = body.registrationStartsAt
     ? parseDateInput(body.registrationStartsAt, "registrationStartsAt")
     : null;
@@ -1202,9 +1229,9 @@ function parseContestPayload(body: Record<string, unknown>) {
     throw new Error("El cierre de inscripción debe ser posterior a su inicio.");
   }
 
-  if (registrationEndsAt && startsAt && registrationEndsAt >= startsAt) {
+  if (registrationEndsAt && startsAt && registrationEndsAt > startsAt) {
     throw new Error(
-      "La inscripción debe cerrar antes de que comience la rendición para dejar una fase de preparación.",
+      "La inscripción tiene que cerrar antes de que empiece la rendición, o a la misma hora.",
     );
   }
 
@@ -1218,6 +1245,7 @@ function parseContestPayload(body: Record<string, unknown>) {
     registrationEndsAt,
     startsAt,
     endsAt,
+    schedules,
     resultsAt,
     resultsUntil,
   };
@@ -3629,6 +3657,7 @@ app.post("/api/contests", async (req, res) => {
       registrationEndsAt: payload.registrationEndsAt,
       startsAt: payload.startsAt,
       endsAt: payload.endsAt,
+      schedules: serializeCategorySchedules(payload.schedules),
       resultsAt: payload.resultsAt,
       resultsUntil: payload.resultsUntil,
       scoring: JSON.stringify(payload.scoring),
@@ -3769,7 +3798,7 @@ app.put("/api/contests/:id", async (req, res) => {
     db().prepare('DELETE FROM "ContestTask" WHERE "contestId" = ?').bind(contestId),
     db().prepare(`UPDATE "Contest" SET
       "title" = ?, "categories" = ?, "durationMinutes" = ?,
-      "registrationStartsAt" = ?, "registrationEndsAt" = ?, "startsAt" = ?, "endsAt" = ?, "resultsAt" = ?, "resultsUntil" = ?,
+      "registrationStartsAt" = ?, "registrationEndsAt" = ?, "startsAt" = ?, "endsAt" = ?, "schedules" = ?, "resultsAt" = ?, "resultsUntil" = ?,
       "scoring" = ?, "questionDisplayMode" = ?,
       "allowPairs" = ?, "shuffleOptions" = ?, "showFeedback" = ?, "showSolutions" = ?, "showTotalScore" = ?,
       "showScoreOnSubmit" = ?, "showFeedbackOnSubmit" = ?, "showSolutionsOnSubmit" = ?,
@@ -3778,6 +3807,7 @@ app.put("/api/contests/:id", async (req, res) => {
       payload.registrationStartsAt?.toISOString() ?? null,
       payload.registrationEndsAt?.toISOString() ?? null,
       payload.startsAt?.toISOString() ?? null, payload.endsAt?.toISOString() ?? null,
+      serializeCategorySchedules(payload.schedules),
       payload.resultsAt?.toISOString() ?? null,
       payload.resultsUntil?.toISOString() ?? null,
       JSON.stringify(payload.scoring), payload.questionDisplayMode,
@@ -4128,11 +4158,18 @@ app.post("/api/contests/:id/resume", async (req, res) => {
       )
       AND EXISTS (SELECT 1 FROM "Contest" WHERE "id" = ? AND "suspendedAt" IS NOT NULL)`)
       .bind(`+${(pausedMs / 1000).toFixed(3)} seconds`, resumedAt, contest.id, contest.id),
-    db().prepare(`UPDATE "Contest" SET "suspendedAt" = NULL, "endsAt" = ?,
+    db().prepare(`UPDATE "Contest" SET "suspendedAt" = NULL, "endsAt" = ?, "schedules" = ?,
         "resultsAt" = ?, "resultsUntil" = ?, "updatedAt" = ?
       WHERE "id" = ? AND "suspendedAt" IS NOT NULL`)
       .bind(
         shift(contest.endsAt),
+        serializeCategorySchedules(
+          shiftCategorySchedules(
+            parseCategorySchedules(contest.schedules),
+            contest.suspendedAt,
+            pausedMs,
+          ),
+        ),
         shift(contest.resultsAt),
         shift(contest.resultsUntil),
         resumedAt,
@@ -6638,8 +6675,12 @@ app.get("/api/play/group/:code", async (req, res) => {
     registrationStartsAt:
       group.contest.registrationStartsAt?.toISOString() ?? null,
     registrationEndsAt: group.contest.registrationEndsAt?.toISOString() ?? null,
-    contestStartsAt: group.contest.startsAt?.toISOString() ?? null,
-    contestEndsAt: group.contest.endsAt?.toISOString() ?? null,
+    contestStartsAt:
+      contestForCategory(group.contest, group.category).startsAt?.toISOString() ??
+      null,
+    contestEndsAt:
+      contestForCategory(group.contest, group.category).endsAt?.toISOString() ??
+      null,
     category: group.category,
     grades: gradesForCategories(groupCategories(group)),
     state,
@@ -7623,7 +7664,11 @@ app.post("/api/play/start", async (req, res) => {
     return;
   }
 
-  const contest = team.group.contest;
+  const category = teamCategory(
+    team.grade,
+    contestCategories(team.group.contest),
+  );
+  const contest = contestForCategory(team.group.contest, category);
   const contestTasks = await contestTasksFor(contest);
   if (computeContestState(contest).state !== "abierta") {
     res
@@ -7641,8 +7686,6 @@ app.post("/api/play/start", async (req, res) => {
     });
     return;
   }
-
-  const category = teamCategory(team.grade, contestCategories(contest));
 
   if (tasksOfCategory(contestTasks, category).length === 0) {
     res.status(409).json({
@@ -7729,7 +7772,9 @@ const playAttemptHandler: express.RequestHandler = async (req, res) => {
       (await prisma.attempt.findUnique({ where: { id: attempt.id } })) ??
       attempt;
   }
-  const contestState = computeContestState(contest).state;
+  const category = teamCategory(team.grade, contestCategories(contest));
+  const categoryContest = contestForCategory(contest, category);
+  const contestState = computeContestState(categoryContest).state;
   const contestTasks = await contestTasksFor(contest);
 
   if (
@@ -7775,7 +7820,6 @@ const playAttemptHandler: express.RequestHandler = async (req, res) => {
         (resultsPublished && contest.showSolutions)),
   };
   const showResults = visible.feedback || visible.solutions;
-  const category = teamCategory(team.grade, contestCategories(contest));
   // Antes de empezar basta saber cuántas preguntas son: el enunciado completo
   // (con sus imágenes) pesa y la pantalla de espera se consulta seguido.
   const categoryTasks = tasksOfCategory(contestTasks, category);
@@ -7844,8 +7888,8 @@ const playAttemptHandler: express.RequestHandler = async (req, res) => {
     },
     durationMinutes: contest.durationMinutes,
     questionDisplayMode: contest.questionDisplayMode,
-    contestStartsAt: contest.startsAt?.toISOString() ?? null,
-    contestEndsAt: contest.endsAt?.toISOString() ?? null,
+    contestStartsAt: categoryContest.startsAt?.toISOString() ?? null,
+    contestEndsAt: categoryContest.endsAt?.toISOString() ?? null,
     state: contestState,
     status: attempt.status,
     startedAt: attempt.startedAt?.toISOString() ?? null,

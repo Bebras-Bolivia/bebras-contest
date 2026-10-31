@@ -107,6 +107,7 @@ model Contest {
   registrationEndsAt   DateTime?
   startsAt             DateTime?
   endsAt               DateTime?
+  schedules            String         @default("{}")
   scoring              String?
   questionDisplayMode  String         @default("one_by_one")
   allowPairs           Boolean        @default(false)

@@ -1,0 +1,1 @@
+ALTER TABLE "Contest" ADD COLUMN "schedules" TEXT NOT NULL DEFAULT '{}';

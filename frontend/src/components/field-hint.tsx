@@ -24,7 +24,7 @@ export function FieldHint({ children }: { children: ReactNode }) {
             <HelpCircleIcon className="size-4" />
           </button>
         </TooltipTrigger>
-        <TooltipContent className="max-w-72 text-pretty leading-5">
+        <TooltipContent className="max-w-80 px-4 py-3 text-sm leading-6 text-pretty">
           {children}
         </TooltipContent>
       </Tooltip>

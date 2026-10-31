@@ -3,8 +3,8 @@
 import { ListPageSkeleton } from "@/components/page-skeletons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowLeftIcon,
   CheckIcon,
+  ChevronLeftIcon,
   PlusIcon,
   SaveIcon,
   SearchIcon,
@@ -293,13 +293,7 @@ export function ContestQuestionsPage() {
   return (
     <div className="flex w-full flex-col gap-4">
       <div className="flex flex-col gap-1 border-b pb-4">
-        <a
-          href={backHref}
-          className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeftIcon className="size-4" />
-          {contest.title}
-        </a>
+        <p className="text-sm text-muted-foreground">{contest.title}</p>
         <h1 className="font-heading text-3xl font-semibold tracking-tight">
           Preguntas
         </h1>
@@ -588,7 +582,10 @@ export function ContestQuestionsPage() {
             `${activeIds.length} ${activeIds.length === 1 ? "pregunta" : "preguntas"} en ${activeCategory}`}
         </p>
         <Button asChild variant="outline">
-          <a href={backHref}>Cancelar</a>
+          <a href={backHref}>
+            <ChevronLeftIcon data-icon="inline-start" />
+            Volver
+          </a>
         </Button>
         <Button type="button" disabled={saving} onClick={save}>
           <SaveIcon data-icon="inline-start" />
