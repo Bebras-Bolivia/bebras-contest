@@ -20,7 +20,22 @@ export type StoredPractice = {
   taskCount: number;
   groupCount: number;
   studentCount: number;
+  resultCount: number;
   state: ContestState;
+};
+
+export type PracticeResults = {
+  tasks: { id: string; title: string }[];
+  results: {
+    id: string;
+    name: string;
+    grade: string | null;
+    totalScore: number;
+    correctCount: number;
+    taskCount: number;
+    marks: string;
+    finishedAt: string;
+  }[];
 };
 
 export type PracticeDraftInput = {
@@ -48,6 +63,10 @@ export function createPractice(practice: PracticeDraftInput) {
     method: "POST",
     body: JSON.stringify(practice),
   });
+}
+
+export function listPracticeResults(practiceId: string) {
+  return request<PracticeResults>(`/api/practices/${practiceId}/results`);
 }
 
 export function removePractice(practiceId: string) {

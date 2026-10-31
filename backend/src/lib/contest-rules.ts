@@ -153,8 +153,8 @@ export function groupCategories(group: {
   contest: { categories: string };
 }) {
   const categories = contestCategories(group.contest);
-  return group.category && categories.includes(group.category)
-    ? [group.category]
+  return group.category
+    ? categories.filter((category) => category === group.category)
     : categories;
 }
 
@@ -173,12 +173,9 @@ export const SCHOOL_GRADES = [
   { value: "S6", label: "6.º de secundaria", category: "Kuntur" },
 ] as const;
 
-/** Cursos que admite un desafío; sin categorías, los doce. */
+/** Cursos de las categorías participantes. */
 export function gradesForCategories(categories: string[]) {
-  const grades = SCHOOL_GRADES.filter((grade) =>
-    categories.includes(grade.category),
-  );
-  return grades.length > 0 ? grades : SCHOOL_GRADES.slice();
+  return SCHOOL_GRADES.filter((grade) => categories.includes(grade.category));
 }
 
 export function parseGrade(value: unknown, categories: string[]) {
@@ -194,12 +191,39 @@ export function parseGrade(value: unknown, categories: string[]) {
     throw new Error("El curso indicado no es válido.");
   }
 
-  if (categories.length > 0 && !categories.includes(known.category)) {
+  if (categories.length === 0) {
+    throw new Error(
+      "El desafío no tiene categorías habilitadas para inscribir.",
+    );
+  }
+  if (!categories.includes(known.category)) {
     throw new Error(
       `${known.label} es de la categoría ${known.category}, que no participa en este desafío (${categories.join(", ")}).`,
     );
   }
 
+  return grade;
+}
+
+type GradeGroup = Parameters<typeof groupCategories>[0] & {
+  grade?: string | null;
+};
+
+export function gradesForGroup(group: GradeGroup) {
+  const grades = gradesForCategories(groupCategories(group));
+  return group.grade
+    ? grades.filter((grade) => grade.value === group.grade)
+    : grades;
+}
+
+export function parseGroupGrade(value: unknown, group: GradeGroup) {
+  const grade = parseGrade(value || group.grade, groupCategories(group));
+  if (group.grade && grade !== group.grade) {
+    const label = SCHOOL_GRADES.find(
+      (item) => item.value === group.grade,
+    )?.label;
+    throw new Error(`Este grupo es de ${label ?? group.grade}.`);
+  }
   return grade;
 }
 
@@ -226,6 +250,8 @@ export type ContestState =
   | "preparacion"
   | "abierta"
   | "suspendida"
+  | "detenida"
+  | "eliminada"
   | "cerrada"
   | "consolidada"
   | "publicada";
@@ -246,12 +272,14 @@ export function registrationOpenAt(
     registrationStartsAt?: Date | null;
     registrationEndsAt?: Date | null;
     publishedAt: Date | null;
+    stoppedAt?: Date | null;
+    trashedAt?: Date | null;
     startsAt: Date | null;
     endsAt: Date | null;
     isPractice?: boolean;
   },
 ) {
-  if (!contest.publishedAt) {
+  if (!contest.publishedAt || contest.stoppedAt || contest.trashedAt) {
     return false;
   }
 
@@ -275,6 +303,8 @@ export function contestStateAt(
   contest: {
     publishedAt: Date | null;
     suspendedAt?: Date | null;
+    stoppedAt?: Date | null;
+    trashedAt?: Date | null;
     consolidatedAt?: Date | null;
     resultsPublishedAt?: Date | null;
     registrationStartsAt?: Date | null;
@@ -284,6 +314,8 @@ export function contestStateAt(
     isPractice?: boolean;
   },
 ): { state: ContestState; isOpen: boolean } {
+  if (contest.trashedAt) return { state: "eliminada", isOpen: false };
+  if (contest.stoppedAt) return { state: "detenida", isOpen: false };
   if (!contest.publishedAt) {
     return { state: "borrador", isOpen: false };
   }

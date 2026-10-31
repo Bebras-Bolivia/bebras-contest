@@ -99,6 +99,10 @@ export function PaperEntry() {
     getPaperBundle(groupId)
       .then((loaded) => {
         if (!active) return;
+        if (loaded.paperBlocked) {
+          window.location.replace(`/grupos/ver?id=${loaded.group.id}`);
+          return;
+        }
         setBundle(loaded);
         setTeamId((current) => {
           if (loaded.teams.some((team) => team.id === current)) return current;
@@ -319,12 +323,10 @@ export function PaperEntry() {
         </div>
         {!bundle.entryOpen && (
           <p className="bg-secondary/20 px-4 py-3 text-sm">
-            {bundle.paperBlocked
-              ? bundle.paperBlocked
-              : bundle.contest.startsAt &&
-                  new Date(bundle.contest.startsAt) > new Date()
-                ? `Las hojas se cargan desde que empieza la prueba: el ${dateAtEnd(bundle.contest.startsAt)}`
-                : "Los resultados ya se calcularon: ya no se pueden cargar hojas."}
+            {bundle.contest.startsAt &&
+            new Date(bundle.contest.startsAt) > new Date()
+              ? `Las hojas se cargan desde que empieza la prueba: el ${dateAtEnd(bundle.contest.startsAt)}`
+              : "Los resultados ya se calcularon: ya no se pueden cargar hojas."}
           </p>
         )}
       </div>

@@ -42,6 +42,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DateTimeField, parseDateTimeLocal } from "@/components/datetime-field";
 import { FormSection } from "@/components/form-section";
+import { ContestLifecycleActions } from "@/components/contest-lifecycle-actions";
 import { FieldHint } from "@/components/field-hint";
 import {
   DifficultyTag,
@@ -76,12 +77,7 @@ type Form = {
   tasks: Record<string, string[]>;
 };
 
-const EDITABLE_STATES: ContestState[] = [
-  "borrador",
-  "programada",
-  "inscripcion",
-  "preparacion",
-];
+const EDITABLE_STATES: ContestState[] = ["borrador", "programada", "detenida"];
 
 function localValue(value: string | null) {
   return value ? toDatetimeLocalValue(value) : "";
@@ -649,6 +645,7 @@ export function ContestEditor() {
   const [form, setForm] = useState<Form | null>(null);
   const [bank, setBank] = useState<StoredTask[]>([]);
   const [contestState, setContestState] = useState<ContestState>("borrador");
+  const [contestMeta, setContestMeta] = useState<StoredContest | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [active, setActive] = useState<string>(() =>
     typeof window === "undefined"
@@ -689,6 +686,7 @@ export function ContestEditor() {
         setForm(loaded);
         setBank(tasks);
         setContestState(contest.state);
+        setContestMeta(contest);
       })
       .catch((error: unknown) => {
         if (alive) {
@@ -789,7 +787,6 @@ export function ContestEditor() {
     const list: string[] = [];
 
     if (!form.title.trim()) list.push("Falta el nombre del desafío.");
-    if (form.categories.length === 0) list.push("Falta elegir una categoría.");
 
     list.push(...dateProblems);
 
@@ -823,6 +820,7 @@ export function ContestEditor() {
   const publishProblems = useMemo(() => {
     if (!form) return [];
     const list = [...problems];
+    if (form.categories.length === 0) list.push("Falta elegir una categoría.");
     const empty = form.categories.filter(
       (category) => (form.tasks[category] ?? []).length === 0,
     );
@@ -960,6 +958,7 @@ export function ContestEditor() {
       const saved = await updateContest(contestId, payload);
       savedRef.current = snapshot;
       setContestState(saved.state);
+      setContestMeta(saved);
       setSaveError(null);
       return true;
     } catch (error) {
@@ -990,6 +989,7 @@ export function ContestEditor() {
     try {
       const published = await publishContest(contestId);
       setContestState(published.state);
+      setContestMeta(published);
       setSaveError(null);
     } catch (error) {
       setSaveError(
@@ -1034,7 +1034,7 @@ export function ContestEditor() {
           </span>
           <FieldHint>
             {locked
-              ? "Ya empezó, así que no se puede cambiar."
+              ? "Puedes ampliar el cierre. Para cambiar el inicio o las preguntas, detén el desafío y reprograma."
               : contestState === "borrador"
                 ? "Nadie lo ve hasta que lo publiques."
                 : "Los maestros ya pueden inscribir a sus estudiantes."}
@@ -1049,6 +1049,23 @@ export function ContestEditor() {
           )}
         </div>
       </div>
+
+      {contestMeta &&
+        ["abierta", "inscripcion", "preparacion"].includes(contestState) && (
+          <ContestLifecycleActions
+            placement="closing"
+            contest={contestMeta}
+            beforeRestart={save}
+            onChanged={(contest) => {
+              const next = formFromContest(contest);
+              setForm(next);
+              setContestState(contest.state);
+              setContestMeta(contest);
+              savedRef.current = JSON.stringify(toPayload(next));
+              setSaveError(null);
+            }}
+          />
+        )}
 
       {locked ? (
         <ContestSummary
@@ -1248,7 +1265,7 @@ export function ContestEditor() {
                 startsAt={form.registrationStartsAt}
                 endsAt={form.registrationEndsAt}
                 maxDate={parseDateTimeLocal(span.startsAt)}
-                disabled={locked}
+                disabled={locked || contestState === "inscripcion"}
                 onChange={(registrationStartsAt, registrationEndsAt) =>
                   update({ registrationStartsAt, registrationEndsAt })
                 }
@@ -1576,7 +1593,18 @@ export function ContestEditor() {
         </>
       )}
 
-      <div className="sticky bottom-0 z-10 -mx-4 flex items-center justify-end gap-3 border-t bg-background px-4 py-3 sm:mx-0 sm:px-0">
+      {contestMeta && contestState !== "abierta" && (
+        <div className="border-t pt-6">
+          <ContestLifecycleActions
+            placement="deletion"
+            contest={contestMeta}
+            beforeRestart={save}
+            onChanged={setContestMeta}
+          />
+        </div>
+      )}
+
+      <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t bg-background px-4 py-3 sm:mx-0 sm:gap-3 sm:px-0">
         {barMessage && (
           <p
             key={barMessage.text}
@@ -1603,6 +1631,21 @@ export function ContestEditor() {
             Volver
           </a>
         </Button>
+        {contestMeta && (
+          <ContestLifecycleActions
+            placement="actions"
+            contest={contestMeta}
+            beforeRestart={save}
+            onChanged={(contest) => {
+              const next = formFromContest(contest);
+              setForm(next);
+              setContestState(contest.state);
+              setContestMeta(contest);
+              savedRef.current = JSON.stringify(toPayload(next));
+              setSaveError(null);
+            }}
+          />
+        )}
         {locked ? (
           <Button asChild variant="outline">
             <a href={`/desafios/resultados?id=${contestId}`}>

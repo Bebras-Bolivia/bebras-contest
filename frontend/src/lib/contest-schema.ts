@@ -47,12 +47,9 @@ export const SCHOOL_GRADES = [
 
 export type SchoolGrade = (typeof SCHOOL_GRADES)[number];
 
-/** Cursos que admite un desafío; sin categorías, los doce. */
+/** Cursos de las categorías participantes. */
 export function gradesForCategories(categories: readonly string[]) {
-  const grades = SCHOOL_GRADES.filter((grade) =>
-    categories.includes(grade.category),
-  );
-  return grades.length > 0 ? grades : [...SCHOOL_GRADES];
+  return SCHOOL_GRADES.filter((grade) => categories.includes(grade.category));
 }
 
 export const CATEGORY_NAMES: string[] = BEBRAS_CATEGORIES.map(
@@ -71,6 +68,8 @@ export type ContestState =
   | "preparacion"
   | "abierta"
   | "suspendida"
+  | "detenida"
+  | "eliminada"
   | "cerrada"
   | "consolidada"
   | "publicada";
@@ -218,6 +217,9 @@ export type StoredContest = {
   showSolutionsOnSubmit: boolean;
   publishedAt: string | null;
   suspendedAt: string | null;
+  stoppedAt: string | null;
+  trashedAt: string | null;
+  isFavorite: boolean;
   consolidatedAt: string | null;
   resultsPublishedAt: string | null;
   state: ContestState;
@@ -259,6 +261,8 @@ export const CONTEST_STATE_LABELS: Record<ContestState, string> = {
   preparacion: "Inscripción cerrada",
   abierta: "En curso",
   suspendida: "Pausado",
+  detenida: "Detenido",
+  eliminada: "En papelera",
   cerrada: "Terminado",
   consolidada: "Resultados listos",
   publicada: "Resultados publicados",

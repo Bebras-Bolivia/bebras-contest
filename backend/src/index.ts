@@ -16,6 +16,7 @@ import { extname } from "node:path";
 import { db, prisma, queryCount, withRequestPrisma } from "./lib/prisma";
 import type { Prisma } from "./generated/prisma/client";
 import { formatPersonName } from "./lib/person-name";
+import { favoriteContestId, purgeExpiredContests, registerContestLifecycle } from "./lib/contest-lifecycle";
 import { parseJsonValue } from "./lib/json";
 import { allowedCorsOrigin } from "./lib/cors";
 import { cleanName, nameKey, normalizeHeader } from "./lib/text";
@@ -30,6 +31,7 @@ import {
   contestStateAt,
   defaultContestScoring,
   gradesForCategories,
+  gradesForGroup,
   groupCategories,
   initialScoreOf,
   isDifficultyKey,
@@ -39,6 +41,7 @@ import {
   parseCategorySchedulesInput,
   parseContestScoring,
   parseGrade,
+  parseGroupGrade,
   registrationOpenAt,
   resultsWindow,
   schedulesSpan,
@@ -965,8 +968,9 @@ const SUSPENDED_CONTEST_MESSAGE =
 
 function groupAccessHasExpired(group: {
   expiresAt: Date | null;
-  contest: { endsAt: Date | null };
+  contest: { endsAt: Date | null; stoppedAt?: Date | null };
 }) {
+  if (group.contest.stoppedAt) return false;
   const effectiveExpiry = group.contest.endsAt ?? group.expiresAt;
   return Boolean(effectiveExpiry && effectiveExpiry < currentDate());
 }
@@ -1016,6 +1020,8 @@ function deserializeContest(contest: {
   showSolutionsOnSubmit: boolean;
   publishedAt: Date | null;
   suspendedAt: Date | null;
+  stoppedAt?: Date | null;
+  trashedAt?: Date | null;
   consolidatedAt: Date | null;
   resultsPublishedAt: Date | null;
   resultsAt: Date | null;
@@ -1040,7 +1046,7 @@ function deserializeContest(contest: {
       difficulties: string;
     };
   }>;
-}) {
+}, favoriteId: string | null = null) {
   const { state, isOpen } = computeContestState(contest);
   const categories = contestCategories(contest);
   const tasks = (contest.tasks ?? [])
@@ -1087,6 +1093,9 @@ function deserializeContest(contest: {
     showSolutionsOnSubmit: contest.showSolutionsOnSubmit,
     publishedAt: contest.publishedAt?.toISOString() ?? null,
     suspendedAt: contest.suspendedAt?.toISOString() ?? null,
+    stoppedAt: contest.stoppedAt?.toISOString() ?? null,
+    trashedAt: contest.trashedAt?.toISOString() ?? null,
+    isFavorite: contest.id === favoriteId,
     consolidatedAt: contest.consolidatedAt?.toISOString() ?? null,
     resultsPublishedAt: contest.resultsPublishedAt?.toISOString() ?? null,
     resultsAt: contest.resultsAt?.toISOString() ?? null,
@@ -1130,12 +1139,8 @@ function parseContestPayload(body: Record<string, unknown>) {
     throw new Error("El nombre del desafío es obligatorio.");
   }
 
-  if (categories.length === 0 || categories.length !== new Set(requested).size) {
-    throw new Error(
-      requested.length === 0
-        ? "Elige al menos una categoría."
-        : "Hay una categoría que no es válida.",
-    );
+  if (categories.length !== new Set(requested).size) {
+    throw new Error("Hay una categoría que no es válida.");
   }
 
   // Las preguntas de una categoría que se quitó se van con ella.
@@ -1837,6 +1842,14 @@ app.post("/api/auth/register", registerUploadMiddleware, async (req, res) => {
   const idBackFile = pickUploaded(req, "idBack");
   const allFiles = [letterFile, idFrontFile, idBackFile];
 
+  if (!(await teacherRegistrationOpen())) {
+    await cleanupFiles(...allFiles);
+    res.status(403).json({
+      message: "El registro de maestros está cerrado por ahora.",
+    });
+    return;
+  }
+
   // El registro llega con el ID Token recien emitido por Firebase: la identidad
   // (uid y correo) sale del token, nunca del formulario. El correo aun no esta
   // verificado en este punto del flujo, por eso `allowUnverified`.
@@ -2090,7 +2103,7 @@ app.get("/api/schools", async (req, res) => {
 app.get("/api/public-contests", async (_req, res) => {
   await releaseDueResults();
   const contests = await prisma.contest.findMany({
-    where: { publishedAt: { not: null }, isPractice: false },
+    where: { publishedAt: { not: null }, isPractice: false, trashedAt: null, stoppedAt: null },
     orderBy: { startsAt: "asc" },
     select: {
       id: true,
@@ -2213,6 +2226,7 @@ app.get("/api/public-ranking", async (_req, res) => {
     where: {
       publishedAt: { not: null },
       isPractice: false,
+      trashedAt: null,
       resultsPublishedAt: { not: null },
     },
     orderBy: { endsAt: "desc" },
@@ -2312,6 +2326,7 @@ async function certificatesExport() {
   const contests = await prisma.contest.findMany({
     where: {
       isPractice: false,
+      trashedAt: null,
       publishedAt: { not: null },
       resultsPublishedAt: { not: null },
     },
@@ -2338,6 +2353,7 @@ async function certificatesExport() {
           group: {
             contest: {
               isPractice: false,
+              trashedAt: null,
               publishedAt: { not: null },
               resultsPublishedAt: { not: null },
             },
@@ -2837,14 +2853,41 @@ app.get("/api/admin/interactive-engines/latest", async (_req, res) => {
 });
 
 const INFO_SITE_KEY = "infoSiteUrl";
+const TEACHER_REGISTRATION_KEY = "teacherRegistration";
 
 async function readSiteSetting(key: string) {
   const row = await prisma.siteSetting.findUnique({ where: { key } });
   return row?.value || null;
 }
 
+async function teacherRegistrationOpen() {
+  return (await readSiteSetting(TEACHER_REGISTRATION_KEY)) !== "closed";
+}
+
 app.get("/api/site-settings", async (_req, res) => {
-  res.json({ infoSiteUrl: await readSiteSetting(INFO_SITE_KEY) });
+  res.json({
+    infoSiteUrl: await readSiteSetting(INFO_SITE_KEY),
+    teacherRegistration: await teacherRegistrationOpen(),
+  });
+});
+
+app.put("/api/admin/teacher-registration", async (req, res) => {
+  if (typeof req.body?.enabled !== "boolean") {
+    res.status(400).json({ message: "Falta indicar si el registro queda abierto." });
+    return;
+  }
+
+  if (req.body.enabled) {
+    await prisma.siteSetting.deleteMany({ where: { key: TEACHER_REGISTRATION_KEY } });
+  } else {
+    await prisma.siteSetting.upsert({
+      where: { key: TEACHER_REGISTRATION_KEY },
+      create: { key: TEACHER_REGISTRATION_KEY, value: "closed" },
+      update: { value: "closed" },
+    });
+  }
+
+  res.json({ teacherRegistration: req.body.enabled });
 });
 
 app.put("/api/admin/site-settings", async (req, res) => {
@@ -2878,7 +2921,10 @@ app.put("/api/admin/site-settings", async (req, res) => {
     await prisma.siteSetting.deleteMany({ where: { key: INFO_SITE_KEY } });
   }
 
-  res.json({ infoSiteUrl: value || null });
+  res.json({
+    infoSiteUrl: value || null,
+    teacherRegistration: await teacherRegistrationOpen(),
+  });
 });
 
 async function certificatesSummary() {
@@ -2982,6 +3028,18 @@ async function requireApproved(
 
 app.use("/api/groups", requireApproved);
 app.use("/api/teams", requireApproved);
+app.use(["/api/groups/:id", "/api/teams/:id"], async (req, res, next) => {
+  if (req.params.id === "course" || req.params.id === "courses") return next();
+  const id = String(req.params.id);
+  const removed = req.baseUrl.startsWith("/api/teams/")
+    ? await prisma.team.findFirst({ where: { id, group: { contest: { trashedAt: { not: null } } } }, select: { id: true } })
+    : await prisma.contestGroup.findFirst({ where: { id, contest: { trashedAt: { not: null } } }, select: { id: true } });
+  if (removed) {
+    res.status(404).json({ message: "El desafío está en la papelera." });
+    return;
+  }
+  next();
+});
 // Practicas: un maestro arma su propio desafio de practica para sus grupos.
 app.use("/api/practices", requireApproved);
 
@@ -3009,6 +3067,7 @@ function serializePractice(contest: {
     createdAt: Date;
     teams: { id: string }[];
   }[];
+  _count: { practiceResults: number };
 }) {
   const groups = [...contest.groups].sort(
     (left, right) => left.createdAt.getTime() - right.createdAt.getTime(),
@@ -3031,6 +3090,7 @@ function serializePractice(contest: {
       (total, group) => total + group.teams.length,
       0,
     ),
+    resultCount: contest._count.practiceResults,
     state: computeContestState({
       publishedAt: contest.createdAt,
       startsAt: contest.startsAt,
@@ -3050,6 +3110,7 @@ const practiceInclude = {
       teams: { select: { id: true } },
     },
   },
+  _count: { select: { practiceResults: true } },
 } satisfies Prisma.ContestInclude;
 
 /** Las tareas que el administrador libero para practica, para elegir de ahi. */
@@ -3231,19 +3292,55 @@ app.post("/api/practices", async (req, res) => {
       createdById: req.user.id,
       publishedAt: currentDate(),
       tasks: { create: taskWrites },
-      groups: {
-        create: {
-          name: title,
-          createdById: req.user.id,
-          accessCode: await generateUniqueAccessCode(),
-          recoveryCode: generateCode(10),
-        },
-      },
     },
     include: practiceInclude,
   });
 
   res.status(201).json(serializePractice(practice));
+});
+
+app.get("/api/practices/:id/results", async (req, res) => {
+  const practice = await prisma.contest.findFirst({
+    where: { id: String(req.params.id), ...practiceOwnerWhere(req) },
+    select: { id: true, updatedAt: true, categories: true },
+  });
+
+  if (!practice) {
+    res.status(404).json({ message: "Práctica no encontrada." });
+    return;
+  }
+
+  const tasks = tasksOfCategory(
+    await contestTasksFor(practice),
+    contestCategories(practice)[0] ?? null,
+  );
+  const results = await prisma.practiceResult.findMany({
+    where: { contestId: practice.id },
+    orderBy: [{ totalScore: "desc" }, { finishedAt: "asc" }],
+    include: {
+      team: {
+        select: {
+          memberOneFirstName: true,
+          memberOneLastName: true,
+          grade: true,
+        },
+      },
+    },
+  });
+
+  res.json({
+    tasks: tasks.map((task) => ({ id: task.taskDraftId, title: task.play.title })),
+    results: results.map((result) => ({
+      id: result.id,
+      name: `${result.team.memberOneFirstName} ${result.team.memberOneLastName}`.trim(),
+      grade: result.team.grade,
+      totalScore: result.totalScore,
+      correctCount: result.correctCount,
+      taskCount: result.taskCount,
+      marks: result.marks,
+      finishedAt: result.finishedAt.toISOString(),
+    })),
+  });
 });
 
 app.delete("/api/practices/:id", async (req, res) => {
@@ -3480,6 +3577,10 @@ app.put("/api/tasks/:id", async (req, res) => {
               isPractice: true,
               publishedAt: true,
               suspendedAt: true,
+              stoppedAt: true,
+              trashedAt: true,
+              registrationStartsAt: true,
+              registrationEndsAt: true,
               startsAt: true,
               endsAt: true,
             },
@@ -3498,12 +3599,12 @@ app.put("/api/tasks/:id", async (req, res) => {
   const running = existing.contestTasks.find(({ contest }) => {
     if (contest.isPractice) return false;
     const { state } = computeContestState(contest);
-    return state === "abierta" || state === "suspendida";
+    return ["inscripcion", "preparacion", "abierta", "suspendida"].includes(state);
   });
 
   if (running) {
     res.status(409).json({
-      message: `Esta tarea está en «${running.contest.title}», que se está rindiendo ahora. Podrás editarla cuando termine.`,
+      message: `Esta tarea está en «${running.contest.title}», que ya comenzó. Detén el desafío antes de modificar sus preguntas.`,
       code: "TASK_IN_RUNNING_CONTEST",
     });
     return;
@@ -3588,17 +3689,21 @@ const taskSummarySelect = {
   difficulties: true,
 } satisfies Prisma.TaskDraftSelect;
 
+registerContestLifecycle(app, currentDate, (contest) => deserializeContest(contest));
+
 app.get("/api/contests", async (_req, res) => {
+  await purgeExpiredContests();
   await releaseDueResults();
   // La relación va sin ordenar: con más de 100 desafíos Prisma la parte en
   // tandas (D1 admite 100 parámetros por consulta), y ordenada no puede.
   const contests = await prisma.contest.findMany({
-    where: { isPractice: false },
+    where: { isPractice: false, trashedAt: null },
     include: { tasks: { include: { taskDraft: { select: taskSummarySelect } } } },
     orderBy: { updatedAt: "desc" },
   });
 
-  res.json(contests.map(deserializeContest));
+  const favoriteId = await favoriteContestId();
+  res.json(contests.map((contest) => deserializeContest(contest, favoriteId)));
 });
 
 app.get("/api/contests/:id", async (req, res) => {
@@ -3617,7 +3722,7 @@ app.get("/api/contests/:id", async (req, res) => {
     return;
   }
 
-  res.json(deserializeContest(contest));
+  res.json(deserializeContest(contest, await favoriteContestId()));
 });
 
 app.post("/api/contests", async (req, res) => {
@@ -3706,17 +3811,6 @@ app.put("/api/contests/:id", async (req, res) => {
     where: {
       id: req.params.id,
     },
-    select: {
-      id: true,
-      publishedAt: true,
-      suspendedAt: true,
-      consolidatedAt: true,
-      resultsPublishedAt: true,
-      registrationStartsAt: true,
-      registrationEndsAt: true,
-      startsAt: true,
-      endsAt: true,
-    },
   });
 
   if (!existingContest) {
@@ -3729,14 +3823,19 @@ app.put("/api/contests/:id", async (req, res) => {
   const { state: currentState } = computeContestState(existingContest);
 
   const alreadyRunning =
-    currentState === "abierta" || currentState === "suspendida";
+    ["inscripcion", "preparacion", "abierta", "suspendida"].includes(currentState);
 
   if (alreadyRunning || contestHasEnded(currentState)) {
     res.status(409).json({
       message: alreadyRunning
-        ? "El desafío ya empezó; no se puede modificar mientras está en curso."
+        ? "El desafío ya comenzó. Solo puedes ampliar el cierre; para cambiar las fechas o preguntas, primero debes detenerlo."
         : "El desafío ya terminó; no se puede modificar.",
     });
+    return;
+  }
+
+  if (existingContest.publishedAt && !existingContest.stoppedAt && payload.categories.length === 0) {
+    res.status(400).json({ message: "Un desafío publicado debe conservar al menos una categoría." });
     return;
   }
 
@@ -4266,34 +4365,6 @@ app.post("/api/contests/:id/results/unpublish", async (req, res) => {
   res.json(deserializeContest(updated));
 });
 
-app.delete("/api/contests/:id", async (req, res) => {
-  const contest = await prisma.contest.findUnique({
-    where: { id: req.params.id },
-    select: { publishedAt: true },
-  });
-
-  if (!contest) {
-    res.status(404).json({ message: "Desafío no encontrado." });
-    return;
-  }
-
-  // Publicado, ya lo ven los maestros y puede tener inscritos o resultados.
-  if (contest.publishedAt) {
-    res.status(409).json({
-      message: "Solo se puede eliminar un desafío en borrador.",
-    });
-    return;
-  }
-
-  await prisma.contest.delete({
-    where: {
-      id: req.params.id,
-    },
-  });
-
-  res.status(204).send();
-});
-
 function generateCode(length: number) {
   // Sin caracteres ambiguos (O/0, I/1/L).
   const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -4370,12 +4441,31 @@ function serializeGroup(group: {
   id: string;
   name: string;
   category: string | null;
+  grade: string | null;
+  autoKey: string | null;
+  createdById: number | null;
   accessCode: string;
   contestId: string;
   firstUsedAt: Date | null;
   expiresAt: Date | null;
   createdAt: Date;
-  contest?: { title: string; categories: string; allowPairs: boolean } | null;
+  contest?:
+    | (Parameters<typeof contestStateAt>[1] & {
+        title: string;
+        categories: string;
+        allowPairs: boolean;
+        createdAt?: Date;
+      })
+    | null;
+  createdBy?: {
+    role: string;
+    name: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+    schoolName?: string | null;
+    department?: string | null;
+  } | null;
   teams?: Array<{
     id: string;
     participationMode: string;
@@ -4389,12 +4479,32 @@ function serializeGroup(group: {
     createdAt: Date;
   }>;
 }) {
+  const responsible = group.createdBy?.role === "maestro" ? group.createdBy : null;
+  const ownerName = responsible
+    ? [responsible.firstName, responsible.lastName]
+        .filter(Boolean)
+        .join(" ") || responsible.name
+    : null;
   return {
     id: group.id,
     name: group.name,
     accessCode: group.accessCode,
     contestId: group.contestId,
+    grade: group.grade,
+    isDefault: Boolean(group.autoKey),
+    isFavorite: false,
+    ownerId: group.createdById,
     contestTitle: group.contest?.title ?? "",
+    contestState: group.contest
+      ? computeContestState(group.contest).state
+      : "borrador",
+    ownerName: ownerName
+      ? formatPersonName(ownerName)
+      : responsible?.email ?? null,
+    ownerEmail: responsible?.email ?? null,
+    ownerSchool: responsible?.schoolName ?? null,
+    ownerDepartment: responsible?.department ?? null,
+    contestCreatedAt: group.contest?.createdAt?.toISOString() ?? group.createdAt.toISOString(),
     category: group.category,
     contestCategories: group.contest ? contestCategories(group.contest) : [],
     contestAllowPairs: group.contest?.allowPairs ?? false,
@@ -4402,6 +4512,11 @@ function serializeGroup(group: {
     expiresAt: group.expiresAt?.toISOString() ?? null,
     createdAt: group.createdAt.toISOString(),
     teamCount: group.teams?.length ?? 0,
+    studentCount:
+      group.teams?.reduce(
+        (total, team) => total + (team.participationMode === "pareja" ? 2 : 1),
+        0,
+      ) ?? 0,
     teams:
       group.teams?.map((team) => ({
         id: team.id,
@@ -4419,8 +4534,37 @@ function serializeGroup(group: {
 }
 
 const groupContestSelect = {
-  contest: { select: { title: true, categories: true, allowPairs: true } },
-};
+  contest: {
+    select: {
+      title: true,
+      categories: true,
+      allowPairs: true,
+      isPractice: true,
+      createdAt: true,
+      stoppedAt: true,
+      trashedAt: true,
+      publishedAt: true,
+      suspendedAt: true,
+      consolidatedAt: true,
+      resultsPublishedAt: true,
+      registrationStartsAt: true,
+      registrationEndsAt: true,
+      startsAt: true,
+      endsAt: true,
+    },
+  },
+  createdBy: {
+    select: {
+      role: true,
+      name: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      schoolName: true,
+      department: true,
+    },
+  },
+} as const;
 
 // ---- Gestión de maestros (solo admin) ----
 
@@ -4709,9 +4853,9 @@ app.get("/api/published-contests", requireAuth, async (req, res) => {
 
   const contests = await prisma.contest.findMany({
     where: {
-      publishedAt: { not: null },
+      trashedAt: null,
+      ...(req.user?.role === "admin" ? {} : { publishedAt: { not: null } }),
       AND: [
-        { OR: [{ endsAt: null }, { endsAt: { gte: currentDate() } }] },
         visibility,
       ],
     },
@@ -4722,37 +4866,164 @@ app.get("/api/published-contests", requireAuth, async (req, res) => {
       categories: true,
       publishedAt: true,
       isPractice: true,
+      createdAt: true,
+      stoppedAt: true,
+      trashedAt: true,
+      suspendedAt: true,
+      consolidatedAt: true,
+      resultsPublishedAt: true,
       registrationStartsAt: true,
       registrationEndsAt: true,
       startsAt: true,
       endsAt: true,
     },
   });
+  const favoriteId = await favoriteContestId();
   res.json(
-    contests.filter(contestRegistrationIsOpen).map((contest) => ({
-      ...contest,
-      categories: contestCategories(contest),
-      registrationStartsAt: contest.registrationStartsAt?.toISOString() ?? null,
-      registrationEndsAt: contest.registrationEndsAt?.toISOString() ?? null,
-      startsAt: contest.startsAt?.toISOString() ?? null,
-      endsAt: contest.endsAt?.toISOString() ?? null,
-    })),
+    contests
+      .map((contest) => ({
+        ...contest,
+        state: computeContestState(contest).state,
+        isFavorite: contest.id === favoriteId,
+        canEnroll: contestCategories(contest).length > 0 && (req.user?.role === "admin" || contestRegistrationIsOpen(contest)),
+        categories: contestCategories(contest),
+        registrationStartsAt: contest.registrationStartsAt?.toISOString() ?? null,
+        registrationEndsAt: contest.registrationEndsAt?.toISOString() ?? null,
+        startsAt: contest.startsAt?.toISOString() ?? null,
+        endsAt: contest.endsAt?.toISOString() ?? null,
+      })),
   );
 });
 
 // ---- Grupos: el admin ve todos; el maestro solo los suyos ----
 
+function groupListFilters(req: express.Request) {
+  const maestro = req.user?.role === "maestro";
+  const contestId =
+    typeof req.query.contestId === "string" && req.query.contestId
+      ? req.query.contestId
+      : null;
+  const requestedOwner = Number(req.query.ownerId);
+  const ownerId = maestro
+    ? req.user!.id
+    : Number.isInteger(requestedOwner) && requestedOwner > 0
+      ? requestedOwner
+      : null;
+  return { contestId, ownerId };
+}
+
+async function groupCounts(filters: {
+  contestId: string | null;
+  ownerId: number | null;
+}) {
+  const conditions = ['c."trashedAt" IS NULL'];
+  const params: Array<string | number> = [];
+  if (filters.contestId) {
+    conditions.push('g."contestId" = ?');
+    params.push(filters.contestId);
+  }
+  if (filters.ownerId) {
+    conditions.push('g."createdById" = ?');
+    params.push(filters.ownerId);
+  }
+  const { results } = await db()
+    .prepare(
+      `SELECT t."groupId" AS "groupId", COUNT(*) AS "teams",
+        SUM(CASE WHEN t."participationMode" = 'pareja' THEN 2 ELSE 1 END) AS "students"
+      FROM "Team" t
+      JOIN "ContestGroup" g ON g."id" = t."groupId"
+      JOIN "Contest" c ON c."id" = g."contestId"
+      WHERE ${conditions.join(" AND ")}
+      GROUP BY t."groupId"`,
+    )
+    .bind(...params)
+    .all<{ groupId: string; teams: number; students: number }>();
+  return new Map(
+    results.map((row) => [
+      row.groupId,
+      { teams: Number(row.teams), students: Number(row.students) },
+    ]),
+  );
+}
+
 app.get("/api/groups", async (req, res) => {
-  const where =
-    req.user?.role === "maestro" ? { createdById: req.user.id } : {};
+  const filters = groupListFilters(req);
 
-  const groups = await prisma.contestGroup.findMany({
-    where,
-    include: { ...groupContestSelect, teams: true },
-    orderBy: { createdAt: "desc" },
-  });
+  const [groups, counts, favoriteId] = await Promise.all([
+    prisma.contestGroup.findMany({
+      where: {
+        contest: { trashedAt: null },
+        ...(filters.ownerId ? { createdById: filters.ownerId } : {}),
+        ...(filters.contestId ? { contestId: filters.contestId } : {}),
+      },
+      include: groupContestSelect,
+      orderBy: { createdAt: "desc" },
+    }),
+    groupCounts(filters),
+    favoriteContestId(),
+  ]);
 
-  res.json(groups.map(serializeGroup));
+  res.json(
+    groups.map((group) => {
+      const count = counts.get(group.id);
+      return {
+        ...serializeGroup(group),
+        teamCount: count?.teams ?? 0,
+        studentCount: count?.students ?? 0,
+        isFavorite: group.contestId === favoriteId,
+      };
+    }),
+  );
+});
+
+app.get("/api/groups/contests", async (req, res) => {
+  const { ownerId } = groupListFilters(req);
+  const { results } = await db()
+    .prepare(
+      `SELECT g."contestId" AS "contestId", COUNT(DISTINCT g."id") AS "groups",
+        COALESCE(SUM(CASE WHEN t."id" IS NULL THEN 0
+          WHEN t."participationMode" = 'pareja' THEN 2 ELSE 1 END), 0) AS "students"
+      FROM "ContestGroup" g
+      JOIN "Contest" c ON c."id" = g."contestId"
+      LEFT JOIN "Team" t ON t."groupId" = g."id"
+      WHERE c."trashedAt" IS NULL${ownerId ? ' AND g."createdById" = ?' : ""}
+      GROUP BY g."contestId"`,
+    )
+    .bind(...(ownerId ? [ownerId] : []))
+    .all<{ contestId: string; groups: number; students: number }>();
+
+  const ids = results.map((row) => row.contestId);
+  const [contests, favoriteId] = await Promise.all([
+    ids.length
+      ? prisma.contest.findMany({
+          where: { id: { in: ids } },
+          select: {
+            id: true,
+            ...groupContestSelect.contest.select,
+          },
+        })
+      : Promise.resolve([]),
+    favoriteContestId(),
+  ]);
+  const byId = new Map(contests.map((contest) => [contest.id, contest]));
+
+  res.json(
+    results.flatMap((row) => {
+      const contest = byId.get(row.contestId);
+      if (!contest) return [];
+      return [
+        {
+          id: contest.id,
+          title: contest.title,
+          state: computeContestState(contest).state,
+          createdAt: contest.createdAt.toISOString(),
+          isFavorite: contest.id === favoriteId,
+          groups: Number(row.groups),
+          students: Number(row.students),
+        },
+      ];
+    }),
+  );
 });
 
 app.get("/api/groups/:id", async (req, res) => {
@@ -4913,6 +5184,7 @@ async function loadGroupResults(
       name: group.name,
       accessCode: group.accessCode,
       category: group.category,
+      grade: group.grade,
     },
     contest: {
       id: contest.id,
@@ -4923,6 +5195,7 @@ async function loadGroupResults(
       endsAt: contest.endsAt?.toISOString() ?? null,
       resultsPublished: Boolean(contest.resultsPublishedAt),
       registrationOpen: contestRegistrationIsOpen(contest),
+      canEnroll: groupCategories(group).length > 0 && (user?.role === "admin" || contestRegistrationIsOpen(contest)),
       paperEntryOpen: paper.entryOpen,
       paperEntryUntil: paper.entryUntil?.toISOString() ?? null,
       printFrom: paper.printFrom?.toISOString() ?? null,
@@ -5220,6 +5493,110 @@ app.get("/api/groups/:id/results.xlsx", async (req, res) => {
   res.end(Buffer.from(buffer as unknown as ArrayBuffer));
 });
 
+function courseGroupInsert(
+  contestId: string,
+  grade: (typeof SCHOOL_GRADES)[number],
+  ownerId: number,
+  accessCode: string,
+  stamp: string,
+) {
+  return db().prepare(`INSERT INTO "ContestGroup"
+    ("id", "contestId", "createdById", "name", "category", "grade", "autoKey",
+     "accessCode", "recoveryCode", "createdAt", "updatedAt")
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM "Contest" c
+    WHERE c."id" = ? AND c."trashedAt" IS NULL
+      AND EXISTS (SELECT 1 FROM json_each(c."categories") WHERE value = ?)
+    ON CONFLICT("autoKey") DO NOTHING`)
+    .bind(
+      randomUUID(), contestId, ownerId, grade.label, grade.category, grade.value,
+      `${ownerId}:${contestId}:${grade.value}`, accessCode, generateCode(10), stamp, stamp,
+      contestId, grade.category,
+    );
+}
+
+async function ensureCourseGroup(
+  contestId: string,
+  grade: (typeof SCHOOL_GRADES)[number],
+  ownerId: number,
+) {
+  const autoKey = `${ownerId}:${contestId}:${grade.value}`;
+  const existing = await prisma.contestGroup.findUnique({ where: { autoKey } });
+  if (existing) return existing;
+  await courseGroupInsert(contestId, grade, ownerId, await generateUniqueAccessCode(), currentDate().toISOString()).run();
+  return prisma.contestGroup.findUniqueOrThrow({ where: { autoKey } });
+}
+
+app.post("/api/groups/courses", async (req, res) => {
+  const contestId = typeof req.body?.contestId === "string" ? req.body.contestId : "";
+  const contest = await prisma.contest.findUnique({ where: { id: contestId } });
+  if (!contest || contest.trashedAt || (!contest.publishedAt && req.user?.role !== "admin")) {
+    res.status(404).json({ message: "Desafío no encontrado." });
+    return;
+  }
+  if (contest.isPractice && req.user?.role === "maestro" && contest.createdById !== req.user.id) {
+    res.status(404).json({ message: "Desafío no encontrado." });
+    return;
+  }
+  if (req.user?.role !== "admin" && !contestRegistrationIsOpen(contest)) {
+    res.status(409).json({ message: registrationWindowMessage(contest) });
+    return;
+  }
+  const grades = gradesForCategories(contestCategories(contest));
+  const ownerId = req.user!.id;
+  const existing = await prisma.contestGroup.findMany({
+    where: { contestId, createdById: ownerId, autoKey: { not: null } },
+    select: { autoKey: true },
+  });
+  const keys = new Set(existing.map((group) => group.autoKey));
+  const missing = grades.filter((grade) => !keys.has(`${ownerId}:${contestId}:${grade.value}`));
+  const reserved = new Set<string>();
+  const inserts: D1PreparedStatement[] = [];
+  const stamp = currentDate().toISOString();
+  for (const grade of missing) {
+    let code = await generateUniqueAccessCode();
+    while (reserved.has(code)) code = await generateUniqueAccessCode();
+    reserved.add(code);
+    inserts.push(courseGroupInsert(contestId, grade, ownerId, code, stamp));
+  }
+  if (inserts.length) await db().batch(inserts);
+  const groups = await prisma.contestGroup.findMany({
+    where: { contestId, createdById: ownerId, autoKey: { not: null }, grade: { in: grades.map((grade) => grade.value) } },
+    include: { ...groupContestSelect, teams: true },
+  });
+  res.json(groups.map(serializeGroup));
+});
+
+app.post("/api/groups/course", async (req, res) => {
+  const contestId = typeof req.body?.contestId === "string" ? req.body.contestId : "";
+  const contest = await prisma.contest.findUnique({ where: { id: contestId } });
+  if (!contest || contest.trashedAt || (!contest.publishedAt && req.user?.role !== "admin")) {
+    res.status(400).json({ message: "El desafío debe estar publicado." });
+    return;
+  }
+  if (contest.isPractice && req.user?.role === "maestro" && contest.createdById !== req.user.id) {
+    res.status(404).json({ message: "Desafío no encontrado." });
+    return;
+  }
+  if (req.user?.role !== "admin" && !contestRegistrationIsOpen(contest)) {
+    res.status(409).json({ message: registrationWindowMessage(contest) });
+    return;
+  }
+  let grade: string;
+  try {
+    grade = parseGrade(req.body?.grade, contestCategories(contest));
+  } catch (error) {
+    res.status(400).json({ message: error instanceof Error ? error.message : "Curso inválido." });
+    return;
+  }
+  const course = SCHOOL_GRADES.find((item) => item.value === grade)!;
+  const courseGroup = await ensureCourseGroup(contest.id, course, req.user!.id);
+  const group = await prisma.contestGroup.findUniqueOrThrow({
+    where: { id: courseGroup.id },
+    include: { ...groupContestSelect, teams: true },
+  });
+  res.json(serializeGroup(group));
+});
+
 app.post("/api/groups", async (req, res) => {
   const contestId =
     typeof req.body?.contestId === "string" ? req.body.contestId : "";
@@ -5245,7 +5622,7 @@ app.post("/api/groups", async (req, res) => {
     return;
   }
 
-  if (!contest.publishedAt) {
+  if (contest.trashedAt || (!contest.publishedAt && req.user?.role !== "admin")) {
     res.status(400).json({
       message: "El desafío debe estar publicado para crear grupos.",
       code: "GROUP_CONTEST_UNPUBLISHED",
@@ -5253,13 +5630,20 @@ app.post("/api/groups", async (req, res) => {
     });
     return;
   }
+  if (contest.isPractice && req.user?.role === "maestro" && contest.createdById !== req.user.id) {
+    res.status(404).json({ message: "Desafío no encontrado." });
+    return;
+  }
 
-  if (!contestRegistrationIsOpen(contest)) {
+  if (req.user?.role !== "admin" && !contestRegistrationIsOpen(contest)) {
     res.status(409).json({ message: registrationWindowMessage(contest) });
     return;
   }
 
-  if (contestHasEnded(computeContestState(contest).state)) {
+  if (
+    req.user?.role !== "admin" &&
+    contestHasEnded(computeContestState(contest).state)
+  ) {
     res.status(409).json({
       message: "El desafío ya cerró; no es posible crear grupos.",
       code: "GROUP_CONTEST_CLOSED",
@@ -5269,10 +5653,20 @@ app.post("/api/groups", async (req, res) => {
   }
 
   const categories = contestCategories(contest);
+  let course: (typeof SCHOOL_GRADES)[number] | undefined;
+  if (req.body?.grade) {
+    try {
+      const grade = parseGrade(req.body.grade, categories);
+      course = SCHOOL_GRADES.find((item) => item.value === grade);
+    } catch (error) {
+      res.status(400).json({ message: error instanceof Error ? error.message : "Curso inválido.", field: "grade" });
+      return;
+    }
+  }
   const requestedCategory =
     typeof req.body?.category === "string" ? req.body.category.trim() : "";
   const category =
-    requestedCategory || (categories.length === 1 ? categories[0] : "");
+    course?.category || requestedCategory || (categories.length === 1 ? categories[0] : "");
 
   if (!categories.includes(category)) {
     res.status(400).json({
@@ -5293,6 +5687,7 @@ app.post("/api/groups", async (req, res) => {
       contestId,
       name,
       category,
+      grade: course?.value ?? null,
       accessCode,
       recoveryCode,
       createdById: req.user?.id ?? null,
@@ -5480,7 +5875,7 @@ app.put("/api/teams/:id", async (req, res) => {
   let grade: string;
 
   try {
-    grade = parseGrade(req.body?.grade, groupCategories(team.group));
+    grade = parseGroupGrade(req.body?.grade, team.group);
   } catch (error) {
     res.status(400).json({
       message: error instanceof Error ? error.message : "Curso inválido.",
@@ -5961,7 +6356,9 @@ app.get("/api/groups/:id/roster-template", async (req, res) => {
     return;
   }
 
-  const grades = gradesForCategories(groupCategories(group));
+  const grades = group.grade && group.createdById !== null
+    ? gradesForCategories(contestCategories(group.contest))
+    : gradesForGroup(group);
   const allowPairs = group.contest.allowPairs;
   // Si el desafio es solo individual, las columnas del companero solo podrian
   // provocar errores: la planilla se queda con lo que de verdad hay que llenar.
@@ -6152,12 +6549,21 @@ app.post("/api/groups/:id/roster", rosterUploadMiddleware, async (req, res) => {
     return;
   }
 
-  if (!contestRegistrationIsOpen(group.contest)) {
+  if (req.user?.role !== "admin" && !contestRegistrationIsOpen(group.contest)) {
     res.status(409).json({ message: registrationWindowMessage(group.contest) });
     return;
   }
 
-  if (contestHasEnded(computeContestState(group.contest).state)) {
+  const availableCategories = contestCategories(group.contest);
+  if (!groupCategories(group).length) {
+    res.status(409).json({ message: "La categoría del grupo no participa en este desafío." });
+    return;
+  }
+
+  if (
+    req.user?.role !== "admin" &&
+    contestHasEnded(computeContestState(group.contest).state)
+  ) {
     res
       .status(409)
       .json({ message: "El desafío ya cerró; no es posible inscribir." });
@@ -6313,7 +6719,27 @@ app.post("/api/groups/:id/roster", rosterUploadMiddleware, async (req, res) => {
     const cellText = (row: ExcelJS.Row, column: number) =>
       column ? valueText(row.getCell(column).value) : "";
 
-    const takenKeys = await groupNameKeys(group.id);
+    const distributeByGrade = Boolean(
+      group.grade &&
+      group.createdById !== null &&
+      req.body?.distributeByGrade === "true",
+    );
+    const destinations = new Map<string, string>();
+    if (distributeByGrade) {
+      const courseGroups = await prisma.contestGroup.findMany({
+        where: {
+          contestId: group.contestId,
+          createdById: group.createdById,
+          autoKey: { not: null },
+        },
+        select: { id: true, grade: true },
+      });
+      for (const destination of courseGroups) {
+        if (destination.grade) destinations.set(destination.grade, destination.id);
+      }
+      destinations.set(group.grade!, group.id);
+    }
+    const takenKeysByCourse = new Map<string, Set<string>>();
 
     type RosterDraft = {
       row: number;
@@ -6391,11 +6817,22 @@ app.post("/api/groups/:id/roster", rosterUploadMiddleware, async (req, res) => {
 
       let grade: string | null = null;
       try {
-        grade = gradeFromCell(gradeText, groupCategories(group));
+        grade = gradeFromCell(
+          gradeText,
+          distributeByGrade ? availableCategories : groupCategories(group).filter((category) => availableCategories.includes(category)),
+        );
+        if (!distributeByGrade) grade = parseGroupGrade(grade, group);
       } catch (error) {
         addIssue(error instanceof Error ? error.message : "Curso inválido.");
       }
 
+      const courseKey = distributeByGrade ? grade ?? "" : group.id;
+      let takenKeys = takenKeysByCourse.get(courseKey);
+      if (!takenKeys) {
+        const destinationId = distributeByGrade ? destinations.get(courseKey) : group.id;
+        takenKeys = destinationId ? await groupNameKeys(destinationId) : new Set<string>();
+        takenKeysByCourse.set(courseKey, takenKeys);
+      }
       const keyOne = oneFirst && oneLast ? nameKey(oneFirst, oneLast) : "";
       const keyTwo =
         isPair && twoFirst && twoLast ? nameKey(twoFirst, twoLast) : "";
@@ -6449,6 +6886,15 @@ app.post("/api/groups/:id/roster", rosterUploadMiddleware, async (req, res) => {
       return;
     }
 
+    if (distributeByGrade) {
+      for (const grade of new Set(drafts.map((draft) => draft.grade))) {
+        if (destinations.has(grade)) continue;
+        const course = SCHOOL_GRADES.find((item) => item.value === grade)!;
+        const destination = await ensureCourseGroup(group.contestId, course, group.createdById!);
+        destinations.set(grade, destination.id);
+      }
+    }
+
     const reservedCodes = new Set<string>();
     const prepared: Array<RosterDraft & { personalCode: string }> = [];
     for (const draft of drafts) {
@@ -6468,7 +6914,7 @@ app.post("/api/groups/:id/roster", rosterUploadMiddleware, async (req, res) => {
           ("id", "groupId", "participationMode", "grade", "memberOneFirstName", "memberOneLastName",
            "memberTwoFirstName", "memberTwoLastName", "personalCode", "status", "createdAt", "updatedAt")
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'registered', ?, ?)`).bind(
-          teamId, group.id, draft.participationMode, draft.grade, draft.oneFirst, draft.oneLast,
+          teamId, distributeByGrade ? destinations.get(draft.grade)! : group.id, draft.participationMode, draft.grade, draft.oneFirst, draft.oneLast,
           draft.twoFirst, draft.twoLast, draft.personalCode, importedAt, importedAt,
         ),
         db().prepare(`INSERT INTO "Attempt" ("id", "teamId", "status", "createdAt", "updatedAt")
@@ -6481,7 +6927,15 @@ app.post("/api/groups/:id/roster", rosterUploadMiddleware, async (req, res) => {
         row: draft.row,
         name: `${draft.oneFirst} ${draft.oneLast}`,
         personalCode: draft.personalCode,
+        grade: draft.grade,
       })),
+      groups: distributeByGrade
+        ? [...new Set(prepared.map((draft) => draft.grade))].map((grade) => ({
+            id: destinations.get(grade)!,
+            grade,
+            count: prepared.filter((draft) => draft.grade === grade).length,
+          }))
+        : [],
       skipped: [],
     });
   } finally {
@@ -6512,12 +6966,15 @@ app.post("/api/groups/:id/teams", async (req, res) => {
     return;
   }
 
-  if (!contestRegistrationIsOpen(group.contest)) {
+  if (req.user?.role !== "admin" && !contestRegistrationIsOpen(group.contest)) {
     res.status(409).json({ message: registrationWindowMessage(group.contest) });
     return;
   }
 
-  if (contestHasEnded(computeContestState(group.contest).state)) {
+  if (
+    req.user?.role !== "admin" &&
+    contestHasEnded(computeContestState(group.contest).state)
+  ) {
     res.status(409).json({
       message: "El desafío ya cerró; no es posible inscribir.",
       code: "TEAM_CONTEST_CLOSED",
@@ -6569,7 +7026,7 @@ app.post("/api/groups/:id/teams", async (req, res) => {
   let grade: string;
 
   try {
-    grade = parseGrade(req.body?.grade, groupCategories(group));
+    grade = parseGroupGrade(req.body?.grade, group);
   } catch (error) {
     res.status(400).json({
       message: error instanceof Error ? error.message : "Curso inválido.",
@@ -6637,8 +7094,8 @@ app.get("/api/play/group/:code", async (req, res) => {
     .trim()
     .toUpperCase();
 
-  const group = await prisma.contestGroup.findUnique({
-    where: { accessCode: code },
+  const group = await prisma.contestGroup.findFirst({
+    where: { accessCode: code, contest: { trashedAt: null } },
     include: { contest: true },
   });
 
@@ -6654,6 +7111,13 @@ app.get("/api/play/group/:code", async (req, res) => {
 
   if (!group.contest.publishedAt) {
     res.status(409).json({ message: "El desafío aún no está disponible." });
+    return;
+  }
+
+  if (group.contest.isPractice) {
+    res.status(410).json({
+      message: "Las prácticas ahora se abren con tu código personal.",
+    });
     return;
   }
 
@@ -6682,93 +7146,223 @@ app.get("/api/play/group/:code", async (req, res) => {
       contestForCategory(group.contest, group.category).endsAt?.toISOString() ??
       null,
     category: group.category,
-    grades: gradesForCategories(groupCategories(group)),
+    grades: gradesForGroup(group),
     state,
   });
 });
 
-app.post("/api/play/practice/:code/enter", async (req, res) => {
-  const code = String(req.params.code ?? "")
-    .trim()
-    .toUpperCase();
-  const rawName =
-    typeof req.body?.name === "string" ? cleanName(req.body.name) : "";
-
-  if (!rawName) {
-    res.status(400).json({ message: "Escribe tu nombre." });
-    return;
-  }
-
-  const group = await prisma.contestGroup.findUnique({
-    where: { accessCode: code },
-    include: { contest: true },
-  });
-
-  if (!group || !group.contest.isPractice) {
-    res.status(404).json({ message: "Código no encontrado." });
-    return;
-  }
-
-  if (groupAccessHasExpired(group)) {
-    res.status(410).json({ message: "Esta práctica ya cerró." });
-    return;
-  }
-
-  if (contestHasEnded(computeContestState(group.contest).state)) {
-    res.status(409).json({ message: "Esta práctica ya cerró." });
-    return;
-  }
-
-  const [first, ...rest] = rawName.split(" ");
-  const firstName = formatName(first);
-  const lastName = rest.length > 0 ? formatName(rest.join(" ")) : "";
-  const key = nameKey(firstName, lastName);
-
-  // El mismo nombre vuelve al mismo intento: asi quien cierra el navegador por
-  // accidente retoma donde iba en vez de empezar de cero con otro registro.
-  const existing = await prisma.team.findMany({ where: { groupId: group.id } });
-  const mine = existing.find(
-    (team) => nameKey(team.memberOneFirstName, team.memberOneLastName) === key,
-  );
-
-  if (mine && playSessionIsLive(mine)) {
-    res.status(409).json({
-      message:
-        "Ya hay alguien con ese nombre resolviendo la práctica. Si eres tú, espera un minuto e inténtalo otra vez.",
-    });
-    return;
-  }
-
-  const team =
-    mine ??
-    (await prisma.team.create({
-      data: {
-        groupId: group.id,
-        participationMode: "individual",
-        memberOneFirstName: firstName,
-        memberOneLastName: lastName,
-        personalCode: await generateUniquePersonalCode(),
-        // Sin su intento, /api/play/attempt no encuentra al estudiante.
-        attempt: { create: { status: "pending" } },
+async function practiceStudent(rawCode: unknown) {
+  const personalCode =
+    typeof rawCode === "string" ? rawCode.trim().toUpperCase() : "";
+  if (!personalCode) return null;
+  const team = await prisma.team.findUnique({
+    where: { personalCode },
+    select: {
+      id: true,
+      grade: true,
+      memberOneFirstName: true,
+      memberOneLastName: true,
+      group: {
+        select: {
+          createdById: true,
+          contest: {
+            select: { categories: true, isPractice: true, trashedAt: true },
+          },
+        },
       },
-    }));
+    },
+  });
+  if (
+    !team ||
+    !team.group.createdById ||
+    team.group.contest.isPractice ||
+    team.group.contest.trashedAt
+  ) {
+    return null;
+  }
+  const category = teamCategory(
+    team.grade,
+    contestCategories(team.group.contest),
+  );
+  if (!category) return null;
+  return { team, teacherId: team.group.createdById, category };
+}
 
-  const sessionToken = randomUUID();
-  await prisma.team.update({
-    where: { id: team.id },
-    data: { sessionToken, sessionSeenAt: currentDate() },
+async function studentPractice(id: string, rawCode: unknown) {
+  const student = await practiceStudent(rawCode);
+  if (!student) return null;
+  const contest = await prisma.contest.findFirst({
+    where: {
+      id,
+      isPractice: true,
+      createdById: student.teacherId,
+      trashedAt: null,
+    },
+  });
+  if (
+    !contest ||
+    !contestCategories(contest).includes(student.category) ||
+    computeContestState(contest).state !== "abierta"
+  ) {
+    return null;
+  }
+  const tasks = tasksOfCategory(
+    await contestTasksFor(contest),
+    student.category,
+  );
+  return { student, contest, tasks };
+}
+
+const PRACTICE_CLOSED = "Esta práctica no está abierta ahora.";
+
+app.post("/api/play/practice/:code/enter", (_req, res) => {
+  res.status(410).json({
+    message: "Las prácticas ahora se abren con tu código personal.",
+  });
+});
+
+app.post("/api/play/practices", async (req, res) => {
+  const student = await practiceStudent(req.body?.personalCode);
+  if (!student) {
+    res.json({ practices: [] });
+    return;
+  }
+
+  const contests = await prisma.contest.findMany({
+    where: { isPractice: true, createdById: student.teacherId, trashedAt: null },
+    include: { _count: { select: { tasks: true } } },
+    orderBy: { endsAt: "asc" },
   });
 
-  res.status(201).json({
-    sessionToken,
-    groupName: group.name,
-    contestTitle: group.contest.title,
-    participationMode: team.participationMode,
-    memberOneFirstName: team.memberOneFirstName,
-    memberOneLastName: team.memberOneLastName,
-    memberTwoFirstName: null,
-    memberTwoLastName: null,
+  res.json({
+    name: student.team.memberOneFirstName,
+    practices: contests
+      .filter(
+        (contest) =>
+          contestCategories(contest).includes(student.category) &&
+          computeContestState(contest).state === "abierta",
+      )
+      .map((contest) => ({
+        id: contest.id,
+        title: contest.title,
+        taskCount: contest._count.tasks,
+        endsAt: contest.endsAt?.toISOString() ?? null,
+      })),
   });
+});
+
+app.post("/api/play/practices/:id/tasks", async (req, res) => {
+  const found = await studentPractice(
+    String(req.params.id),
+    req.body?.personalCode,
+  );
+  if (!found) {
+    res.status(404).json({ message: PRACTICE_CLOSED });
+    return;
+  }
+
+  res.json({
+    title: found.contest.title,
+    category: found.student.category,
+    rules: contestRules(found.tasks),
+    tasks: await externalizeTaskImages(
+      found.tasks.map((contestTask) =>
+        renderSafeTask(contestTask, contestTask.play),
+      ),
+      imageStore(req),
+    ),
+  });
+});
+
+app.post("/api/play/practices/:id/check", async (req, res) => {
+  const found = await studentPractice(
+    String(req.params.id),
+    req.body?.personalCode,
+  );
+  if (!found) {
+    res.status(404).json({ message: PRACTICE_CLOSED });
+    return;
+  }
+
+  const contestTask = found.tasks.find(
+    (item) => item.taskDraftId === req.body?.taskId,
+  );
+  if (!contestTask) {
+    res.status(404).json({ message: "Pregunta no encontrada." });
+    return;
+  }
+
+  const payload = req.body?.payload;
+  const error = validateTaskAnswer(contestTask.play, payload);
+  if (error) {
+    res.status(400).json({ message: error });
+    return;
+  }
+
+  res.json({
+    correct: answerIsCorrect(contestTask.play, payload),
+    explanationBlocks: await externalizeTaskImages(
+      contestTask.play.explanationBlocks,
+      imageStore(req),
+    ),
+  });
+});
+
+app.post("/api/play/practices/:id/finish", async (req, res) => {
+  const found = await studentPractice(
+    String(req.params.id),
+    req.body?.personalCode,
+  );
+  if (!found) {
+    res.status(404).json({ message: PRACTICE_CLOSED });
+    return;
+  }
+
+  const answers = (
+    req.body?.answers && typeof req.body.answers === "object"
+      ? req.body.answers
+      : {}
+  ) as Record<string, unknown>;
+  let totalScore = initialScoreOf(found.tasks);
+  let correctCount = 0;
+  let answeredCount = 0;
+  let marks = "";
+
+  for (const contestTask of found.tasks) {
+    const raw = answers[contestTask.taskDraftId] ?? null;
+    const payload =
+      raw !== null && !validateTaskAnswer(contestTask.play, raw) ? raw : null;
+    const graded = gradeAnswer(contestTask, contestTask.play, payload);
+    totalScore += graded.score;
+    if (graded.answered) answeredCount += 1;
+    if (graded.isCorrect) correctCount += 1;
+    marks += !graded.answered ? "-" : graded.isCorrect ? "C" : "X";
+  }
+
+  const summary = {
+    totalScore,
+    correctCount,
+    answeredCount,
+    taskCount: found.tasks.length,
+  };
+
+  await prisma.practiceResult.upsert({
+    where: {
+      contestId_teamId: {
+        contestId: found.contest.id,
+        teamId: found.student.team.id,
+      },
+    },
+    create: {
+      contestId: found.contest.id,
+      teamId: found.student.team.id,
+      ...summary,
+      marks,
+    },
+    update: { ...summary, marks, finishedAt: currentDate() },
+  });
+
+  res.json(summary);
 });
 
 app.post("/api/play/join", async (req, res) => {
@@ -6792,8 +7386,8 @@ app.post("/api/play/join", async (req, res) => {
     return;
   }
 
-  const group = await prisma.contestGroup.findUnique({
-    where: { accessCode: code },
+  const group = await prisma.contestGroup.findFirst({
+    where: { accessCode: code, contest: { trashedAt: null } },
     include: { contest: true },
   });
 
@@ -6839,7 +7433,7 @@ app.post("/api/play/join", async (req, res) => {
   let grade: string;
 
   try {
-    grade = parseGrade(req.body?.grade, groupCategories(group));
+    grade = parseGroupGrade(req.body?.grade, group);
   } catch (error) {
     res.status(400).json({
       message: error instanceof Error ? error.message : "Curso inválido.",
@@ -6924,8 +7518,8 @@ app.get("/api/play/team/:personalCode", async (req, res) => {
     .trim()
     .toUpperCase();
 
-  const team = await prisma.team.findUnique({
-    where: { personalCode },
+  const team = await prisma.team.findFirst({
+    where: { personalCode, group: { contest: { trashedAt: null } } },
     include: { group: { include: { contest: true } } },
   });
 
@@ -7251,6 +7845,8 @@ async function releaseDueResults(contestId?: string) {
       isPractice: false,
       publishedAt: { not: null },
       suspendedAt: null,
+      stoppedAt: null,
+      trashedAt: null,
       resultsReleasedAt: null,
       endsAt: { not: null, lt: now },
     },
@@ -7316,15 +7912,15 @@ const playTeamLightInclude = {
 };
 
 function findLightTeamForPlay(personalCode: string) {
-  return prisma.team.findUnique({
-    where: { personalCode },
+  return prisma.team.findFirst({
+    where: { personalCode, group: { contest: { trashedAt: null } } },
     include: playTeamLightInclude,
   });
 }
 
 function findLightTeamBySession(sessionToken: string) {
-  return prisma.team.findUnique({
-    where: { sessionToken },
+  return prisma.team.findFirst({
+    where: { sessionToken, group: { contest: { trashedAt: null } } },
     include: playTeamLightInclude,
   });
 }
@@ -7368,12 +7964,12 @@ async function findAnswerTeamBySession(
         a."id" AS "attemptId", a."status" AS "attemptStatus", a."mode" AS "attemptMode", a."endsAt" AS "attemptEndsAt",
         c."id" AS "contestId", c."updatedAt", c."categories", c."publishedAt", c."suspendedAt",
         c."consolidatedAt", c."resultsPublishedAt", c."registrationStartsAt", c."registrationEndsAt",
-        c."startsAt", c."endsAt", c."isPractice"
+        c."startsAt", c."endsAt", c."isPractice", c."stoppedAt", c."trashedAt"
       FROM "Team" t
       JOIN "ContestGroup" g ON g."id" = t."groupId"
       JOIN "Contest" c ON c."id" = g."contestId"
       LEFT JOIN "Attempt" a ON a."teamId" = t."id"
-      WHERE t."sessionToken" = ?`,
+      WHERE t."sessionToken" = ? AND c."trashedAt" IS NULL`,
     )
     .bind(sessionToken)
     .first<Record<string, unknown>>();
@@ -7398,6 +7994,8 @@ async function findAnswerTeamBySession(
         categories: String(row.categories ?? "[]"),
         publishedAt: sqlDate(row.publishedAt),
         suspendedAt: sqlDate(row.suspendedAt),
+        stoppedAt: sqlDate(row.stoppedAt),
+        trashedAt: sqlDate(row.trashedAt),
         consolidatedAt: sqlDate(row.consolidatedAt),
         resultsPublishedAt: sqlDate(row.resultsPublishedAt),
         registrationStartsAt: sqlDate(row.registrationStartsAt),
@@ -7508,8 +8106,8 @@ app.post("/api/play/session", async (req, res) => {
     return;
   }
 
-  const team = await prisma.team.findUnique({
-    where: { personalCode },
+  const team = await prisma.team.findFirst({
+    where: { personalCode, group: { contest: { trashedAt: null } } },
     include: { group: { include: { contest: true } } },
   });
 
@@ -7612,13 +8210,15 @@ app.post("/api/play/heartbeat", async (req, res) => {
     .prepare(
       `UPDATE "Team" SET "sessionSeenAt" = ? WHERE "sessionToken" = ?
       RETURNING
-        (SELECT c."suspendedAt" FROM "ContestGroup" g JOIN "Contest" c ON c."id" = g."contestId" WHERE g."id" = "Team"."groupId") AS "suspendedAt",
+        (SELECT COALESCE(c."suspendedAt", c."stoppedAt") FROM "ContestGroup" g JOIN "Contest" c ON c."id" = g."contestId" WHERE g."id" = "Team"."groupId") AS "suspendedAt",
+        (SELECT a."id" FROM "Attempt" a WHERE a."teamId" = "Team"."id") AS "attemptId",
         (SELECT a."endsAt" FROM "Attempt" a WHERE a."teamId" = "Team"."id") AS "endsAt",
         (SELECT a."status" FROM "Attempt" a WHERE a."teamId" = "Team"."id") AS "status"`,
     )
     .bind(now.toISOString(), token)
     .first<{
       suspendedAt: string | null;
+      attemptId: string | null;
       endsAt: string | null;
       status: string | null;
     }>();
@@ -7634,6 +8234,7 @@ app.post("/api/play/heartbeat", async (req, res) => {
     ok: true,
     serverNow: now.toISOString(),
     suspended: Boolean(state.suspendedAt),
+    attemptId: state.attemptId,
     endsAt: iso(state.endsAt),
     status: state.status,
   });
@@ -7868,6 +8469,7 @@ const playAttemptHandler: express.RequestHandler = async (req, res) => {
 
   const body = {
     contestTitle: contest.title,
+    attemptId: attempt.id,
     // Hora del servidor: la cuenta regresiva no depende del reloj del equipo.
     serverNow: currentDate().toISOString(),
     category,
@@ -7993,6 +8595,10 @@ app.post("/api/play/answer", async (req, res) => {
     return;
   }
 
+  if (typeof req.body?.attemptId === "string" && req.body.attemptId !== team.attempt.id) {
+    res.status(409).json({ message: "El intento se reinició. Actualiza el desafío antes de responder." });
+    return;
+  }
   const answerError = validateTaskAnswer(contestTask.play, payload);
   if (answerError) {
     res.status(400).json({ message: answerError });
@@ -8004,11 +8610,15 @@ app.post("/api/play/answer", async (req, res) => {
   const graded = gradeAnswer(contestTask, contestTask.play, payload);
   const now = currentDate().toISOString();
   // Una sola sentencia: es la escritura más frecuente durante la prueba.
-  await db()
+  const written = await db()
     .prepare(
       `INSERT INTO "AttemptAnswer"
         ("id", "attemptId", "taskDraftId", "responsePayload", "isCorrect", "score", "answeredAt", "createdAt", "updatedAt")
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (
+        SELECT 1 FROM "Attempt" a JOIN "Team" t ON t."id" = a."teamId"
+        JOIN "ContestGroup" g ON g."id" = t."groupId" JOIN "Contest" c ON c."id" = g."contestId"
+        WHERE a."id" = ? AND a."status" = 'in_progress' AND c."stoppedAt" IS NULL AND c."trashedAt" IS NULL
+          AND (strftime('%Y-%m-%dT%H:%M:%fZ', c."updatedAt") = ? OR c."updatedAt" = ?))
       ON CONFLICT ("attemptId", "taskDraftId") DO UPDATE SET
         "responsePayload" = excluded."responsePayload",
         "isCorrect" = excluded."isCorrect",
@@ -8026,8 +8636,16 @@ app.post("/api/play/answer", async (req, res) => {
       graded.answered ? now : null,
       now,
       now,
+      team.attempt.id,
+      team.group.contest.updatedAt.toISOString(),
+      team.group.contest.updatedAt.getTime(),
     )
     .run();
+
+  if (!written.meta.changes) {
+    res.status(409).json({ message: "El desafío cambió. Actualiza la página antes de responder." });
+    return;
+  }
 
   res.status(204).send();
 });
@@ -8062,13 +8680,14 @@ app.post("/api/play/submit", async (req, res) => {
     return;
   }
 
-  if (computeContestState(team.group.contest).state === "suspendida") {
-    res.status(409).json({ message: SUSPENDED_CONTEST_MESSAGE });
+  if (team.attempt.status !== "in_progress" || team.group.contest.stoppedAt ||
+      (typeof req.body?.attemptId === "string" && req.body.attemptId !== team.attempt.id)) {
+    res.status(409).json({ message: "El intento se reinició o todavía no empezó." });
     return;
   }
 
-  if (team.attempt.status !== "in_progress") {
-    res.status(409).json({ message: "El desafío no está en curso." });
+  if (computeContestState(team.group.contest).state === "suspendida") {
+    res.status(409).json({ message: SUSPENDED_CONTEST_MESSAGE });
     return;
   }
 
@@ -8207,6 +8826,9 @@ export default {
   // Cada cinco minutos: publica la práctica si cambió algo que no pasó por
   // las rutas de tareas (scripts de carga, cambios directos en D1).
   async scheduled(_controller: ScheduledController, _env: unknown, ctx: ExecutionContext) {
-    ctx.waitUntil(withRequestPrisma(() => refreshPracticeSnapshotQuietly()));
+    ctx.waitUntil(withRequestPrisma(async () => {
+      await purgeExpiredContests();
+      await refreshPracticeSnapshotQuietly();
+    }));
   },
 };

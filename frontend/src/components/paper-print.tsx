@@ -90,6 +90,10 @@ export function PaperPrint() {
     getPaperBundle(groupId)
       .then((loaded) => {
         if (!active) return;
+        if (loaded.paperBlocked) {
+          window.location.replace(`/grupos/ver?id=${loaded.group.id}`);
+          return;
+        }
         setBundle(loaded);
         const withStudents = loaded.categories.find((item) =>
           loaded.teams.some((team) => team.category === item.name),
@@ -195,11 +199,9 @@ export function PaperPrint() {
 
         {!bundle.canPrint ? (
           <p className="bg-secondary/20 px-4 py-3 text-sm leading-6">
-            {bundle.paperBlocked
-              ? bundle.paperBlocked
-              : bundle.printFrom
-                ? `La prueba se puede imprimir desde el ${formatDateTime(bundle.printFrom)}, dos días antes de que empiece.`
-                : "La prueba todavía no tiene fecha. Se puede imprimir dos días antes de que empiece."}
+            {bundle.printFrom
+              ? `La prueba se puede imprimir desde el ${formatDateTime(bundle.printFrom)}, dos días antes de que empiece.`
+              : "La prueba todavía no tiene fecha. Se puede imprimir dos días antes de que empiece."}
           </p>
         ) : (
           <>

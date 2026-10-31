@@ -24,9 +24,11 @@ import {
 import { toast } from "sonner";
 
 import { ApiError } from "@/lib/api-client";
+import { getUser } from "@/lib/auth";
 import { copyToClipboard, groupJoinLink } from "@/lib/clipboard";
 import {
   CONTEST_STATE_LABELS,
+  SCHOOL_GRADES,
   gradeLabel,
   gradesForCategories,
   isTaskDifficulty,
@@ -39,6 +41,7 @@ import {
   getGroup,
   getGroupResults,
   importRoster,
+  listGroups,
   removeGroup,
   renameGroup,
   removeTeam,
@@ -51,10 +54,16 @@ import {
   type StoredGroup,
 } from "@/lib/groups-api";
 import { dateAtEnd } from "@/lib/paper";
-import { Reveal, Unfold } from "@/components/reveal";
+import { Expand, Reveal, Unfold } from "@/components/reveal";
 import { enter } from "@/lib/surface";
 import { cn } from "@/lib/utils";
 import { DifficultyTag } from "@/components/contest-task-parts";
+import {
+  CategoryLogo,
+  categorySoftStyle,
+  categoryStyle,
+} from "@/components/category-logo";
+import { FieldHint } from "@/components/field-hint";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -102,6 +111,7 @@ async function copy(value: string, message: string) {
 
 export function GroupPage() {
   const [{ id, view: initialView }] = useState(readParams);
+  const [isAdmin] = useState(() => getUser()?.role === "admin");
   const [group, setGroup] = useState<StoredGroup | null>(null);
   const [results, setResults] = useState<GroupResults | null>(null);
   const [loadError, setLoadError] = useState<string | null>(
@@ -109,6 +119,7 @@ export function GroupPage() {
   );
   const [view, setView] = useState<View | null>(initialView);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [courses, setCourses] = useState<StoredGroup[]>([]);
 
   const refresh = useCallback(async () => {
     try {
@@ -141,6 +152,33 @@ export function GroupPage() {
       active = false;
     };
   }, [id]);
+
+  const contestId = group?.contestId;
+  const ownerId = group?.ownerId;
+  useEffect(() => {
+    if (!contestId) return;
+    let active = true;
+    const order = (grade: string | null) =>
+      SCHOOL_GRADES.findIndex((item) => item.value === grade);
+    void listGroups({ contestId, ownerId })
+      .then((all) => {
+        if (!active) return;
+        setCourses(
+          all
+            .filter(
+              (item) =>
+                item.contestId === contestId &&
+                item.ownerId === ownerId &&
+                item.grade,
+            )
+            .sort((left, right) => order(left.grade) - order(right.grade)),
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [contestId, ownerId]);
 
   const state = results?.contest.state;
   const live = Boolean(state && LIVE_STATES.includes(state));
@@ -178,77 +216,102 @@ export function GroupPage() {
   const started = Boolean(
     state && (LIVE_STATES.includes(state) || ENDED_STATES.includes(state)),
   );
+  const hasResults = started && teams.length > 0;
   const activeView: View =
-    view ?? (started && teams.length > 0 ? "resultados" : "estudiantes");
+    view === "resultados" && !hasResults
+      ? "estudiantes"
+      : (view ?? (hasResults ? "resultados" : "estudiantes"));
   const categories = results.categories;
+  const groupCategory =
+    SCHOOL_GRADES.find((item) => item.value === group.grade)?.category ??
+    group.category;
 
   return (
     <div className="flex w-full flex-col gap-6">
       <div
         className={cn(
           enter,
-          "flex flex-col gap-5 border-b pb-6 lg:flex-row lg:items-end lg:justify-between",
+          "flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between",
         )}
       >
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <GroupName group={group} onRenamed={setGroup} />
-          <p className="text-sm text-muted-foreground">
-            {group.contestTitle}
-            {categories.length > 0 && <> · {categories.join(", ")}</>}
-            {state && (
-              <>
-                {" · "}
-                <span
-                  className={cn(
-                    "font-medium",
-                    live ? "text-primary" : "text-foreground",
-                  )}
-                >
-                  {CONTEST_STATE_LABELS[state]}
-                </span>
-              </>
-            )}
-          </p>
-          {results.contest.startsAt && !started && (
-            <p className="text-sm text-muted-foreground">
-              La prueba empieza el {formatDateTime(results.contest.startsAt)}.
-            </p>
+        <div className="flex min-w-0 items-center gap-4">
+          {groupCategory && (
+            <CategoryLogo name={groupCategory} className="size-20 sm:size-24" />
           )}
-        </div>
-
-        <div className="flex flex-col gap-2 lg:items-end">
-          <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Código del grupo
-          </span>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-3xl font-bold tracking-[0.2em]">
-              {group.accessCode}
-            </span>
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="outline"
-              aria-label="Copiar código"
-              onClick={() => copy(group.accessCode, "Código copiado.")}
-            >
-              <CopyIcon />
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                copy(
-                  groupJoinLink(group.accessCode),
-                  "Enlace copiado. Compártelo con tus estudiantes.",
-                )
-              }
-            >
-              <LinkIcon data-icon="inline-start" />
-              Copiar enlace
-            </Button>
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <GroupName group={group} onRenamed={setGroup} />
+            {isAdmin && group.ownerName && (
+              <p className="text-sm text-muted-foreground">
+                Responsable: {group.ownerName}
+              </p>
+            )}
+            <p className="text-sm text-muted-foreground">
+              {group.contestTitle}
+              {categories.length > 0 && <> · {categories.join(", ")}</>}
+              {state && (
+                <>
+                  {" · "}
+                  <span
+                    className={cn(
+                      "font-medium",
+                      live ? "text-primary" : "text-foreground",
+                    )}
+                  >
+                    {CONTEST_STATE_LABELS[state]}
+                  </span>
+                </>
+              )}
+            </p>
+            {results.contest.startsAt && !started && (
+              <p className="text-sm text-muted-foreground">
+                La prueba empieza el {formatDateTime(results.contest.startsAt)}.
+              </p>
+            )}
           </div>
         </div>
+
+        {results.contest.registrationOpen && (
+          <div className="flex flex-col gap-2 lg:items-end">
+            <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Código del grupo
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-3xl font-bold tracking-[0.2em]">
+                  {group.accessCode}
+                </span>
+                <FieldHint>
+                  {results.contest.isPractice
+                    ? "Comparte este código con tus estudiantes. Lo escriben en «Entrar con código», ponen su nombre y acceden a la práctica."
+                    : "Este código identifica al grupo. Compártelo con tus estudiantes para que se inscriban desde «Entrar con código». Después, cada estudiante recibe su código personal para rendir el desafío."}
+                </FieldHint>
+              </div>
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="outline"
+                aria-label="Copiar código"
+                onClick={() => copy(group.accessCode, "Código copiado.")}
+              >
+                <CopyIcon />
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  copy(
+                    groupJoinLink(group.accessCode),
+                    "Enlace copiado. Compártelo con tus estudiantes.",
+                  )
+                }
+              >
+                <LinkIcon data-icon="inline-start" />
+                Copiar enlace
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div
@@ -261,36 +324,40 @@ export function GroupPage() {
             ["estudiantes", "Estudiantes", teams.length],
             ["resultados", "Resultados", null],
           ] as const
-        ).map(([key, label, count]) => {
-          const selected = activeView === key;
-          return (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              onClick={() => changeView(key)}
-              className="relative flex shrink-0 items-baseline gap-1.5 py-2.5 text-sm whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground aria-selected:font-medium aria-selected:text-foreground"
-            >
-              {label}
-              {count !== null && (
-                <span className="text-xs tabular-nums opacity-60">{count}</span>
-              )}
-              {key === "resultados" && live && (
-                <span
-                  aria-label="En vivo"
-                  className="size-2 self-center bg-primary"
-                />
-              )}
-              {selected && (
-                <span
-                  aria-hidden="true"
-                  className="grow-x absolute inset-x-0 bottom-0 h-0.5 bg-primary"
-                />
-              )}
-            </button>
-          );
-        })}
+        )
+          .filter(([key]) => key !== "resultados" || hasResults)
+          .map(([key, label, count]) => {
+            const selected = activeView === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => changeView(key)}
+                className="relative flex shrink-0 items-baseline gap-1.5 py-2.5 text-sm whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground aria-selected:font-medium aria-selected:text-foreground"
+              >
+                {label}
+                {count !== null && (
+                  <span className="text-xs tabular-nums opacity-60">
+                    {count}
+                  </span>
+                )}
+                {key === "resultados" && live && (
+                  <span
+                    aria-label="En vivo"
+                    className="size-2 self-center bg-primary"
+                  />
+                )}
+                {selected && (
+                  <span
+                    aria-hidden="true"
+                    className="grow-x absolute inset-x-0 bottom-0 h-0.5 bg-primary"
+                  />
+                )}
+              </button>
+            );
+          })}
       </div>
 
       <div
@@ -304,7 +371,63 @@ export function GroupPage() {
         )}
       </div>
 
-      {results.contest.registrationOpen && (
+      {courses.length > 1 && (
+        <nav
+          aria-label="Otros cursos de este desafío"
+          className="flex flex-col gap-2 pt-2"
+        >
+          <h2 className="text-sm font-semibold">
+            Otros cursos de este desafío
+          </h2>
+          {(
+            [
+              ["P", "Primaria"],
+              ["S", "Secundaria"],
+            ] as const
+          ).map(([level, label]) => {
+            const ofLevel = courses.filter((course) =>
+              course.grade?.startsWith(level),
+            );
+            if (ofLevel.length === 0) return null;
+            return (
+              <div key={level} className="flex flex-wrap items-center gap-2">
+                <span className="w-24 text-sm text-muted-foreground">
+                  {label}
+                </span>
+                {ofLevel.map((course) => {
+                  const current = course.id === group.id;
+                  const category = SCHOOL_GRADES.find(
+                    (item) => item.value === course.grade,
+                  )?.category;
+                  return (
+                    <a
+                      key={course.id}
+                      href={`/grupos/ver?id=${course.id}&vista=${activeView}`}
+                      aria-current={current ? "page" : undefined}
+                      aria-label={gradeLabel(course.grade)}
+                      style={
+                        category
+                          ? current
+                            ? categoryStyle(category)
+                            : categorySoftStyle(category)
+                          : undefined
+                      }
+                      className={cn(
+                        "flex min-w-14 items-center justify-center px-3 py-1.5 text-sm transition-opacity outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary/60",
+                        current && "font-semibold",
+                      )}
+                    >
+                      {gradeLabel(course.grade).split(" ")[0]}
+                    </a>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </nav>
+      )}
+
+      {results.contest.registrationOpen && !group.isDefault && (
         <div className="mt-6 border-t pt-5">
           <Button
             type="button"
@@ -372,19 +495,21 @@ function GroupName({
         <h1 className="font-heading text-3xl font-semibold tracking-tight break-words">
           {group.name}
         </h1>
-        <Button
-          type="button"
-          size="icon-sm"
-          variant="ghost"
-          aria-label="Cambiar el nombre del grupo"
-          className="mt-1 shrink-0 text-muted-foreground"
-          onClick={() => {
-            setDraft(group.name);
-            setError(null);
-          }}
-        >
-          <PencilIcon />
-        </Button>
+        {!group.grade && (
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Cambiar el nombre del grupo"
+            className="mt-1 shrink-0 text-muted-foreground"
+            onClick={() => {
+              setDraft(group.name);
+              setError(null);
+            }}
+          >
+            <PencilIcon />
+          </Button>
+        )}
       </div>
     );
   }
@@ -611,7 +736,7 @@ function StudentForm({
   ) => (
     <label className="flex min-w-0 flex-1 flex-col gap-1">
       <span className="sr-only">{placeholder}</span>
-      <Input
+      <input
         ref={ref}
         value={values[key]}
         placeholder={placeholder}
@@ -619,6 +744,7 @@ function StudentForm({
         disabled={saving}
         aria-invalid={Boolean(errors[key])}
         onChange={(event) => set(key, event.target.value)}
+        className="h-10 w-full min-w-0 border-2 border-border/20 bg-background px-3 text-sm transition-colors outline-none placeholder:text-muted-foreground hover:border-border/40 focus-visible:border-primary disabled:opacity-50 aria-invalid:border-destructive"
       />
     </label>
   );
@@ -641,10 +767,7 @@ function StudentForm({
       ref={formRef}
       noValidate
       onSubmit={submit}
-      className={cn(
-        "flex flex-col gap-3",
-        !compact && "border-2 border-dashed border-border/60 p-4",
-      )}
+      className="flex flex-col gap-3"
     >
       {allowPairs && (
         <div role="radiogroup" aria-label="Modalidad" className="flex gap-1.5">
@@ -678,42 +801,46 @@ function StudentForm({
           pair ? "Apellidos del primero" : "Apellidos",
         )}
       </div>
-      {pair && (
+      <Expand open={pair} className="-mt-3">
         <div className="flex flex-col gap-2 sm:flex-row">
           {nameField("memberTwoFirstName", "Nombres del segundo")}
           {nameField("memberTwoLastName", "Apellidos del segundo")}
         </div>
-      )}
+      </Expand>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div
-          role="radiogroup"
-          aria-label="Curso"
-          aria-invalid={Boolean(errors.grade)}
-          className="flex flex-wrap gap-1.5"
-        >
-          {grades.map((grade) => {
-            const selected = values.grade === grade.value;
-            return (
-              <button
-                key={grade.value}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                disabled={saving}
-                onClick={() => set("grade", grade.value)}
-                className={cn(
-                  "border-2 px-3 py-1.5 text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
-                  selected
-                    ? "border-primary bg-primary/10 font-semibold"
-                    : "border-border/30 hover:border-primary/60",
-                  errors.grade && !selected && "border-destructive/60",
-                )}
-              >
-                {grade.label}
-              </button>
-            );
-          })}
-        </div>
+        {grades.length === 1 ? (
+          <p className="text-sm text-muted-foreground">{grades[0].label}</p>
+        ) : (
+          <div
+            role="radiogroup"
+            aria-label="Curso"
+            aria-invalid={Boolean(errors.grade)}
+            className="flex flex-wrap gap-1.5"
+          >
+            {grades.map((grade) => {
+              const selected = values.grade === grade.value;
+              return (
+                <button
+                  key={grade.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  disabled={saving}
+                  onClick={() => set("grade", grade.value)}
+                  className={cn(
+                    "border-2 px-3 py-1.5 text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
+                    selected
+                      ? "border-primary bg-primary/10 font-semibold"
+                      : "border-border/30 hover:border-primary/60",
+                    errors.grade && !selected && "border-destructive/60",
+                  )}
+                >
+                  {grade.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <div className="flex gap-2 sm:shrink-0">
           {onCancel && (
             <Button
@@ -779,7 +906,9 @@ function StudentsTab({
   results: GroupResults;
   onChanged: () => Promise<void>;
 }) {
-  const grades = gradesForCategories(results.categories);
+  const grades = gradesForCategories(results.categories).filter(
+    (grade) => !group.grade || grade.value === group.grade,
+  );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [removing, setRemoving] = useState<GroupResultTeam | null>(null);
   const [importing, setImporting] = useState(false);
@@ -789,6 +918,7 @@ function StudentsTab({
   } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const registrationOpen = results.contest.registrationOpen;
+  const canEnroll = results.contest.canEnroll;
   const [initialIds] = useState(
     () => new Set(results.teams.map((team) => team.id)),
   );
@@ -855,17 +985,25 @@ function StudentsTab({
 
   return (
     <div className="flex flex-col gap-6">
-      {registrationOpen ? (
+      {canEnroll ? (
         <section className={cn(enter, "flex flex-col gap-3")}>
           <div className="flex flex-col gap-1">
-            <h2 className="font-heading text-lg font-semibold">
-              Inscribir estudiantes
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Escribe su nombre y elige su curso. Cada uno recibe un código
-              personal para entrar a la prueba. También pueden inscribirse solos
-              entrando con el código del grupo.
-            </p>
+            <div className="flex items-center gap-1.5">
+              <h2 className="font-heading text-lg font-semibold">
+                Inscribir estudiantes
+              </h2>
+              <FieldHint>
+                Cada uno recibe un código personal para entrar a la prueba.
+                {registrationOpen &&
+                  " También pueden inscribirse solos entrando con el código del grupo."}
+              </FieldHint>
+            </div>
+            {ENDED_STATES.includes(results.contest.state) && (
+              <p className="text-sm text-muted-foreground">
+                El desafío ya terminó. Inscribir estudiantes no vuelve a abrir
+                la rendición en línea.
+              </p>
+            )}
           </div>
           <StudentForm
             grades={grades}
@@ -874,13 +1012,11 @@ function StudentsTab({
             submitLabel="Inscribir"
             onSubmit={add}
           />
-          <div className="flex flex-wrap items-center gap-x-1 gap-y-1 text-sm text-muted-foreground">
-            <span>¿Tienes la lista en Excel?</span>
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
-              variant="link"
+              variant="ghost"
               size="sm"
-              className="h-auto px-1"
               onClick={() =>
                 void downloadRosterTemplate(group.id, group.name).catch(
                   (error: unknown) =>
@@ -893,14 +1029,12 @@ function StudentsTab({
               }
             >
               <DownloadIcon data-icon="inline-start" />
-              Descarga la plantilla
+              Plantilla
             </Button>
-            <span>y</span>
             <Button
               type="button"
-              variant="link"
+              variant="outline"
               size="sm"
-              className="h-auto px-1"
               disabled={importing}
               onClick={() => fileRef.current?.click()}
             >
@@ -912,8 +1046,14 @@ function StudentsTab({
               ) : (
                 <UploadIcon data-icon="inline-start" />
               )}
-              súbela llena
+              Subir lista
             </Button>
+            {group.grade && group.ownerId !== null && (
+              <FieldHint>
+                Si tu lista incluye varios cursos, cada estudiante se inscribe
+                en el grupo de su curso.
+              </FieldHint>
+            )}
             <input
               ref={fileRef}
               type="file"
@@ -944,6 +1084,20 @@ function StudentsTab({
                   ? "No se inscribió a nadie."
                   : `Se inscribieron ${roster.result.created.length} estudiante${roster.result.created.length === 1 ? "" : "s"}.`}
               </p>
+              {roster.result.groups?.length > 1 && (
+                <ul className="flex flex-wrap gap-x-4 gap-y-1">
+                  {roster.result.groups.map((course) => (
+                    <li key={course.id}>
+                      <a
+                        className="underline underline-offset-4"
+                        href={`/grupos/ver?id=${course.id}&vista=estudiantes`}
+                      >
+                        {gradeLabel(course.grade)} ({course.count})
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
               {roster.result.skipped.length > 0 && (
                 <ul className="text-muted-foreground">
                   {roster.result.skipped.map((issue) => (
@@ -1037,7 +1191,8 @@ function StudentsTab({
                         <CopyIcon className="size-3.5 text-muted-foreground group-hover/code:text-foreground" />
                       </button>
                       <div className="flex gap-1">
-                        {results.contest.paperEntryOpen &&
+                        {!results.contest.paperBlocked &&
+                          results.contest.paperEntryOpen &&
                           (team.paper || team.progress === "not_started") && (
                             <Button
                               asChild
@@ -1081,7 +1236,13 @@ function StudentsTab({
                     <div className="py-3">
                       <StudentForm
                         compact
-                        grades={grades}
+                        grades={
+                          team.startedAt && team.grade
+                            ? grades.filter(
+                                (grade) => grade.value === team.grade,
+                              )
+                            : grades
+                        }
                         allowPairs={team.participationMode === "pareja"}
                         initial={toValues(team)}
                         submitLabel="Guardar"
@@ -1154,19 +1315,13 @@ function PaperSection({
   const { contest, teams } = results;
   const loaded = teams.filter((team) => team.paper).length;
 
-  if (contest.paperBlocked) {
-    return (
-      <section
-        className={cn(enter, "flex flex-col gap-1 border-t pt-6")}
-        style={{ animationDelay: "120ms" }}
-      >
-        <h2 className="font-heading text-lg font-semibold">
-          ¿Sin internet en el aula?
-        </h2>
-        <p className="text-sm text-muted-foreground">{contest.paperBlocked}</p>
-      </section>
-    );
-  }
+  if (
+    contest.paperBlocked ||
+    !group.contestCategories.some((category) =>
+      results.categories.includes(category),
+    )
+  )
+    return null;
 
   return (
     <section

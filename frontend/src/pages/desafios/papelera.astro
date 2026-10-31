@@ -1,0 +1,10 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { ContestTrash } from "../../components/contest-trash";
+---
+
+<Layout title="Papelera" heading="Papelera" requireAuth backHref="/desafios">
+  <main class="mx-auto flex w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+    <ContestTrash client:only="react" />
+  </main>
+</Layout>

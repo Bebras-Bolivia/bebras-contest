@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from "react";
 import {
+  ArrowRightIcon,
   CalendarClockIcon,
   CheckIcon,
   CircleCheckBigIcon,
@@ -37,6 +38,11 @@ import {
   readPlaySession,
   storePlaySession,
 } from "@/lib/play-api";
+import {
+  listStudentPractices,
+  rememberPracticeCode,
+  type StudentPracticeItem,
+} from "@/lib/student-practice-api";
 import { cn } from "@/lib/utils";
 
 type GroupGrade = {
@@ -67,7 +73,7 @@ type JoinResult = {
   contestTitle: string;
 };
 
-type Step = "code" | "practice" | "register" | "confirm" | "done";
+type Step = "code" | "practice" | "choose" | "register" | "confirm" | "done";
 
 type JoinErrors = {
   code?: string;
@@ -124,6 +130,11 @@ export function JoinForm() {
   const [twoLast, setTwoLast] = useState("");
   const [result, setResult] = useState<JoinResult | null>(null);
   const [practiceName, setPracticeName] = useState("");
+  const [choice, setChoice] = useState<{
+    code: string;
+    name: string;
+    practices: StudentPracticeItem[];
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<JoinErrors>({});
   const accessCodeRef = useRef<HTMLInputElement>(null);
@@ -187,6 +198,20 @@ export function JoinForm() {
       // El personal tiene 8 caracteres y el de grupo 6, pero se prueban ambos
       // por si el estudiante se equivoca de campo.
       if (code.length !== GROUP_CODE_LENGTH) {
+        const offered = await listStudentPractices(code).catch(() => null);
+
+        if (offered && offered.practices.length > 0) {
+          rememberPracticeCode(code);
+          setErrors({});
+          setChoice({
+            code,
+            name: offered.name ?? "",
+            practices: offered.practices,
+          });
+          setStep("choose");
+          return;
+        }
+
         const failure = await enterWithPersonalCode(code);
 
         if (!failure) {
@@ -241,7 +266,7 @@ export function JoinForm() {
       setErrors({});
       setGroup(info);
       setMode("individual");
-      setGrade("");
+      setGrade(info.grades.length === 1 ? info.grades[0].value : "");
 
       // Una sesión guardada de este mismo grupo lleva directo al desafío; la
       // de otro desafío anterior no, así puede inscribirse en este.
@@ -463,6 +488,68 @@ export function JoinForm() {
         <Button asChild size="lg" className="w-full">
           <a href="/rendir">Ir al desafío</a>
         </Button>
+      </Screen>
+    );
+  }
+
+  if (step === "choose" && choice) {
+    return (
+      <Screen
+        eyebrow={choice.name ? `Hola, ${choice.name}` : "Hola"}
+        title="¿Qué quieres hacer?"
+      >
+        <div className="flex flex-col gap-3">
+          {choice.practices.map((practice) => (
+            <Button
+              key={practice.id}
+              asChild
+              size="lg"
+              variant="outline"
+              className="h-auto w-full justify-between py-3"
+            >
+              <a href={`/practicar?id=${encodeURIComponent(practice.id)}`}>
+                <span className="flex min-w-0 flex-col items-start text-left">
+                  <span className="truncate">{practice.title}</span>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    Práctica · {practice.taskCount}{" "}
+                    {practice.taskCount === 1 ? "pregunta" : "preguntas"}
+                  </span>
+                </span>
+                <ArrowRightIcon data-icon="inline-end" />
+              </a>
+            </Button>
+          ))}
+          <Button
+            type="button"
+            size="lg"
+            className="w-full"
+            disabled={loading}
+            onClick={() => {
+              setLoading(true);
+              void openPlaySession(choice.code)
+                .then((session) => {
+                  storePlaySession(session.sessionToken);
+                  window.location.href = "/rendir";
+                })
+                .catch((error: unknown) => {
+                  setLoading(false);
+                  toast.error(
+                    error instanceof Error
+                      ? error.message
+                      : "No se pudo entrar.",
+                  );
+                });
+            }}
+          >
+            {loading && (
+              <LoaderCircleIcon
+                data-icon="inline-start"
+                className="animate-spin"
+              />
+            )}
+            Ir al desafío
+          </Button>
+        </div>
       </Screen>
     );
   }

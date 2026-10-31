@@ -41,10 +41,20 @@ import {
 } from "@/lib/firebase-auth";
 import { useFirebaseSession } from "@/lib/use-firebase-session";
 import { landingPath, openBebrasSession } from "@/lib/session-api";
+import { getSiteSettings } from "@/lib/admin-api";
 
 export function LoginForm() {
   const configured = isFirebaseConfigured();
   const session = useFirebaseSession();
+  const [registrationOpen, setRegistrationOpen] = useState(false);
+
+  useEffect(() => {
+    void getSiteSettings()
+      .then(({ teacherRegistration }) =>
+        setRegistrationOpen(teacherRegistration),
+      )
+      .catch(() => undefined);
+  }, []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -502,14 +512,16 @@ export function LoginForm() {
           onClick={() => void handleGoogle()}
         />
 
-        <div className="mt-8 text-center">
-          <p className="text-sm text-muted-foreground">
-            ¿Todavía no tienes una cuenta de maestro?
-          </p>
-          <Button asChild variant="outline" className="mt-3 w-full">
-            <a href="/registro">Registrarme como maestro</a>
-          </Button>
-        </div>
+        {registrationOpen && (
+          <div className="mt-8 text-center motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300">
+            <p className="text-sm text-muted-foreground">
+              ¿Todavía no tienes una cuenta de maestro?
+            </p>
+            <Button asChild variant="outline" className="mt-3 w-full">
+              <a href="/registro">Registrarme como maestro</a>
+            </Button>
+          </div>
+        )}
 
         {!REGISTRATION_ONLY && (
           <p className="mt-5 text-center text-xs text-muted-foreground">

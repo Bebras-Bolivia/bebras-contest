@@ -1,0 +1,12 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { TeacherPracticeSolver } from "../components/teacher-practice-solver";
+
+const title = "Práctica";
+---
+
+<Layout title={title} heading={title} deferChrome>
+  <main class="mx-auto w-full max-w-6xl px-4 py-6 sm:py-8">
+    <TeacherPracticeSolver client:only="react" />
+  </main>
+</Layout>

@@ -62,7 +62,8 @@ export const ModelName = {
   Attempt: 'Attempt',
   AttemptAnswer: 'AttemptAnswer',
   Result: 'Result',
-  SiteSetting: 'SiteSetting'
+  SiteSetting: 'SiteSetting',
+  PracticeResult: 'PracticeResult'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -188,6 +189,8 @@ export const ContestScalarFieldEnum = {
   showSolutionsOnSubmit: 'showSolutionsOnSubmit',
   publishedAt: 'publishedAt',
   suspendedAt: 'suspendedAt',
+  stoppedAt: 'stoppedAt',
+  trashedAt: 'trashedAt',
   consolidatedAt: 'consolidatedAt',
   resultsPublishedAt: 'resultsPublishedAt',
   resultsAt: 'resultsAt',
@@ -225,6 +228,8 @@ export const ContestGroupScalarFieldEnum = {
   createdById: 'createdById',
   name: 'name',
   category: 'category',
+  grade: 'grade',
+  autoKey: 'autoKey',
   accessCode: 'accessCode',
   recoveryCode: 'recoveryCode',
   firstUsedAt: 'firstUsedAt',
@@ -308,6 +313,21 @@ export const SiteSettingScalarFieldEnum = {
 } as const
 
 export type SiteSettingScalarFieldEnum = (typeof SiteSettingScalarFieldEnum)[keyof typeof SiteSettingScalarFieldEnum]
+
+
+export const PracticeResultScalarFieldEnum = {
+  id: 'id',
+  contestId: 'contestId',
+  teamId: 'teamId',
+  totalScore: 'totalScore',
+  correctCount: 'correctCount',
+  answeredCount: 'answeredCount',
+  taskCount: 'taskCount',
+  marks: 'marks',
+  finishedAt: 'finishedAt'
+} as const
+
+export type PracticeResultScalarFieldEnum = (typeof PracticeResultScalarFieldEnum)[keyof typeof PracticeResultScalarFieldEnum]
 
 
 export const SortOrder = {

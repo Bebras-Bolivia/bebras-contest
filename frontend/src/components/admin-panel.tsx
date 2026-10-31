@@ -21,6 +21,7 @@ import {
   listAdmins,
   renewCertificatesKey,
   saveSiteSettings,
+  setTeacherRegistration,
   type AdminAccount,
   type CertificatesLink,
 } from "@/lib/admin-api";
@@ -38,6 +39,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { SignOutButton } from "@/components/sign-out-button";
 
 const errorText = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
@@ -59,8 +62,10 @@ export function AdminPanel() {
         )}
       </div>
       <AdminsSection />
+      <TeacherRegistrationSection />
       <InfoSiteSection />
       <CertificatesSection />
+      <SignOutButton />
     </div>
   );
 }
@@ -148,9 +153,7 @@ function AdminsSection() {
       </form>
 
       {admins === null ? (
-        !error && (
-          <RowsSkeleton />
-        )
+        !error && <RowsSkeleton />
       ) : (
         <ul className="divide-y border-y">
           {admins.map((admin) => (
@@ -201,6 +204,52 @@ function AdminsSection() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </section>
+  );
+}
+
+function TeacherRegistrationSection() {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    void getSiteSettings()
+      .then(({ teacherRegistration }) => setEnabled(teacherRegistration))
+      .catch(() => undefined);
+  }, []);
+
+  const change = async (next: boolean) => {
+    setSaving(true);
+    setEnabled(next);
+    try {
+      const { teacherRegistration } = await setTeacherRegistration(next);
+      setEnabled(teacherRegistration);
+      toast.success(
+        teacherRegistration
+          ? "Los maestros ya pueden registrarse."
+          : "El registro de maestros quedó cerrado.",
+      );
+    } catch (caught) {
+      setEnabled(!next);
+      toast.error(errorText(caught, "No se pudo guardar."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="flex flex-col gap-4">
+      <h2 className="font-heading text-xl font-semibold">
+        Registro de maestros
+      </h2>
+      <label className="flex w-fit items-center gap-3 text-sm">
+        <Switch
+          checked={enabled ?? false}
+          disabled={enabled === null || saving}
+          onCheckedChange={(checked) => void change(checked)}
+        />
+        Habilitar registro de maestros
+      </label>
     </section>
   );
 }
@@ -351,9 +400,7 @@ function CertificatesSection() {
       </div>
 
       {link === null ? (
-        !error && (
-          <RowsSkeleton />
-        )
+        !error && <RowsSkeleton />
       ) : (
         <div className="flex flex-col gap-3">
           <p className="text-sm">

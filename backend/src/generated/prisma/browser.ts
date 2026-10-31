@@ -77,3 +77,8 @@ export type Result = Prisma.ResultModel
  * 
  */
 export type SiteSetting = Prisma.SiteSettingModel
+/**
+ * Model PracticeResult
+ * 
+ */
+export type PracticeResult = Prisma.PracticeResultModel

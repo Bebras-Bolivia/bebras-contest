@@ -75,6 +75,60 @@ export function removeContest(contestId: string) {
   });
 }
 
+export function setContestFavorite(contestId: string, favorite: boolean) {
+  return request<{ favoriteContestId: string | null }>(
+    `/api/contests/${contestId}/favorite`,
+    {
+      method: "POST",
+      body: JSON.stringify({ favorite }),
+    },
+  );
+}
+
+export function stopContest(contestId: string) {
+  return request<StoredContest>(`/api/contests/${contestId}/stop`, {
+    method: "POST",
+  });
+}
+
+export function restartContest(contestId: string) {
+  return request<StoredContest>(`/api/contests/${contestId}/restart`, {
+    method: "POST",
+  });
+}
+
+export function extendContestClosing(
+  contestId: string,
+  dates: {
+    registrationEndsAt?: string;
+    endsAt?: string;
+    categoryEndsAt?: Record<string, string>;
+  },
+) {
+  return request<StoredContest>(`/api/contests/${contestId}/closing`, {
+    method: "PATCH",
+    body: JSON.stringify(dates),
+  });
+}
+
+export type TrashedContest = {
+  id: string;
+  title: string;
+  groupCount: number;
+  trashedAt: string;
+  deletesAt: string;
+};
+
+export function listTrashedContests() {
+  return request<TrashedContest[]>("/api/contests/trash");
+}
+
+export function restoreContest(contestId: string) {
+  return request<StoredContest>(`/api/contests/${contestId}/restore`, {
+    method: "POST",
+  });
+}
+
 export type ContestResultRow = {
   teamId: string;
   category: string | null;

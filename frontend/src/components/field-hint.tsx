@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { HelpCircleIcon } from "lucide-react";
 
 import { FieldLabel } from "@/components/ui/field";
@@ -12,13 +12,18 @@ import {
 } from "@/components/ui/tooltip";
 
 export function FieldHint({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false);
   return (
     <TooltipProvider delayDuration={150}>
-      <Tooltip>
+      <Tooltip open={open} onOpenChange={setOpen}>
         <TooltipTrigger asChild>
           <button
             type="button"
             aria-label="Más información"
+            onClick={(event) => {
+              event.preventDefault();
+              setOpen(true);
+            }}
             className="inline-flex size-4 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <HelpCircleIcon className="size-4" />

@@ -8,7 +8,6 @@ import {
   HouseIcon,
   PauseIcon,
   SchoolIcon,
-  SearchIcon,
   PencilIcon,
   XIcon,
 } from "lucide-react";
@@ -27,7 +26,7 @@ import {
   type MaestroSchool,
 } from "@/lib/users-api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchBox } from "@/components/search-box";
 import {
   Select,
   SelectContent,
@@ -543,16 +542,12 @@ export function MaestrosHome() {
                   ))}
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <div className="relative sm:w-64">
-                    <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
-                      placeholder="Nombre, correo, colegio o ciudad"
-                      className="pl-9"
-                      aria-label="Buscar maestros"
-                    />
-                  </div>
+                  <SearchBox
+                    value={search}
+                    onChange={setSearch}
+                    placeholder="Buscar maestro"
+                    label="Buscar maestros por nombre, correo, colegio o ciudad"
+                  />
                   <Select
                     value={sort}
                     onValueChange={(value) => setSort(value as SortValue)}

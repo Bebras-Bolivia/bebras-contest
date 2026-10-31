@@ -27,9 +27,19 @@ export type EnrollTeamInput = {
 export type StoredGroup = {
   id: string;
   name: string;
+  grade: string | null;
+  isDefault: boolean;
+  ownerId: number | null;
   accessCode: string;
   contestId: string;
   contestTitle: string;
+  contestState: ContestState;
+  ownerName: string | null;
+  ownerEmail: string | null;
+  ownerSchool: string | null;
+  ownerDepartment: string | null;
+  contestCreatedAt: string;
+  isFavorite: boolean;
   category: string | null;
   contestCategories: string[];
   contestAllowPairs: boolean;
@@ -37,18 +47,34 @@ export type StoredGroup = {
   expiresAt: string | null;
   createdAt: string;
   teamCount: number;
+  studentCount: number;
   teams: GroupTeam[];
+};
+
+export type GroupContestSummary = {
+  id: string;
+  title: string;
+  state: ContestState;
+  createdAt: string;
+  isFavorite: boolean;
+  groups: number;
+  students: number;
 };
 
 export type GroupDraftInput = {
   contestId: string;
   category?: string;
+  grade?: string;
   name: string;
 };
 
 export type PublishedContest = {
   id: string;
   title: string;
+  state: ContestState;
+  createdAt: string;
+  isFavorite: boolean;
+  canEnroll: boolean;
   categories: string[];
   registrationStartsAt: string | null;
   registrationEndsAt: string | null;
@@ -60,8 +86,18 @@ export function listPublishedContests() {
   return request<PublishedContest[]>("/api/published-contests");
 }
 
-export function listGroups() {
-  return request<StoredGroup[]>("/api/groups");
+export function listGroups(
+  filters: { contestId?: string; ownerId?: number | null } = {},
+) {
+  const params = new URLSearchParams();
+  if (filters.contestId) params.set("contestId", filters.contestId);
+  if (filters.ownerId) params.set("ownerId", String(filters.ownerId));
+  const query = params.toString();
+  return request<StoredGroup[]>(`/api/groups${query ? `?${query}` : ""}`);
+}
+
+export function listGroupContests() {
+  return request<GroupContestSummary[]>("/api/groups/contests");
 }
 
 export function getGroup(groupId: string) {
@@ -72,6 +108,20 @@ export function createGroup(group: GroupDraftInput) {
   return request<StoredGroup>("/api/groups", {
     method: "POST",
     body: JSON.stringify(group),
+  });
+}
+
+export function openCourseGroup(contestId: string, grade: string) {
+  return request<StoredGroup>("/api/groups/course", {
+    method: "POST",
+    body: JSON.stringify({ contestId, grade }),
+  });
+}
+
+export function prepareCourseGroups(contestId: string) {
+  return request<StoredGroup[]>("/api/groups/courses", {
+    method: "POST",
+    body: JSON.stringify({ contestId }),
   });
 }
 
@@ -93,6 +143,7 @@ export type RosterIssue = { row: number; name: string; reason: string };
 export type RosterImportResult = {
   created: Array<{ row: number; name: string; personalCode: string }>;
   skipped: RosterIssue[];
+  groups: Array<{ id: string; grade: string; count: number }>;
 };
 
 export async function downloadRosterTemplate(groupId: string, name: string) {
@@ -134,6 +185,7 @@ export async function downloadGroupResults(groupId: string, name: string) {
 export async function importRoster(groupId: string, file: File) {
   const form = new FormData();
   form.append("file", file);
+  form.append("distributeByGrade", "true");
 
   return request<RosterImportResult>(`/api/groups/${groupId}/roster`, {
     method: "POST",
@@ -195,6 +247,7 @@ export type GroupResults = {
     name: string;
     accessCode: string;
     category: string | null;
+    grade: string | null;
   };
   contest: {
     id: string;
@@ -205,6 +258,7 @@ export type GroupResults = {
     endsAt: string | null;
     resultsPublished: boolean;
     registrationOpen: boolean;
+    canEnroll: boolean;
     paperEntryOpen: boolean;
     paperEntryUntil: string | null;
     printFrom: string | null;

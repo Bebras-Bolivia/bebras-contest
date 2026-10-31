@@ -276,11 +276,8 @@ test("un grupo con categoría solo admite la suya; sin categoría, las del desaf
     "Capibara",
     "Titi",
   ]);
-  // Una categoría que el desafío ya no tiene no se respeta.
-  assert.deepEqual(groupCategories({ category: "Kuntur", contest }), [
-    "Capibara",
-    "Titi",
-  ]);
+  // Una categoría que el desafío ya no tiene no admite inscripciones.
+  assert.deepEqual(groupCategories({ category: "Kuntur", contest }), []);
 });
 
 test("cada curso pertenece a su categoría, y Kuntur es quinto y sexto de secundaria", () => {
@@ -292,15 +289,18 @@ test("cada curso pertenece a su categoría, y Kuntur es quinto y sexto de secund
     gradesForCategories(["Guacamayo", "Titi"]).map((grade) => grade.value),
     ["P1", "P2", "P5", "P6"],
   );
-  assert.equal(gradesForCategories([]).length, 12);
-  assert.equal(gradesForCategories(["Inventada"]).length, 12);
+  assert.equal(gradesForCategories([]).length, 0);
+  assert.equal(gradesForCategories(["Inventada"]).length, 0);
 });
 
 test("el curso se valida contra las categorías del desafío", () => {
   assert.equal(parseGrade(" P3 ", ["Capibara"]), "P3");
-  assert.equal(parseGrade("S6", []), "S6");
+  assert.throws(() => parseGrade("S6", []), /no tiene categorías habilitadas/);
   assert.throws(() => parseGrade("", ["Titi"]), /Debes indicar el curso/);
-  assert.throws(() => parseGrade(undefined, ["Titi"]), /Debes indicar el curso/);
+  assert.throws(
+    () => parseGrade(undefined, ["Titi"]),
+    /Debes indicar el curso/,
+  );
   assert.throws(() => parseGrade("P9", ["Titi"]), /no es válido/);
   assert.throws(
     () => parseGrade("P1", ["Titi", "Kuntur"]),

@@ -90,6 +90,7 @@ async function saveAnswerWithRetry(
   taskId: string,
   payload: unknown,
   preview = false,
+  attemptId?: string,
 ) {
   if (preview) {
     // La vista previa no persiste nada: la respuesta vive solo en la pantalla.
@@ -100,7 +101,7 @@ async function saveAnswerWithRetry(
 
   for (let attempt = 0; attempt <= SAVE_RETRY_DELAYS.length; attempt += 1) {
     try {
-      await saveAnswer(taskId, payload);
+      await saveAnswer(taskId, payload, attemptId);
       return;
     } catch (error) {
       lastError = error;
@@ -169,6 +170,7 @@ export function AttemptPage({
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const saveQueues = useRef<Record<string, Promise<void>>>({});
   const answersRef = useRef<Record<string, unknown>>({});
+  const attemptIdRef = useRef<string | null>(null);
   const submittedRef = useRef(false);
   const lastSavedAt = useRef(0);
   const skippedBeats = useRef(0);
@@ -214,6 +216,21 @@ export function AttemptPage({
           previewCache.current.set(data.category, data);
           settledCategory.current = data.category;
         }
+        if (
+          attemptIdRef.current &&
+          data.attemptId &&
+          attemptIdRef.current !== data.attemptId
+        ) {
+          Object.values(saveTimers.current).forEach(clearTimeout);
+          saveTimers.current = {};
+          saveQueues.current = {};
+          failedSaves.current.clear();
+          submittedRef.current = false;
+          automaticFinishAttemptedRef.current = false;
+          setCurrentIndex(0);
+          setUnsaved(false);
+        }
+        attemptIdRef.current = data.attemptId ?? null;
         setAttempt(data);
         syncClock(data.serverNow);
         answersRef.current = data.answers ?? {};
@@ -273,7 +290,8 @@ export function AttemptPage({
     return () => clearInterval(id);
   }, []);
 
-  const suspended = attempt?.state === "suspendida";
+  const suspended =
+    attempt?.state === "suspendida" || attempt?.state === "detenida";
   const waitingForStart =
     attempt?.status === "pending" &&
     ["programada", "inscripcion", "preparacion"].includes(attempt.state);
@@ -358,17 +376,22 @@ export function AttemptPage({
   };
 
   const queueSave = (taskId: string, payload: unknown) => {
+    const generation = attemptIdRef.current;
     const previousSave = saveQueues.current[taskId] ?? Promise.resolve();
     const nextSave = previousSave
       .catch(() => undefined)
-      .then(() => saveAnswerWithRetry(taskId, payload, preview))
+      .then(() =>
+        saveAnswerWithRetry(taskId, payload, preview, generation ?? undefined),
+      )
       .then(
         () => {
+          if (generation !== attemptIdRef.current) return;
           lastSavedAt.current = Date.now();
           failedSaves.current.delete(taskId);
           setUnsaved(failedSaves.current.size > 0);
         },
         (error: unknown) => {
+          if (generation !== attemptIdRef.current) return;
           if (!handlePlayError(error)) {
             failedSaves.current.add(taskId);
             setUnsaved(true);
@@ -398,9 +421,7 @@ export function AttemptPage({
     for (const [taskId, timer] of Object.entries(saveTimers.current)) {
       clearTimeout(timer);
       delete saveTimers.current[taskId];
-      void queueSave(taskId, answersRef.current[taskId]).catch(
-        () => undefined,
-      );
+      void queueSave(taskId, answersRef.current[taskId]).catch(() => undefined);
     }
   };
 
@@ -486,7 +507,7 @@ export function AttemptPage({
       if (preview) {
         await finishPreview(true);
       } else {
-        await submitAttempt();
+        await submitAttempt(attemptIdRef.current ?? undefined);
         await load();
       }
     } catch (error) {
@@ -573,7 +594,9 @@ export function AttemptPage({
       syncClock(state.serverNow);
       if (
         attempt &&
-        (state.suspended !== (attempt.state === "suspendida") ||
+        (state.suspended !==
+          (attempt.state === "suspendida" || attempt.state === "detenida") ||
+          state.attemptId !== attempt.attemptId ||
           state.status !== attempt.status ||
           (state.endsAt ?? null) !== (attempt.endsAt ?? null))
       ) {
@@ -652,7 +675,7 @@ export function AttemptPage({
         return;
       }
 
-      await submitAttempt();
+      await submitAttempt(attemptIdRef.current ?? undefined);
       await load();
       toast.success("Entregaste el desafío.");
     } catch (error) {
@@ -817,16 +840,20 @@ export function AttemptPage({
       <Alert>
         {!suspended && contestStartsAtMs > 0 && <ClockIcon />}
         <AlertTitle>
-          {suspended
-            ? "El desafío está suspendido"
-            : contestStartsAtMs > 0
-              ? scheduledStartReached
-                ? "El desafío está por comenzar"
-                : "El desafío comienza en"
-              : "El horario aún no está definido"}
+          {attempt.state === "detenida"
+            ? "El desafío está detenido"
+            : suspended
+              ? "El desafío está suspendido"
+              : contestStartsAtMs > 0
+                ? scheduledStartReached
+                  ? "El desafío está por comenzar"
+                  : "El desafío comienza en"
+                : "El horario aún no está definido"}
         </AlertTitle>
         <AlertDescription className="flex flex-col gap-2">
-          {suspended ? (
+          {attempt.state === "detenida" ? (
+            "El organizador lo detuvo para reprogramarlo. Tu inscripción y tu código se conservan. Esta pantalla se actualizará cuando vuelva a estar disponible."
+          ) : suspended ? (
             "Tu maestro la pausó. Deja esta página abierta: se habilita sola cuando la reanuden."
           ) : contestStartsAtMs > 0 ? (
             <>

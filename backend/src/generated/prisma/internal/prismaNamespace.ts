@@ -395,7 +395,8 @@ export const ModelName = {
   Attempt: 'Attempt',
   AttemptAnswer: 'AttemptAnswer',
   Result: 'Result',
-  SiteSetting: 'SiteSetting'
+  SiteSetting: 'SiteSetting',
+  PracticeResult: 'PracticeResult'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -411,7 +412,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "teacherSchool" | "school" | "taskDraft" | "contest" | "contestTask" | "contestGroup" | "team" | "attempt" | "attemptAnswer" | "result" | "siteSetting"
+    modelProps: "user" | "teacherSchool" | "school" | "taskDraft" | "contest" | "contestTask" | "contestGroup" | "team" | "attempt" | "attemptAnswer" | "result" | "siteSetting" | "practiceResult"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1303,6 +1304,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    PracticeResult: {
+      payload: Prisma.$PracticeResultPayload<ExtArgs>
+      fields: Prisma.PracticeResultFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.PracticeResultFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PracticeResultPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.PracticeResultFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PracticeResultPayload>
+        }
+        findFirst: {
+          args: Prisma.PracticeResultFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PracticeResultPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.PracticeResultFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PracticeResultPayload>
+        }
+        findMany: {
+          args: Prisma.PracticeResultFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PracticeResultPayload>[]
+        }
+        create: {
+          args: Prisma.PracticeResultCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PracticeResultPayload>
+        }
+        createMany: {
+          args: Prisma.PracticeResultCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.PracticeResultCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PracticeResultPayload>[]
+        }
+        delete: {
+          args: Prisma.PracticeResultDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PracticeResultPayload>
+        }
+        update: {
+          args: Prisma.PracticeResultUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PracticeResultPayload>
+        }
+        deleteMany: {
+          args: Prisma.PracticeResultDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.PracticeResultUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.PracticeResultUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PracticeResultPayload>[]
+        }
+        upsert: {
+          args: Prisma.PracticeResultUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PracticeResultPayload>
+        }
+        aggregate: {
+          args: Prisma.PracticeResultAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePracticeResult>
+        }
+        groupBy: {
+          args: Prisma.PracticeResultGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PracticeResultGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.PracticeResultCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PracticeResultCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -1449,6 +1524,8 @@ export const ContestScalarFieldEnum = {
   showSolutionsOnSubmit: 'showSolutionsOnSubmit',
   publishedAt: 'publishedAt',
   suspendedAt: 'suspendedAt',
+  stoppedAt: 'stoppedAt',
+  trashedAt: 'trashedAt',
   consolidatedAt: 'consolidatedAt',
   resultsPublishedAt: 'resultsPublishedAt',
   resultsAt: 'resultsAt',
@@ -1486,6 +1563,8 @@ export const ContestGroupScalarFieldEnum = {
   createdById: 'createdById',
   name: 'name',
   category: 'category',
+  grade: 'grade',
+  autoKey: 'autoKey',
   accessCode: 'accessCode',
   recoveryCode: 'recoveryCode',
   firstUsedAt: 'firstUsedAt',
@@ -1569,6 +1648,21 @@ export const SiteSettingScalarFieldEnum = {
 } as const
 
 export type SiteSettingScalarFieldEnum = (typeof SiteSettingScalarFieldEnum)[keyof typeof SiteSettingScalarFieldEnum]
+
+
+export const PracticeResultScalarFieldEnum = {
+  id: 'id',
+  contestId: 'contestId',
+  teamId: 'teamId',
+  totalScore: 'totalScore',
+  correctCount: 'correctCount',
+  answeredCount: 'answeredCount',
+  taskCount: 'taskCount',
+  marks: 'marks',
+  finishedAt: 'finishedAt'
+} as const
+
+export type PracticeResultScalarFieldEnum = (typeof PracticeResultScalarFieldEnum)[keyof typeof PracticeResultScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -1734,6 +1828,7 @@ export type GlobalOmitConfig = {
   attemptAnswer?: Prisma.AttemptAnswerOmit
   result?: Prisma.ResultOmit
   siteSetting?: Prisma.SiteSettingOmit
+  practiceResult?: Prisma.PracticeResultOmit
 }
 
 /* Types for Logging */

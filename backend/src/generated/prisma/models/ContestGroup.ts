@@ -40,6 +40,8 @@ export type ContestGroupMinAggregateOutputType = {
   createdById: number | null
   name: string | null
   category: string | null
+  grade: string | null
+  autoKey: string | null
   accessCode: string | null
   recoveryCode: string | null
   firstUsedAt: Date | null
@@ -54,6 +56,8 @@ export type ContestGroupMaxAggregateOutputType = {
   createdById: number | null
   name: string | null
   category: string | null
+  grade: string | null
+  autoKey: string | null
   accessCode: string | null
   recoveryCode: string | null
   firstUsedAt: Date | null
@@ -68,6 +72,8 @@ export type ContestGroupCountAggregateOutputType = {
   createdById: number
   name: number
   category: number
+  grade: number
+  autoKey: number
   accessCode: number
   recoveryCode: number
   firstUsedAt: number
@@ -92,6 +98,8 @@ export type ContestGroupMinAggregateInputType = {
   createdById?: true
   name?: true
   category?: true
+  grade?: true
+  autoKey?: true
   accessCode?: true
   recoveryCode?: true
   firstUsedAt?: true
@@ -106,6 +114,8 @@ export type ContestGroupMaxAggregateInputType = {
   createdById?: true
   name?: true
   category?: true
+  grade?: true
+  autoKey?: true
   accessCode?: true
   recoveryCode?: true
   firstUsedAt?: true
@@ -120,6 +130,8 @@ export type ContestGroupCountAggregateInputType = {
   createdById?: true
   name?: true
   category?: true
+  grade?: true
+  autoKey?: true
   accessCode?: true
   recoveryCode?: true
   firstUsedAt?: true
@@ -221,6 +233,8 @@ export type ContestGroupGroupByOutputType = {
   createdById: number | null
   name: string
   category: string | null
+  grade: string | null
+  autoKey: string | null
   accessCode: string
   recoveryCode: string
   firstUsedAt: Date | null
@@ -258,6 +272,8 @@ export type ContestGroupWhereInput = {
   createdById?: Prisma.IntNullableFilter<"ContestGroup"> | number | null
   name?: Prisma.StringFilter<"ContestGroup"> | string
   category?: Prisma.StringNullableFilter<"ContestGroup"> | string | null
+  grade?: Prisma.StringNullableFilter<"ContestGroup"> | string | null
+  autoKey?: Prisma.StringNullableFilter<"ContestGroup"> | string | null
   accessCode?: Prisma.StringFilter<"ContestGroup"> | string
   recoveryCode?: Prisma.StringFilter<"ContestGroup"> | string
   firstUsedAt?: Prisma.DateTimeNullableFilter<"ContestGroup"> | Date | string | null
@@ -275,6 +291,8 @@ export type ContestGroupOrderByWithRelationInput = {
   createdById?: Prisma.SortOrderInput | Prisma.SortOrder
   name?: Prisma.SortOrder
   category?: Prisma.SortOrderInput | Prisma.SortOrder
+  grade?: Prisma.SortOrderInput | Prisma.SortOrder
+  autoKey?: Prisma.SortOrderInput | Prisma.SortOrder
   accessCode?: Prisma.SortOrder
   recoveryCode?: Prisma.SortOrder
   firstUsedAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -288,6 +306,7 @@ export type ContestGroupOrderByWithRelationInput = {
 
 export type ContestGroupWhereUniqueInput = Prisma.AtLeast<{
   id?: string
+  autoKey?: string
   accessCode?: string
   AND?: Prisma.ContestGroupWhereInput | Prisma.ContestGroupWhereInput[]
   OR?: Prisma.ContestGroupWhereInput[]
@@ -296,6 +315,7 @@ export type ContestGroupWhereUniqueInput = Prisma.AtLeast<{
   createdById?: Prisma.IntNullableFilter<"ContestGroup"> | number | null
   name?: Prisma.StringFilter<"ContestGroup"> | string
   category?: Prisma.StringNullableFilter<"ContestGroup"> | string | null
+  grade?: Prisma.StringNullableFilter<"ContestGroup"> | string | null
   recoveryCode?: Prisma.StringFilter<"ContestGroup"> | string
   firstUsedAt?: Prisma.DateTimeNullableFilter<"ContestGroup"> | Date | string | null
   expiresAt?: Prisma.DateTimeNullableFilter<"ContestGroup"> | Date | string | null
@@ -304,7 +324,7 @@ export type ContestGroupWhereUniqueInput = Prisma.AtLeast<{
   contest?: Prisma.XOR<Prisma.ContestScalarRelationFilter, Prisma.ContestWhereInput>
   createdBy?: Prisma.XOR<Prisma.UserNullableScalarRelationFilter, Prisma.UserWhereInput> | null
   teams?: Prisma.TeamListRelationFilter
-}, "id" | "accessCode">
+}, "id" | "autoKey" | "accessCode">
 
 export type ContestGroupOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
@@ -312,6 +332,8 @@ export type ContestGroupOrderByWithAggregationInput = {
   createdById?: Prisma.SortOrderInput | Prisma.SortOrder
   name?: Prisma.SortOrder
   category?: Prisma.SortOrderInput | Prisma.SortOrder
+  grade?: Prisma.SortOrderInput | Prisma.SortOrder
+  autoKey?: Prisma.SortOrderInput | Prisma.SortOrder
   accessCode?: Prisma.SortOrder
   recoveryCode?: Prisma.SortOrder
   firstUsedAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -334,6 +356,8 @@ export type ContestGroupScalarWhereWithAggregatesInput = {
   createdById?: Prisma.IntNullableWithAggregatesFilter<"ContestGroup"> | number | null
   name?: Prisma.StringWithAggregatesFilter<"ContestGroup"> | string
   category?: Prisma.StringNullableWithAggregatesFilter<"ContestGroup"> | string | null
+  grade?: Prisma.StringNullableWithAggregatesFilter<"ContestGroup"> | string | null
+  autoKey?: Prisma.StringNullableWithAggregatesFilter<"ContestGroup"> | string | null
   accessCode?: Prisma.StringWithAggregatesFilter<"ContestGroup"> | string
   recoveryCode?: Prisma.StringWithAggregatesFilter<"ContestGroup"> | string
   firstUsedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"ContestGroup"> | Date | string | null
@@ -346,6 +370,8 @@ export type ContestGroupCreateInput = {
   id?: string
   name: string
   category?: string | null
+  grade?: string | null
+  autoKey?: string | null
   accessCode: string
   recoveryCode: string
   firstUsedAt?: Date | string | null
@@ -363,6 +389,8 @@ export type ContestGroupUncheckedCreateInput = {
   createdById?: number | null
   name: string
   category?: string | null
+  grade?: string | null
+  autoKey?: string | null
   accessCode: string
   recoveryCode: string
   firstUsedAt?: Date | string | null
@@ -376,6 +404,8 @@ export type ContestGroupUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  autoKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
   recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
   firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -393,6 +423,8 @@ export type ContestGroupUncheckedUpdateInput = {
   createdById?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  autoKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
   recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
   firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -408,6 +440,8 @@ export type ContestGroupCreateManyInput = {
   createdById?: number | null
   name: string
   category?: string | null
+  grade?: string | null
+  autoKey?: string | null
   accessCode: string
   recoveryCode: string
   firstUsedAt?: Date | string | null
@@ -420,6 +454,8 @@ export type ContestGroupUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  autoKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
   recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
   firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -434,6 +470,8 @@ export type ContestGroupUncheckedUpdateManyInput = {
   createdById?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  autoKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
   recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
   firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -458,6 +496,8 @@ export type ContestGroupCountOrderByAggregateInput = {
   createdById?: Prisma.SortOrder
   name?: Prisma.SortOrder
   category?: Prisma.SortOrder
+  grade?: Prisma.SortOrder
+  autoKey?: Prisma.SortOrder
   accessCode?: Prisma.SortOrder
   recoveryCode?: Prisma.SortOrder
   firstUsedAt?: Prisma.SortOrder
@@ -476,6 +516,8 @@ export type ContestGroupMaxOrderByAggregateInput = {
   createdById?: Prisma.SortOrder
   name?: Prisma.SortOrder
   category?: Prisma.SortOrder
+  grade?: Prisma.SortOrder
+  autoKey?: Prisma.SortOrder
   accessCode?: Prisma.SortOrder
   recoveryCode?: Prisma.SortOrder
   firstUsedAt?: Prisma.SortOrder
@@ -490,6 +532,8 @@ export type ContestGroupMinOrderByAggregateInput = {
   createdById?: Prisma.SortOrder
   name?: Prisma.SortOrder
   category?: Prisma.SortOrder
+  grade?: Prisma.SortOrder
+  autoKey?: Prisma.SortOrder
   accessCode?: Prisma.SortOrder
   recoveryCode?: Prisma.SortOrder
   firstUsedAt?: Prisma.SortOrder
@@ -609,6 +653,8 @@ export type ContestGroupCreateWithoutCreatedByInput = {
   id?: string
   name: string
   category?: string | null
+  grade?: string | null
+  autoKey?: string | null
   accessCode: string
   recoveryCode: string
   firstUsedAt?: Date | string | null
@@ -624,6 +670,8 @@ export type ContestGroupUncheckedCreateWithoutCreatedByInput = {
   contestId: string
   name: string
   category?: string | null
+  grade?: string | null
+  autoKey?: string | null
   accessCode: string
   recoveryCode: string
   firstUsedAt?: Date | string | null
@@ -667,6 +715,8 @@ export type ContestGroupScalarWhereInput = {
   createdById?: Prisma.IntNullableFilter<"ContestGroup"> | number | null
   name?: Prisma.StringFilter<"ContestGroup"> | string
   category?: Prisma.StringNullableFilter<"ContestGroup"> | string | null
+  grade?: Prisma.StringNullableFilter<"ContestGroup"> | string | null
+  autoKey?: Prisma.StringNullableFilter<"ContestGroup"> | string | null
   accessCode?: Prisma.StringFilter<"ContestGroup"> | string
   recoveryCode?: Prisma.StringFilter<"ContestGroup"> | string
   firstUsedAt?: Prisma.DateTimeNullableFilter<"ContestGroup"> | Date | string | null
@@ -679,6 +729,8 @@ export type ContestGroupCreateWithoutContestInput = {
   id?: string
   name: string
   category?: string | null
+  grade?: string | null
+  autoKey?: string | null
   accessCode: string
   recoveryCode: string
   firstUsedAt?: Date | string | null
@@ -694,6 +746,8 @@ export type ContestGroupUncheckedCreateWithoutContestInput = {
   createdById?: number | null
   name: string
   category?: string | null
+  grade?: string | null
+  autoKey?: string | null
   accessCode: string
   recoveryCode: string
   firstUsedAt?: Date | string | null
@@ -732,6 +786,8 @@ export type ContestGroupCreateWithoutTeamsInput = {
   id?: string
   name: string
   category?: string | null
+  grade?: string | null
+  autoKey?: string | null
   accessCode: string
   recoveryCode: string
   firstUsedAt?: Date | string | null
@@ -748,6 +804,8 @@ export type ContestGroupUncheckedCreateWithoutTeamsInput = {
   createdById?: number | null
   name: string
   category?: string | null
+  grade?: string | null
+  autoKey?: string | null
   accessCode: string
   recoveryCode: string
   firstUsedAt?: Date | string | null
@@ -776,6 +834,8 @@ export type ContestGroupUpdateWithoutTeamsInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  autoKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
   recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
   firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -792,6 +852,8 @@ export type ContestGroupUncheckedUpdateWithoutTeamsInput = {
   createdById?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  autoKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
   recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
   firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -805,6 +867,8 @@ export type ContestGroupCreateManyCreatedByInput = {
   contestId: string
   name: string
   category?: string | null
+  grade?: string | null
+  autoKey?: string | null
   accessCode: string
   recoveryCode: string
   firstUsedAt?: Date | string | null
@@ -817,6 +881,8 @@ export type ContestGroupUpdateWithoutCreatedByInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  autoKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
   recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
   firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -832,6 +898,8 @@ export type ContestGroupUncheckedUpdateWithoutCreatedByInput = {
   contestId?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  autoKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
   recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
   firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -846,6 +914,8 @@ export type ContestGroupUncheckedUpdateManyWithoutCreatedByInput = {
   contestId?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  autoKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
   recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
   firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -859,6 +929,8 @@ export type ContestGroupCreateManyContestInput = {
   createdById?: number | null
   name: string
   category?: string | null
+  grade?: string | null
+  autoKey?: string | null
   accessCode: string
   recoveryCode: string
   firstUsedAt?: Date | string | null
@@ -871,6 +943,8 @@ export type ContestGroupUpdateWithoutContestInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  autoKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
   recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
   firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -886,6 +960,8 @@ export type ContestGroupUncheckedUpdateWithoutContestInput = {
   createdById?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  autoKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
   recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
   firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -900,6 +976,8 @@ export type ContestGroupUncheckedUpdateManyWithoutContestInput = {
   createdById?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  autoKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
   recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
   firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -945,6 +1023,8 @@ export type ContestGroupSelect<ExtArgs extends runtime.Types.Extensions.Internal
   createdById?: boolean
   name?: boolean
   category?: boolean
+  grade?: boolean
+  autoKey?: boolean
   accessCode?: boolean
   recoveryCode?: boolean
   firstUsedAt?: boolean
@@ -963,6 +1043,8 @@ export type ContestGroupSelectCreateManyAndReturn<ExtArgs extends runtime.Types.
   createdById?: boolean
   name?: boolean
   category?: boolean
+  grade?: boolean
+  autoKey?: boolean
   accessCode?: boolean
   recoveryCode?: boolean
   firstUsedAt?: boolean
@@ -979,6 +1061,8 @@ export type ContestGroupSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.
   createdById?: boolean
   name?: boolean
   category?: boolean
+  grade?: boolean
+  autoKey?: boolean
   accessCode?: boolean
   recoveryCode?: boolean
   firstUsedAt?: boolean
@@ -995,6 +1079,8 @@ export type ContestGroupSelectScalar = {
   createdById?: boolean
   name?: boolean
   category?: boolean
+  grade?: boolean
+  autoKey?: boolean
   accessCode?: boolean
   recoveryCode?: boolean
   firstUsedAt?: boolean
@@ -1003,7 +1089,7 @@ export type ContestGroupSelectScalar = {
   updatedAt?: boolean
 }
 
-export type ContestGroupOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "contestId" | "createdById" | "name" | "category" | "accessCode" | "recoveryCode" | "firstUsedAt" | "expiresAt" | "createdAt" | "updatedAt", ExtArgs["result"]["contestGroup"]>
+export type ContestGroupOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "contestId" | "createdById" | "name" | "category" | "grade" | "autoKey" | "accessCode" | "recoveryCode" | "firstUsedAt" | "expiresAt" | "createdAt" | "updatedAt", ExtArgs["result"]["contestGroup"]>
 export type ContestGroupInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   contest?: boolean | Prisma.ContestDefaultArgs<ExtArgs>
   createdBy?: boolean | Prisma.ContestGroup$createdByArgs<ExtArgs>
@@ -1032,6 +1118,8 @@ export type $ContestGroupPayload<ExtArgs extends runtime.Types.Extensions.Intern
     createdById: number | null
     name: string
     category: string | null
+    grade: string | null
+    autoKey: string | null
     accessCode: string
     recoveryCode: string
     firstUsedAt: Date | null
@@ -1469,6 +1557,8 @@ export interface ContestGroupFieldRefs {
   readonly createdById: Prisma.FieldRef<"ContestGroup", 'Int'>
   readonly name: Prisma.FieldRef<"ContestGroup", 'String'>
   readonly category: Prisma.FieldRef<"ContestGroup", 'String'>
+  readonly grade: Prisma.FieldRef<"ContestGroup", 'String'>
+  readonly autoKey: Prisma.FieldRef<"ContestGroup", 'String'>
   readonly accessCode: Prisma.FieldRef<"ContestGroup", 'String'>
   readonly recoveryCode: Prisma.FieldRef<"ContestGroup", 'String'>
   readonly firstUsedAt: Prisma.FieldRef<"ContestGroup", 'DateTime'>

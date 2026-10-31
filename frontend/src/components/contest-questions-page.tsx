@@ -43,12 +43,7 @@ import {
   difficultyOf,
 } from "@/components/contest-task-parts";
 
-const EDITABLE: ContestState[] = [
-  "borrador",
-  "programada",
-  "inscripcion",
-  "preparacion",
-];
+const EDITABLE: ContestState[] = ["borrador", "programada", "detenida"];
 
 const chipClass =
   "flex h-7 shrink-0 items-center gap-1.5 px-2.5 text-xs whitespace-nowrap text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/60 disabled:pointer-events-none disabled:opacity-40 aria-pressed:bg-primary/10 aria-pressed:font-semibold aria-pressed:text-primary";
@@ -282,7 +277,7 @@ export function ContestQuestionsPage() {
   if (!EDITABLE.includes(contest.state)) {
     return (
       <p className="text-sm text-muted-foreground">
-        Este desafío ya empezó y sus preguntas no se pueden cambiar.{" "}
+        Este desafío ya comenzó. Detenlo para cambiar sus preguntas.{" "}
         <a href={backHref} className="underline underline-offset-4">
           Volver al desafío
         </a>

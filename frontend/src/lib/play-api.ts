@@ -52,6 +52,7 @@ export type ContestRules = {
 };
 
 export type AttemptState = {
+  attemptId?: string;
   contestTitle: string;
   /** Hora del servidor al responder: la cuenta regresiva no usa el reloj del equipo. */
   serverNow?: string;
@@ -169,6 +170,7 @@ export type PlayHeartbeat = {
   ok: boolean;
   serverNow: string;
   suspended: boolean;
+  attemptId: string | null;
   endsAt: string | null;
   status: AttemptState["status"] | null;
 };
@@ -187,15 +189,22 @@ export function startAttempt() {
   return playRequest<{ ok: boolean }>("/api/play/start", { method: "POST" });
 }
 
-export function saveAnswer(taskId: string, payload: unknown) {
+export function saveAnswer(
+  taskId: string,
+  payload: unknown,
+  attemptId?: string,
+) {
   return playRequest<null>("/api/play/answer", {
     method: "POST",
-    body: JSON.stringify({ taskId, payload }),
+    body: JSON.stringify({ taskId, payload, attemptId }),
     // Sigue aunque se cierre la pestaña justo después de responder.
     keepalive: true,
   });
 }
 
-export function submitAttempt() {
-  return playRequest<{ ok: boolean }>("/api/play/submit", { method: "POST" });
+export function submitAttempt(attemptId?: string) {
+  return playRequest<{ ok: boolean }>("/api/play/submit", {
+    method: "POST",
+    body: JSON.stringify({ attemptId }),
+  });
 }

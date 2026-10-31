@@ -77,6 +77,7 @@ import {
 } from "@/lib/firebase-auth";
 import { useFirebaseSession } from "@/lib/use-firebase-session";
 import { landingPath, openBebrasSession } from "@/lib/session-api";
+import { getSiteSettings } from "@/lib/admin-api";
 
 type RegisterErrors = {
   firstName?: string;
@@ -108,6 +109,17 @@ export function RegisterForm() {
   // estan decididos, solo faltan los datos propios de Bebras (§9).
   const completing = Boolean(session.user);
   const [step, setStep] = useState<"form" | "confirm" | "verify">("form");
+  const [registrationOpen, setRegistrationOpen] = useState<boolean | null>(
+    null,
+  );
+
+  useEffect(() => {
+    void getSiteSettings()
+      .then(({ teacherRegistration }) =>
+        setRegistrationOpen(teacherRegistration),
+      )
+      .catch(() => setRegistrationOpen(true));
+  }, []);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [resending, setResending] = useState(false);
   const [checkingVerification, setCheckingVerification] = useState(false);
@@ -607,6 +619,19 @@ export function RegisterForm() {
       setSubmitting(false);
     }
   };
+
+  if (registrationOpen === null) return null;
+
+  if (!registrationOpen && step !== "verify") {
+    return (
+      <section className="mx-auto w-full max-w-md">
+        <Heading title="Registro de maestro" />
+        <p className="text-sm text-muted-foreground">
+          El registro de maestros está cerrado por ahora.
+        </p>
+      </section>
+    );
+  }
 
   if (!configured) {
     return (

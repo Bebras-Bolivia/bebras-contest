@@ -11,7 +11,10 @@ export type AdminAccount = {
   isSelf: boolean;
 };
 
-export type SiteSettings = { infoSiteUrl: string | null };
+export type SiteSettings = {
+  infoSiteUrl: string | null;
+  teacherRegistration: boolean;
+};
 
 export function listAdmins() {
   return request<AdminAccount[]>("/api/admin/admins");
@@ -28,11 +31,21 @@ export function getSiteSettings() {
   return publicRequest<SiteSettings>("/api/site-settings");
 }
 
-export function saveSiteSettings(settings: SiteSettings) {
+export function saveSiteSettings(settings: { infoSiteUrl: string | null }) {
   return request<SiteSettings>("/api/admin/site-settings", {
     method: "PUT",
     body: JSON.stringify(settings),
   });
+}
+
+export function setTeacherRegistration(enabled: boolean) {
+  return request<{ teacherRegistration: boolean }>(
+    "/api/admin/teacher-registration",
+    {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    },
+  );
 }
 
 export type CertificatesLink = {

@@ -48,6 +48,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { SignOutButton } from "@/components/sign-out-button";
 import { DocumentUpload } from "@/components/document-upload";
 import {
   Popover,
@@ -778,6 +779,7 @@ export function ProfilePage() {
           </span>
         </p>
       </section>
+      <SignOutButton />
     </div>
   );
 }

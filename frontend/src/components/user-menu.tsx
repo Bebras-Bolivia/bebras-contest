@@ -1,10 +1,7 @@
 "use client";
 
-import { LogOutIcon } from "lucide-react";
-
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { type AuthUser } from "@/lib/auth";
-import { signOutFirebase } from "@/lib/firebase-auth";
 import { useAuthUser } from "@/lib/use-auth-user";
 import { useFirebaseSession } from "@/lib/use-firebase-session";
 import { Button } from "@/components/ui/button";
@@ -60,14 +57,6 @@ export function UserMenu() {
     );
   }
 
-  const handleLogout = () => {
-    // Cerrar tambien en Firebase: si no, la proxima visita a /login retomaria
-    // la sesion automaticamente.
-    void signOutFirebase().finally(() => {
-      window.location.href = "/";
-    });
-  };
-
   const isMaestro = user.role === "maestro";
   const unverified = isMaestro && user.status !== "approved";
 
@@ -93,15 +82,6 @@ export function UserMenu() {
           {firstName(user)}
         </span>
       </a>
-      <Button
-        size="icon"
-        variant="ghost"
-        onClick={handleLogout}
-        aria-label="Cerrar sesión"
-        title="Cerrar sesión"
-      >
-        <LogOutIcon />
-      </Button>
     </div>
   );
 }

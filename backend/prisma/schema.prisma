@@ -121,6 +121,8 @@ model Contest {
   showSolutionsOnSubmit Boolean       @default(false)
   publishedAt          DateTime?
   suspendedAt          DateTime?
+  stoppedAt            DateTime?
+  trashedAt            DateTime?
   consolidatedAt       DateTime?
   resultsPublishedAt   DateTime?
   // Cuándo se publican solos los resultados; sin fecha, al cerrar la rendición.
@@ -137,8 +139,10 @@ model Contest {
   createdBy            User?          @relation(fields: [createdById], references: [id], onDelete: Cascade)
   tasks                ContestTask[]
   groups               ContestGroup[]
+  practiceResults      PracticeResult[]
 
   @@index([createdById])
+  @@index([trashedAt])
 }
 
 model ContestTask {
@@ -168,6 +172,8 @@ model ContestGroup {
   name         String
   // Categoría del grupo; sin ella (grupos anteriores) valen todas las del desafío.
   category     String?
+  grade        String?
+  autoKey      String?   @unique
   accessCode   String    @unique
   recoveryCode String
   firstUsedAt  DateTime?
@@ -180,6 +186,7 @@ model ContestGroup {
 
   @@index([contestId])
   @@index([createdById])
+  @@index([contestId, createdById, grade])
 }
 
 model Team {
@@ -199,6 +206,7 @@ model Team {
   updatedAt          DateTime     @updatedAt
   group              ContestGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   attempt            Attempt?
+  practiceResults    PracticeResult[]
 
   @@index([groupId])
 }
@@ -253,4 +261,21 @@ model SiteSetting {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
+}
+
+model PracticeResult {
+  id            String   @id @default(cuid())
+  contestId     String
+  teamId        String
+  totalScore    Int
+  correctCount  Int
+  answeredCount Int
+  taskCount     Int
+  marks         String   @default("")
+  finishedAt    DateTime @default(now())
+  contest       Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  team          Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([contestId, teamId])
+  @@index([teamId])
 }

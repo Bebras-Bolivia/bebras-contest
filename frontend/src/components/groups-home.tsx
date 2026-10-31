@@ -1,388 +1,820 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  ChevronDownIcon,
   ChevronRightIcon,
   CopyIcon,
   LoaderCircleIcon,
-  PlusIcon,
+  StarIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-
-import { cn } from "@/lib/utils";
-import { ApiError } from "@/lib/api-client";
 import { getUser } from "@/lib/auth";
+import { cn } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
-import { formatContestWindow, gradesForCategories } from "@/lib/contest-schema";
 import {
-  createGroup,
+  CONTEST_STATE_LABELS,
+  SCHOOL_GRADES,
+  gradeLabel,
+  gradesForCategories,
+} from "@/lib/contest-schema";
+import {
+  listGroupContests,
   listGroups,
   listPublishedContests,
+  prepareCourseGroups,
+  type GroupContestSummary,
   type PublishedContest,
   type StoredGroup,
 } from "@/lib/groups-api";
+import { DEPARTMENTS } from "@/lib/departments";
+import { categorySoftStyle, categoryStyle } from "@/components/category-logo";
+import { FieldHint } from "@/components/field-hint";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Expand } from "@/components/reveal";
+import { SearchBox } from "@/components/search-box";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+
+type ListedGroup = StoredGroup & { pending?: boolean; canOpen?: boolean };
+
+async function prepareRows(rows: ListedGroup[], contestId?: string) {
+  if (
+    !contestId ||
+    !rows.some(
+      (group) =>
+        group.contestId === contestId && group.pending && group.canOpen,
+    )
+  )
+    return rows;
+  const prepared = await prepareCourseGroups(contestId);
+  const isFavorite =
+    rows.find((group) => group.contestId === contestId)?.isFavorite ?? false;
+  const merged = new Map(
+    rows
+      .filter((group) => !(group.contestId === contestId && group.pending))
+      .map((group) => [group.id, group]),
+  );
+  for (const group of prepared) merged.set(group.id, { ...group, isFavorite });
+  return [...merged.values()];
+}
 
 function studentCount(group: StoredGroup) {
-  return group.teams.reduce(
-    (total, team) => total + (team.participationMode === "pareja" ? 2 : 1),
-    0,
+  return group.studentCount ?? 0;
+}
+
+type Section = Omit<GroupContestSummary, "groups">;
+
+const OWNERS_PAGE = 40;
+
+function departmentName(value: string | null) {
+  if (!value) return null;
+  const found = DEPARTMENTS.find(
+    (item) =>
+      item.key === value.toUpperCase() ||
+      item.name.toLowerCase() === value.toLowerCase(),
+  );
+  return found?.name ?? value;
+}
+
+function plain(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function sectionsFrom(
+  summaries: GroupContestSummary[],
+  published: PublishedContest[],
+): Section[] {
+  const sections = new Map<string, Section>(
+    summaries.map((summary) => [summary.id, summary]),
+  );
+  for (const contest of published) {
+    if (sections.has(contest.id)) continue;
+    if (gradesForCategories(contest.categories).length === 0) continue;
+    sections.set(contest.id, {
+      id: contest.id,
+      title: contest.title,
+      state: contest.state,
+      createdAt: contest.createdAt,
+      isFavorite: contest.isFavorite,
+      students: 0,
+    });
+  }
+  return [...sections.values()].sort(
+    (a, b) =>
+      Number(b.isFavorite) - Number(a.isFavorite) ||
+      b.createdAt.localeCompare(a.createdAt) ||
+      a.title.localeCompare(b.title, "es"),
   );
 }
 
-/** «3.º y 4.º de primaria» */
-function categoryGrades(category: string) {
-  const grades = gradesForCategories([category]);
-  const [, level] = grades[0].label.split(" de ");
-  return `${grades.map((grade) => grade.label.split(" de ")[0]).join(" y ")} de ${level}`;
+function courseOrder(value: string | null) {
+  const index = SCHOOL_GRADES.findIndex((grade) => grade.value === value);
+  return index < 0 ? SCHOOL_GRADES.length : index;
+}
+
+function sectionsFor(groups: ListedGroup[]) {
+  const sections = new Map<
+    string,
+    {
+      id: string;
+      title: string;
+      state: StoredGroup["contestState"];
+      createdAt: string;
+      isFavorite: boolean;
+      groups: ListedGroup[];
+    }
+  >();
+  for (const group of groups) {
+    const section = sections.get(group.contestId) ?? {
+      id: group.contestId,
+      title: group.contestTitle,
+      state: group.contestState,
+      createdAt: group.contestCreatedAt,
+      isFavorite: group.isFavorite,
+      groups: [],
+    };
+    section.groups.push(group);
+    sections.set(section.id, section);
+  }
+  return [...sections.values()]
+    .map((section) => ({
+      ...section,
+      students: section.groups.reduce(
+        (sum, group) => sum + studentCount(group),
+        0,
+      ),
+      groups: section.groups.sort(
+        (a, b) =>
+          courseOrder(a.grade) - courseOrder(b.grade) ||
+          Number(b.isDefault) - Number(a.isDefault) ||
+          a.name.localeCompare(b.name, "es", { numeric: true }),
+      ),
+    }))
+    .sort(
+      (a, b) =>
+        Number(b.isFavorite) - Number(a.isFavorite) ||
+        b.createdAt.localeCompare(a.createdAt) ||
+        a.title.localeCompare(b.title, "es"),
+    );
+}
+
+async function loadContestRows(
+  contestId: string,
+  contests: PublishedContest[],
+  user: ReturnType<typeof getUser>,
+) {
+  const isMaestro = user?.role === "maestro";
+  const stored = await listGroups({ contestId });
+  const rows: ListedGroup[] = stored.filter((group) => {
+    if (group.teamCount > 0) return true;
+    const categories = group.contestCategories;
+    return group.grade
+      ? gradesForCategories(categories).some(
+          (grade) => grade.value === group.grade,
+        )
+      : group.category
+        ? categories.includes(group.category)
+        : categories.length > 0;
+  });
+  const contest = contests.find((item) => item.id === contestId);
+  if (user && contest) {
+    for (const grade of gradesForCategories(contest.categories)) {
+      if (
+        stored.some(
+          (group) =>
+            group.grade === grade.value &&
+            group.isDefault &&
+            group.ownerId === user.id,
+        )
+      )
+        continue;
+      rows.push({
+        id: `course:${contest.id}:${grade.value}`,
+        pending: true,
+        canOpen: contest.canEnroll,
+        name: grade.label,
+        grade: grade.value,
+        isDefault: true,
+        ownerId: user.id,
+        ownerName: isMaestro ? (user.name ?? user.email) : null,
+        ownerEmail: isMaestro ? user.email : null,
+        ownerSchool: null,
+        ownerDepartment: null,
+        contestId: contest.id,
+        contestTitle: contest.title,
+        contestState: contest.state,
+        contestCreatedAt: contest.createdAt,
+        isFavorite: contest.isFavorite,
+        category: grade.category,
+        contestCategories: contest.categories,
+        contestAllowPairs: false,
+        accessCode: "",
+        firstUsedAt: null,
+        expiresAt: null,
+        createdAt: "",
+        teamCount: 0,
+        studentCount: 0,
+        teams: [],
+      });
+    }
+  }
+  return prepareRows(rows, contestId);
 }
 
 export function GroupsHome() {
-  const [isMaestro] = useState(() => getUser()?.role === "maestro");
-  const [groups, setGroups] = useState<StoredGroup[] | null>(null);
-  const [contests, setContests] = useState<PublishedContest[]>([]);
+  const [user] = useState(getUser);
+  const isMaestro = user?.role === "maestro";
+  const [groups, setGroups] = useState<ListedGroup[] | null>(null);
+  const [sections, setSections] = useState<Section[]>([]);
+  const [published, setPublished] = useState<PublishedContest[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
+  const [choosing, setChoosing] = useState<string | null>(null);
+  const [selected, setSelected] = useState(() =>
+    new URLSearchParams(window.location.search).get("desafio"),
+  );
 
   useEffect(() => {
     let active = true;
-    void Promise.all([listGroups(), listPublishedContests()])
-      .then(([loadedGroups, loadedContests]) => {
+    void Promise.all([listGroupContests(), listPublishedContests()])
+      .then(async ([summaries, contests]) => {
         if (!active) return;
-        setGroups(loadedGroups);
-        setContests(loadedContests);
+        const list = sectionsFrom(summaries, contests);
+        const requested = new URLSearchParams(window.location.search).get(
+          "desafio",
+        );
+        const initial =
+          list.find((section) => section.id === requested) ?? list[0];
+        const rows = initial
+          ? await loadContestRows(initial.id, contests, user)
+          : [];
+        if (!active) return;
+        setPublished(contests);
+        setSections(list);
+        setSelected(initial?.id ?? null);
+        setGroups(rows);
       })
       .catch((error: unknown) => {
-        if (!active) return;
-        setLoadError(
-          error instanceof Error
-            ? error.message
-            : "No se pudieron cargar tus grupos.",
-        );
+        if (active)
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : "No se pudieron cargar los grupos.",
+          );
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [user]);
 
-  const copyCode = async (code: string) => {
-    if (await copyToClipboard(code)) {
-      toast.success(`Código copiado: ${code}`);
-    } else {
-      toast.error("No se pudo copiar el código.");
+  const summary = sections.find((section) => section.id === selected);
+  const current = summary && {
+    ...summary,
+    students: (groups ?? []).reduce(
+      (sum, group) => sum + studentCount(group),
+      0,
+    ),
+    groups: sectionsFor(groups ?? [])[0]?.groups ?? [],
+  };
+  const others = sections.filter((section) => section.id !== current?.id);
+
+  const choose = async (id: string) => {
+    if (choosing) return;
+    setChoosing(id);
+    try {
+      setGroups(await loadContestRows(id, published, user));
+      setSelected(id);
+      const url = new URL(window.location.href);
+      url.searchParams.set("desafio", id);
+      window.history.replaceState(null, "", url);
+      window.scrollTo({ top: 0, behavior: "auto" });
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudieron cargar los grupos.",
+      );
+    } finally {
+      setChoosing(null);
     }
   };
 
-  const total =
-    groups?.reduce((sum, group) => sum + studentCount(group), 0) ?? 0;
+  const copyCode = async (code: string) => {
+    if (await copyToClipboard(code)) toast.success(`Código copiado: ${code}`);
+    else toast.error("No se pudo copiar el código.");
+  };
 
-  return (
-    <div className="flex w-full flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-5">
-        <div className="flex flex-col gap-1">
-          <h1 className="font-heading text-3xl font-semibold tracking-tight">
-            {isMaestro ? "Mis grupos" : "Grupos"}
-          </h1>
-          {groups && groups.length > 0 && (
-            <p className="text-sm text-muted-foreground">
-              {groups.length} {groups.length === 1 ? "grupo" : "grupos"} ·{" "}
-              {total} {total === 1 ? "estudiante" : "estudiantes"}
-            </p>
-          )}
-        </div>
-        <Button type="button" onClick={() => setCreateOpen(true)}>
-          <PlusIcon data-icon="inline-start" />
-          Nuevo grupo
-        </Button>
-      </div>
-
-      {loadError ? (
-        <p className="text-sm text-destructive">{loadError}</p>
-      ) : groups === null ? (
-        <GroupsSkeleton />
-      ) : groups.length === 0 ? (
-        <div className="flex flex-col items-start gap-2 py-6">
-          <p className="font-medium">Todavía no tienes grupos.</p>
-          <p className="max-w-xl text-sm text-muted-foreground">
-            Un grupo junta a tus estudiantes de una categoría para un desafío.
-            Tiene un código con el que entran a inscribirse y a rendir.
-          </p>
-        </div>
-      ) : (
-        <ul className="divide-y border-b">
-          {groups.map((group, index) => {
-            const students = studentCount(group);
-            return (
-              <li
-                key={group.id}
-                style={{ animationDelay: `${Math.min(index, 10) * 45}ms` }}
-                className="group/row relative flex flex-wrap items-center gap-x-6 gap-y-2 px-3 py-4 transition-colors hover:bg-muted/40 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 motion-safe:fill-mode-both"
+  const renderRow = (group: ListedGroup, index: number) => {
+    const students = studentCount(group);
+    const canOpen = !group.pending;
+    const showCode = group.contestState === "inscripcion";
+    const showResults =
+      students > 0 &&
+      ["abierta", "suspendida", "cerrada", "consolidada", "publicada"].includes(
+        group.contestState,
+      );
+    return (
+      <li
+        key={group.id}
+        style={{ animationDelay: `${Math.min(index, 10) * 35}ms` }}
+        className={cn(
+          "group/row relative flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-4 transition-colors motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 motion-safe:fill-mode-both sm:gap-x-5",
+          canOpen && "hover:bg-muted/40",
+        )}
+      >
+        <div className="flex min-w-0 flex-1 basis-56 flex-col gap-1">
+          <h3 className="text-base font-semibold break-words">
+            {group.pending ? (
+              group.name
+            ) : (
+              <a
+                href={`/grupos/ver?id=${group.id}&vista=estudiantes`}
+                className="outline-none after:absolute after:inset-0 focus-visible:underline"
               >
-                <div className="flex min-w-0 flex-1 basis-64 flex-col gap-1">
-                  <h2 className="text-lg font-semibold break-words">
-                    <a
-                      href={`/grupos/ver?id=${group.id}`}
-                      className="outline-none after:absolute after:inset-0 focus-visible:underline"
-                    >
-                      {group.name}
-                    </a>
-                  </h2>
-                  <p className="text-sm text-muted-foreground">
-                    {group.contestTitle}
-                    {group.category && <> · {group.category}</>}
-                  </p>
-                </div>
-                <span className="text-sm text-muted-foreground tabular-nums">
-                  {students} {students === 1 ? "estudiante" : "estudiantes"}
-                </span>
+                {group.name}
+              </a>
+            )}
+          </h3>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {group.category && (
+              <Badge data-category style={categoryStyle(group.category)}>
+                {group.category}
+              </Badge>
+            )}
+            {group.grade && group.name !== gradeLabel(group.grade) && (
+              <span className="text-sm text-muted-foreground">
+                {gradeLabel(group.grade)}
+              </span>
+            )}
+            {!isMaestro && group.ownerName && (
+              <span className="text-sm text-muted-foreground">
+                {group.ownerName}
+              </span>
+            )}
+          </div>
+        </div>
+        <span className="text-sm text-muted-foreground tabular-nums">
+          {students} {students === 1 ? "estudiante" : "estudiantes"}
+        </span>
+        {!group.pending && (
+          <>
+            {showCode && (
+              <div className="relative z-10 flex items-center gap-1.5">
                 <button
                   type="button"
                   title="Copiar código del grupo"
                   aria-label={`Copiar el código ${group.accessCode}`}
-                  onClick={() => copyCode(group.accessCode)}
-                  className="relative z-10 flex items-center gap-2 px-2 py-1 font-mono text-lg font-semibold tracking-widest transition-colors hover:bg-muted"
+                  onClick={() => void copyCode(group.accessCode)}
+                  className="flex items-center gap-2 px-2 py-1 font-mono text-lg font-semibold tracking-widest transition-colors hover:bg-muted"
                 >
                   {group.accessCode}
                   <CopyIcon className="size-4 text-muted-foreground" />
                 </button>
-                <ChevronRightIcon className="size-5 text-muted-foreground transition-transform group-hover/row:translate-x-0.5 max-sm:hidden" />
+                <FieldHint>
+                  Comparte este código con tus estudiantes para acceder a este
+                  grupo desde «Entrar con código». En un desafío oficial sirve
+                  para inscribirse; después, cada estudiante recibe su código
+                  personal para rendir.
+                </FieldHint>
+              </div>
+            )}
+            {showResults && (
+              <Button
+                asChild
+                size="sm"
+                variant="ghost"
+                className="relative z-10 max-sm:px-2"
+              >
+                <a href={`/grupos/ver?id=${group.id}&vista=resultados`}>
+                  Resultados
+                </a>
+              </Button>
+            )}
+          </>
+        )}
+        {canOpen && (
+          <ChevronRightIcon className="size-5 text-muted-foreground transition-transform group-hover/row:translate-x-0.5 max-sm:hidden" />
+        )}
+      </li>
+    );
+  };
+
+  return (
+    <div className="flex w-full flex-col gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-5">
+        <h1 className="font-heading text-3xl font-semibold tracking-tight">
+          {isMaestro ? "Mis grupos" : "Grupos"}
+        </h1>
+        {others.length > 0 && (
+          <Button asChild variant="ghost" size="sm" className="lg:hidden">
+            <a href="#otros-desafios">Otros desafíos ({others.length})</a>
+          </Button>
+        )}
+      </div>
+      {loadError ? (
+        <p className="text-sm text-destructive">{loadError}</p>
+      ) : groups === null ? (
+        <GroupsSkeleton />
+      ) : !current ? (
+        <p className="py-6 text-sm text-muted-foreground">
+          {isMaestro
+            ? "Los grupos aparecerán cuando el desafío tenga categorías asignadas."
+            : "Asigna categorías al desafío para habilitar los grupos de cada curso."}
+        </p>
+      ) : (
+        <div
+          className={cn(
+            "grid min-w-0 gap-10",
+            others.length > 0 && "lg:grid-cols-[minmax(0,1fr)_15rem] lg:gap-8",
+          )}
+        >
+          <section
+            aria-labelledby="group-current-contest"
+            className="flex min-w-0 flex-col gap-3"
+          >
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-2">
+                <h2
+                  id="group-current-contest"
+                  className="text-lg font-semibold break-words"
+                >
+                  {current.title}
+                </h2>
+                {current.isFavorite && (
+                  <StarIcon
+                    aria-label="Desafío favorito"
+                    className="size-4 shrink-0 fill-primary text-primary"
+                  />
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                <span
+                  className={cn(
+                    "font-medium",
+                    current.state === "abierta"
+                      ? "text-primary"
+                      : "text-foreground",
+                  )}
+                >
+                  {CONTEST_STATE_LABELS[current.state]}
+                </span>{" "}
+                · {current.groups.length}{" "}
+                {current.groups.length === 1 ? "grupo" : "grupos"} ·{" "}
+                {current.students}{" "}
+                {current.students === 1 ? "estudiante" : "estudiantes"}
+              </p>
+            </div>
+            {isMaestro ? (
+              <ul className="divide-y border-b">
+                {current.groups.map(renderRow)}
+              </ul>
+            ) : (
+              <AdminGroups groups={current.groups} renderRow={renderRow} />
+            )}
+          </section>
+          {others.length > 0 && (
+            <aside
+              id="otros-desafios"
+              className="flex min-w-0 scroll-mt-6 flex-col gap-3"
+            >
+              <h2 className="font-heading text-base font-semibold">
+                Otros desafíos
+              </h2>
+              <ul className="divide-y border-b">
+                {others.map((section) => (
+                  <li key={section.id}>
+                    <button
+                      type="button"
+                      disabled={choosing !== null}
+                      onClick={() => void choose(section.id)}
+                      className="flex w-full items-start gap-2 px-2 py-4 text-left outline-none transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-primary/60"
+                    >
+                      <span className="flex min-w-0 flex-1 flex-col gap-1">
+                        <span className="font-semibold break-words">
+                          {section.title}
+                        </span>
+                        <span className="text-sm text-muted-foreground">
+                          {CONTEST_STATE_LABELS[section.state]}
+                        </span>
+                        <span className="text-sm text-muted-foreground">
+                          {section.students}{" "}
+                          {section.students === 1
+                            ? "estudiante"
+                            : "estudiantes"}
+                        </span>
+                      </span>
+                      {choosing === section.id ? (
+                        <LoaderCircleIcon className="mt-1 size-4 shrink-0 animate-spin text-muted-foreground" />
+                      ) : section.isFavorite ? (
+                        <StarIcon className="mt-1 size-4 shrink-0 fill-primary text-primary" />
+                      ) : (
+                        <ChevronRightIcon className="mt-1 size-4 shrink-0 text-muted-foreground" />
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </aside>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+type OwnerEntry = {
+  key: string;
+  name: string;
+  email: string | null;
+  school: string | null;
+  department: string | null;
+  teachers: Set<string>;
+  groups: ListedGroup[];
+  students: number;
+};
+
+function AdminGroups({
+  groups,
+  renderRow,
+}: {
+  groups: ListedGroup[];
+  renderRow: (group: ListedGroup, index: number) => ReactNode;
+}) {
+  const [search, setSearch] = useState("");
+  const [department, setDepartment] = useState("todos");
+  const [opened, setOpened] = useState<Set<string>>(() => new Set());
+  const [limit, setLimit] = useState(OWNERS_PAGE);
+
+  const owners = useMemo(() => {
+    const byOwner = new Map<string, OwnerEntry>();
+    for (const group of groups) {
+      const school = group.ownerName ? group.ownerSchool : null;
+      const key = group.ownerName
+        ? `colegio:${plain(school ?? "")}:${group.ownerDepartment ?? ""}`
+        : "admin";
+      const entry = byOwner.get(key) ?? {
+        key,
+        name: group.ownerName
+          ? (school ?? "Sin colegio")
+          : "Creados por administradores",
+        email: group.ownerName ? group.ownerEmail : null,
+        school,
+        department: group.ownerName ? group.ownerDepartment : null,
+        teachers: new Set<string>(),
+        groups: [],
+        students: 0,
+      };
+      if (group.ownerName) entry.teachers.add(group.ownerName);
+      if (key === "admin" || group.teamCount > 0) entry.groups.push(group);
+      entry.students += studentCount(group);
+      byOwner.set(key, entry);
+    }
+    return [...byOwner.values()].sort(
+      (a, b) =>
+        Number(b.key === "admin") - Number(a.key === "admin") ||
+        a.name.localeCompare(b.name, "es"),
+    );
+  }, [groups]);
+
+  const departments = useMemo(
+    () =>
+      [
+        ...new Set(
+          owners
+            .map((owner) => owner.department)
+            .filter((value): value is string => Boolean(value)),
+        ),
+      ].sort((a, b) =>
+        (departmentName(a) ?? a).localeCompare(departmentName(b) ?? b, "es"),
+      ),
+    [owners],
+  );
+
+  const direct = owners.find((owner) => owner.key === "admin");
+  const query = plain(search.trim());
+  const filtered = owners
+    .filter((owner) => owner.key !== "admin")
+    .filter(
+      (owner) =>
+        (department === "todos" || owner.department === department) &&
+        (!query ||
+          plain(
+            [
+              owner.name,
+              owner.email,
+              owner.school,
+              owner.department,
+              ...owner.teachers,
+            ]
+              .filter(Boolean)
+              .join(" "),
+          ).includes(query) ||
+          owner.groups.some((group) =>
+            plain(group.accessCode).includes(query),
+          )),
+    );
+  const visible = filtered.slice(0, limit);
+  const openAll = Boolean(query) && filtered.length <= 3;
+
+  const toggle = (key: string) =>
+    setOpened((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  return (
+    <div className="flex flex-col gap-3">
+      {direct && direct.groups.length > 0 && (
+        <div className="flex flex-col gap-2 pb-4">
+          <h3 className="text-sm font-semibold">{direct.name}</h3>
+          {(
+            [
+              ["P", "Primaria"],
+              ["S", "Secundaria"],
+            ] as const
+          ).map(([level, label]) => {
+            const ofLevel = direct.groups.filter((group) =>
+              group.grade?.startsWith(level),
+            );
+            if (ofLevel.length === 0) return null;
+            return (
+              <div key={level} className="flex flex-wrap items-center gap-2">
+                <span className="w-24 text-sm text-muted-foreground">
+                  {label}
+                </span>
+                {ofLevel.map((group) => {
+                  const chipClass =
+                    "flex min-w-14 items-center justify-center px-3 py-1.5 text-sm transition-opacity outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary/60";
+                  const style = group.category
+                    ? categorySoftStyle(group.category)
+                    : undefined;
+                  const text = gradeLabel(group.grade).split(" ")[0];
+                  const title = `${gradeLabel(group.grade)} · ${studentCount(group)} ${studentCount(group) === 1 ? "estudiante" : "estudiantes"}`;
+                  return group.pending ? (
+                    <span
+                      key={group.id}
+                      title={title}
+                      style={style}
+                      className={cn(chipClass, "opacity-50")}
+                    >
+                      {text}
+                    </span>
+                  ) : (
+                    <a
+                      key={group.id}
+                      href={`/grupos/ver?id=${group.id}&vista=estudiantes`}
+                      title={title}
+                      aria-label={title}
+                      style={style}
+                      className={chipClass}
+                    >
+                      {text}
+                    </a>
+                  );
+                })}
+              </div>
+            );
+          })}
+          {direct.groups.some((group) => !group.grade) && (
+            <ul className="divide-y border-y">
+              {direct.groups.filter((group) => !group.grade).map(renderRow)}
+            </ul>
+          )}
+        </div>
+      )}
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <SearchBox
+          value={search}
+          onChange={(value) => {
+            setSearch(value);
+            setLimit(OWNERS_PAGE);
+          }}
+          placeholder="Buscar colegio, maestro o código"
+          label="Buscar por colegio, maestro o código"
+        />
+        {departments.length > 1 && (
+          <Select
+            value={department}
+            onValueChange={(value) => {
+              setDepartment(value);
+              setLimit(OWNERS_PAGE);
+            }}
+          >
+            <SelectTrigger className="sm:w-56" aria-label="Departamento">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos los departamentos</SelectItem>
+              {departments.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {departmentName(value)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+      {visible.length === 0 ? (
+        <p className="py-6 text-sm text-muted-foreground">
+          Nada coincide con la búsqueda.
+        </p>
+      ) : (
+        <ul className="divide-y border-y">
+          {visible.map((owner) => {
+            const expanded = openAll || opened.has(owner.key);
+            return (
+              <li key={owner.key}>
+                <button
+                  type="button"
+                  aria-expanded={expanded}
+                  onClick={() => toggle(owner.key)}
+                  className="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-primary/60"
+                >
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="font-semibold break-words">
+                      {owner.name}
+                    </span>
+                    {owner.key !== "admin" && (
+                      <span className="text-sm text-muted-foreground">
+                        {[
+                          departmentName(owner.department),
+                          `${owner.teachers.size} ${owner.teachers.size === 1 ? "maestro" : "maestros"}`,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-sm text-muted-foreground tabular-nums">
+                    {owner.students}{" "}
+                    {owner.students === 1 ? "estudiante" : "estudiantes"}
+                  </span>
+                  <ChevronDownIcon
+                    className={cn(
+                      "size-4 shrink-0 text-muted-foreground transition-transform duration-300",
+                      expanded && "rotate-180",
+                    )}
+                  />
+                </button>
+                <Expand open={expanded}>
+                  {owner.groups.length === 0 ? (
+                    <p className="border-t px-3 py-3 text-sm text-muted-foreground">
+                      Todavía no hay estudiantes inscritos.
+                    </p>
+                  ) : (
+                    <ul className="divide-y border-t bg-muted/20">
+                      {expanded && owner.groups.map(renderRow)}
+                    </ul>
+                  )}
+                </Expand>
               </li>
             );
           })}
         </ul>
       )}
-
-      <CreateGroupDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        contests={contests}
-        isMaestro={isMaestro}
-      />
+      {filtered.length > limit && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="self-start"
+          onClick={() => setLimit((current) => current + OWNERS_PAGE)}
+        >
+          Mostrar más ({filtered.length - limit})
+        </Button>
+      )}
     </div>
   );
 }
 
-function CreateGroupDialog({
-  open,
-  onOpenChange,
-  contests,
-  isMaestro,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  contests: PublishedContest[];
-  isMaestro: boolean;
-}) {
-  const [contestId, setContestId] = useState("");
-  const [category, setCategory] = useState("");
-  const [name, setName] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  const chosenContestId = contests.length === 1 ? contests[0].id : contestId;
-  const contest = contests.find((item) => item.id === chosenContestId);
-  const categories = contest?.categories ?? [];
-  const chosenCategory =
-    categories.length === 1
-      ? categories[0]
-      : categories.includes(category)
-        ? category
-        : "";
-
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const missing = !contest
-      ? "Elige el desafío."
-      : !chosenCategory
-        ? "Elige la categoría de tus estudiantes."
-        : !name.trim()
-          ? "Ponle un nombre al grupo."
-          : null;
-    if (missing) {
-      setError(missing);
-      return;
-    }
-    setError(null);
-    setCreating(true);
-    try {
-      const group = await createGroup({
-        contestId: chosenContestId,
-        category: chosenCategory,
-        name: name.trim(),
-      });
-      window.location.assign(`/grupos/ver?id=${group.id}&vista=estudiantes`);
-    } catch (caught) {
-      setError(
-        caught instanceof ApiError || caught instanceof Error
-          ? caught.message
-          : "No se pudo crear el grupo.",
-      );
-      setCreating(false);
-    }
-  };
-
-  const option = (selected: boolean) =>
-    cn(
-      "flex flex-col items-start gap-0.5 border-2 px-3 py-2 text-left text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
-      selected
-        ? "border-primary bg-primary/10 font-semibold"
-        : "border-border/30 hover:border-primary/60",
-    );
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Nuevo grupo</DialogTitle>
-          <DialogDescription>
-            Después inscribes a tus estudiantes y les das su código.
-          </DialogDescription>
-        </DialogHeader>
-        {contests.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            {isMaestro
-              ? "Ahora no hay desafíos con inscripción abierta. Podrás crear un grupo cuando el organizador publique uno."
-              : "No hay desafíos publicados con inscripción abierta."}
-          </p>
-        ) : (
-          <form noValidate onSubmit={submit} className="flex flex-col gap-5">
-            {contests.length > 1 && (
-              <fieldset className="flex flex-col gap-2">
-                <legend className="mb-2 text-sm font-medium">Desafío</legend>
-                <div
-                  role="radiogroup"
-                  aria-label="Desafío"
-                  className="grid gap-2"
-                >
-                  {contests.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={item.id === chosenContestId}
-                      onClick={() => {
-                        setContestId(item.id);
-                        setError(null);
-                      }}
-                      className={option(item.id === chosenContestId)}
-                    >
-                      {item.title}
-                      {item.startsAt && (
-                        <span className="text-xs font-normal text-muted-foreground">
-                          Rendición{" "}
-                          {formatContestWindow(item.startsAt, item.endsAt)}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
-            )}
-            {contests.length === 1 && contest && (
-              <p className="text-sm">
-                Desafío: <span className="font-semibold">{contest.title}</span>
-              </p>
-            )}
-            {categories.length > 1 && (
-              <fieldset className="flex flex-col gap-2">
-                <legend className="mb-2 text-sm font-medium">
-                  Categoría de tus estudiantes
-                </legend>
-                <div
-                  role="radiogroup"
-                  aria-label="Categoría"
-                  className="grid grid-cols-2 gap-2 sm:grid-cols-3"
-                >
-                  {categories.map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      role="radio"
-                      aria-checked={item === chosenCategory}
-                      onClick={() => {
-                        setCategory(item);
-                        setError(null);
-                      }}
-                      className={option(item === chosenCategory)}
-                    >
-                      {item}
-                      <span className="text-xs font-normal text-muted-foreground">
-                        {categoryGrades(item)}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
-            )}
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium">Nombre del grupo</span>
-              <Input
-                value={name}
-                disabled={creating}
-                placeholder="Ej. 6.º A"
-                onChange={(event) => {
-                  setName(event.target.value);
-                  setError(null);
-                }}
-              />
-            </label>
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
-            <DialogFooter>
-              <Button type="submit" disabled={creating}>
-                {creating ? (
-                  <LoaderCircleIcon
-                    data-icon="inline-start"
-                    className="animate-spin"
-                  />
-                ) : (
-                  <PlusIcon data-icon="inline-start" />
-                )}
-                Crear grupo
-              </Button>
-            </DialogFooter>
-          </form>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/** La silueta de la lista mientras cargan los grupos. */
 function GroupsSkeleton() {
   return (
     <div aria-busy>
-      <span className="sr-only">Cargando grupos...</span>
-      <ul className="divide-y border-b">
-        {[40, 32, 48].map((width, index) => (
-          <li
-            key={index}
-            className="flex flex-wrap items-center gap-x-6 gap-y-2 px-3 py-4"
-          >
-            <div className="flex min-w-0 flex-1 basis-64 flex-col gap-2">
-              <Skeleton
-                className="h-6 rounded-none"
-                style={{ width: `${width}%` }}
-              />
-              <Skeleton className="h-4 w-3/5 rounded-none" />
-            </div>
-            <Skeleton className="h-4 w-24 rounded-none" />
-            <Skeleton className="h-7 w-28 rounded-none" />
-          </li>
-        ))}
-      </ul>
+      <span className="sr-only">Cargando grupos…</span>
+      <div className="flex flex-col gap-4">
+        <Skeleton className="h-5 w-64" />
+        <Skeleton className="h-4 w-48" />
+        <ul className="divide-y border-b">
+          {[0, 1, 2, 3].map((index) => (
+            <li key={index} className="flex flex-col gap-2 px-3 py-4">
+              <Skeleton className="h-5 w-48" />
+              <Skeleton className="h-4 w-24" />
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }

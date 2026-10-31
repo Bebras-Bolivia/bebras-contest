@@ -2,12 +2,10 @@
 
 import { RowsSkeleton } from "@/components/page-skeletons";
 import { ListPageSkeleton } from "@/components/page-skeletons";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 import {
+  BarChart3Icon,
   ClockIcon,
-  CopyIcon,
-  EyeIcon,
-  LinkIcon,
   PlusIcon,
   XIcon,
   UsersIcon,
@@ -16,31 +14,25 @@ import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import {
-  CONTEST_CATEGORIES,
   CONTEST_STATE_LABELS,
-  difficultyBadgeClass,
-  difficultyLabel,
   formatContestWindow,
 } from "@/lib/contest-schema";
 import {
-  createPractice,
-  listPracticeTasks,
+  listPracticeResults,
   listPractices,
   removePractice,
-  type PracticeTask,
+  type PracticeResults,
   type StoredPractice,
 } from "@/lib/practices-api";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { FieldHint } from "@/components/field-hint";
+import { categoryStyle } from "@/components/category-logo";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -52,71 +44,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { TaskContentRenderer } from "@/components/task-content-renderer";
-import { InteractiveTryout } from "@/components/interactive-player";
-import { getPracticeTask } from "@/lib/practice-api";
-import type { PlayTask } from "@/lib/play-api";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
-/** `datetime-local` trabaja en hora local sin zona; el input la necesita así. */
-function toLocalInput(date: Date) {
-  const offset = date.getTimezoneOffset() * 60000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
-}
-
-function fromLocalInput(value: string) {
-  return value ? new Date(value).toISOString() : null;
-}
-
-type FormErrors = {
-  title?: string;
-  category?: string;
-  durationMinutes?: string;
-  window?: string;
-  tasks?: string;
-  form?: string;
-};
 
 export function PracticesHome() {
   const [practices, setPractices] = useState<StoredPractice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<StoredPractice | null>(null);
-
-  const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("");
-  const [durationMinutes, setDurationMinutes] = useState("20");
-  const [startsAt, setStartsAt] = useState("");
-  const [endsAt, setEndsAt] = useState("");
-  const [pool, setPool] = useState<PracticeTask[]>([]);
-  const [poolLoading, setPoolLoading] = useState(false);
-  const [picked, setPicked] = useState<string[]>([]);
-  const [errors, setErrors] = useState<FormErrors>({});
-
-  const [preview, setPreview] = useState<PracticeTask | null>(null);
-  const [previewTask, setPreviewTask] = useState<PlayTask | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  // El enunciado solo se pide cuando alguien lo abre, y una sola vez.
-  const previewCache = useRef(new Map<string, PlayTask>());
-
-  const titleRef = useRef<HTMLInputElement>(null);
-  const categoryRef = useRef<HTMLButtonElement>(null);
-  const durationRef = useRef<HTMLInputElement>(null);
+  const [viewing, setViewing] = useState<StoredPractice | null>(null);
+  const [results, setResults] = useState<PracticeResults | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -141,158 +75,19 @@ export function PracticesHome() {
     };
   }, []);
 
-  // Cada categoría tiene su propio conjunto liberado: al cambiarla, la
-  // selección anterior deja de ser válida.
-  useEffect(() => {
-    if (!category) {
-      setPool([]);
-      setPicked([]);
-      return;
-    }
-
-    let active = true;
-    setPoolLoading(true);
-    setPicked([]);
-
-    void listPracticeTasks(category)
-      .then((data) => {
-        if (active) setPool(data.tasks);
-      })
+  const openResults = (practice: StoredPractice) => {
+    setViewing(practice);
+    setResults(null);
+    void listPracticeResults(practice.id)
+      .then(setResults)
       .catch((error: unknown) => {
-        if (active) setPool([]);
+        setViewing(null);
         toast.error(
           error instanceof Error
             ? error.message
-            : "No se pudieron cargar las preguntas.",
+            : "No se pudieron cargar los resultados.",
         );
-      })
-      .finally(() => {
-        if (active) setPoolLoading(false);
       });
-
-    return () => {
-      active = false;
-    };
-  }, [category]);
-
-  const resetForm = () => {
-    const now = new Date();
-    setTitle("");
-    setCategory("");
-    setDurationMinutes("20");
-    setStartsAt(toLocalInput(new Date(now.getTime() + 15 * 60000)));
-    setEndsAt(toLocalInput(new Date(now.getTime() + 75 * 60000)));
-    setPool([]);
-    setPicked([]);
-    setErrors({});
-  };
-
-  const openPreview = (task: PracticeTask) => {
-    setPreview(task);
-
-    const cached = previewCache.current.get(task.id);
-    if (cached) {
-      setPreviewTask(cached);
-      return;
-    }
-
-    setPreviewTask(null);
-    setPreviewLoading(true);
-    void getPracticeTask(task.id)
-      .then((loaded) => {
-        previewCache.current.set(task.id, loaded);
-        setPreviewTask(loaded);
-      })
-      .catch((error: unknown) => {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "No se pudo cargar la pregunta.",
-        );
-        setPreview(null);
-      })
-      .finally(() => setPreviewLoading(false));
-  };
-
-  const togglePicked = (taskId: string) => {
-    setPicked((current) =>
-      current.includes(taskId)
-        ? current.filter((id) => id !== taskId)
-        : [...current, taskId],
-    );
-    if (errors.tasks) {
-      setErrors((current) => ({ ...current, tasks: undefined }));
-    }
-  };
-
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const minutes = Number(durationMinutes);
-    const next: FormErrors = {
-      title: title.trim() ? undefined : "Ponle un nombre.",
-      category: category ? undefined : "Elige una categoría.",
-      durationMinutes:
-        Number.isInteger(minutes) && minutes > 0
-          ? undefined
-          : "Debe ser un número de minutos mayor que cero.",
-      tasks: picked.length > 0 ? undefined : "Elige al menos una pregunta.",
-    };
-
-    if (!startsAt || !endsAt) {
-      next.window = "Elige cuándo empieza y cuándo termina.";
-    } else if (new Date(endsAt) <= new Date(startsAt)) {
-      next.window = "El cierre debe ser posterior al inicio.";
-    }
-
-    const firstInvalid = (
-      ["title", "category", "durationMinutes", "window", "tasks"] as const
-    ).find((field) => next[field]);
-
-    if (firstInvalid) {
-      setErrors(next);
-      if (firstInvalid === "title") titleRef.current?.focus();
-      if (firstInvalid === "category") categoryRef.current?.focus();
-      if (firstInvalid === "durationMinutes") durationRef.current?.focus();
-      return;
-    }
-
-    setErrors({});
-    setCreating(true);
-
-    try {
-      const created = await createPractice({
-        title: title.trim(),
-        category,
-        durationMinutes: minutes,
-        startsAt: fromLocalInput(startsAt),
-        endsAt: fromLocalInput(endsAt),
-        tasks: picked,
-      });
-      setPractices((current) => [created, ...current]);
-      setCreateOpen(false);
-      toast.success(
-        "Práctica creada. Comparte su código: tus estudiantes entran con él y su nombre.",
-      );
-    } catch (error) {
-      setErrors({
-        form:
-          error instanceof Error
-            ? error.message
-            : "No se pudo crear la práctica.",
-      });
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const copy = async (value: string, done: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
-      toast.success(done);
-    } catch {
-      toast.error("No se pudo copiar.");
-    }
   };
 
   const confirmDelete = () => {
@@ -315,266 +110,46 @@ export function PracticesHome() {
   };
 
   if (loading) {
-    return (
-      <ListPageSkeleton label="Cargando prácticas..." />
-    );
+    return <ListPageSkeleton label="Cargando prácticas..." />;
   }
 
   return (
     <div className="flex w-full flex-col gap-8">
       <div className="flex flex-col gap-4 border-b pb-5 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
           <h1 className="font-heading text-3xl font-semibold tracking-tight">
             Mis prácticas
           </h1>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Arma un desafío de práctica con las preguntas que el organizador
-            liberó. Solo tú lo ves, y tus estudiantes entran con el código de
-            la práctica y su nombre.
-          </p>
+          <FieldHint>
+            Tus estudiantes inscritos la ven al entrar con su código personal,
+            dentro del horario que elijas.
+          </FieldHint>
         </div>
-        <Dialog
-          open={createOpen}
-          onOpenChange={(open) => {
-            setCreateOpen(open);
-            if (open) resetForm();
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button className="shrink-0">
-              <PlusIcon data-icon="inline-start" />
-              Nueva práctica
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="flex max-h-[90dvh] flex-col sm:max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Nueva práctica</DialogTitle>
-              <DialogDescription>
-                Elige la categoría y las preguntas. El resto queda con los
-                puntajes estándar y la retroalimentación encendida.
-              </DialogDescription>
-            </DialogHeader>
-            <form
-              id="practice-form"
-              className="flex min-h-0 flex-col gap-4 overflow-y-auto"
-              onSubmit={submit}
-              aria-busy={creating}
-              noValidate
-            >
-              {errors.form && (
-                <Alert variant="destructive">
-                  <AlertDescription>{errors.form}</AlertDescription>
-                </Alert>
-              )}
-
-              <Field data-invalid={Boolean(errors.title) || undefined}>
-                <FieldLabel htmlFor="practice-title">Nombre</FieldLabel>
-                <FieldContent>
-                  <Input
-                    ref={titleRef}
-                    id="practice-title"
-                    value={title}
-                    onChange={(event) => setTitle(event.target.value)}
-                    placeholder="Ej. Repaso del viernes"
-                    aria-invalid={Boolean(errors.title)}
-                  />
-                  <FieldError>{errors.title}</FieldError>
-                </FieldContent>
-              </Field>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field data-invalid={Boolean(errors.category) || undefined}>
-                  <FieldLabel htmlFor="practice-category">Categoría</FieldLabel>
-                  <FieldContent>
-                    <Select value={category} onValueChange={setCategory}>
-                      <SelectTrigger
-                        ref={categoryRef}
-                        id="practice-category"
-                        aria-invalid={Boolean(errors.category)}
-                      >
-                        <SelectValue placeholder="Elige una" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CONTEST_CATEGORIES.map((item) => (
-                          <SelectItem key={item.name} value={item.name}>
-                            {item.name} ({item.age})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FieldError>{errors.category}</FieldError>
-                  </FieldContent>
-                </Field>
-
-                <Field
-                  data-invalid={Boolean(errors.durationMinutes) || undefined}
-                >
-                  <FieldLabel htmlFor="practice-duration">
-                    Duración (minutos)
-                  </FieldLabel>
-                  <FieldContent>
-                    <Input
-                      ref={durationRef}
-                      id="practice-duration"
-                      type="number"
-                      min={1}
-                      value={durationMinutes}
-                      onChange={(event) =>
-                        setDurationMinutes(event.target.value)
-                      }
-                      aria-invalid={Boolean(errors.durationMinutes)}
-                    />
-                    <FieldError>{errors.durationMinutes}</FieldError>
-                  </FieldContent>
-                </Field>
-              </div>
-
-              <Field data-invalid={Boolean(errors.window) || undefined}>
-                <FieldLabel htmlFor="practice-starts">Horario</FieldLabel>
-                <FieldContent>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <Input
-                      id="practice-starts"
-                      type="datetime-local"
-                      value={startsAt}
-                      onChange={(event) => setStartsAt(event.target.value)}
-                      aria-label="Inicio"
-                    />
-                    <Input
-                      id="practice-ends"
-                      type="datetime-local"
-                      value={endsAt}
-                      onChange={(event) => setEndsAt(event.target.value)}
-                      aria-label="Cierre"
-                    />
-                  </div>
-                  <FieldDescription>
-                    Tus estudiantes solo pueden entrar dentro de esta ventana.
-                  </FieldDescription>
-                  <FieldError>{errors.window}</FieldError>
-                </FieldContent>
-              </Field>
-
-              <Field data-invalid={Boolean(errors.tasks) || undefined}>
-                <FieldLabel htmlFor="practice-tasks">
-                  Preguntas {picked.length > 0 && `(${picked.length} elegidas)`}
-                </FieldLabel>
-                <FieldContent>
-                  <div
-                    id="practice-tasks"
-                    className="flex max-h-64 flex-col overflow-y-auto rounded-md border"
-                  >
-                    {!category ? (
-                      <p className="p-3 text-sm text-muted-foreground">
-                        Elige una categoría para ver las preguntas disponibles.
-                      </p>
-                    ) : poolLoading ? (
-                      <div className="p-3">
-                        <RowsSkeleton label="Cargando preguntas..." rows={4} />
-                      </div>
-                    ) : pool.length === 0 ? (
-                      <p className="p-3 text-sm text-muted-foreground">
-                        El organizador todavía no liberó preguntas para esta
-                        categoría.
-                      </p>
-                    ) : (
-                      pool.map((task) => {
-                        const active = picked.includes(task.id);
-                        return (
-                          <div
-                            key={task.id}
-                            className={cn(
-                              "flex items-center justify-between gap-2 border-b px-3 py-2 text-sm transition last:border-b-0",
-                              active ? "bg-muted" : "hover:bg-muted/60",
-                            )}
-                          >
-                            <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
-                              <input
-                                type="checkbox"
-                                checked={active}
-                                onChange={() => togglePicked(task.id)}
-                                className="size-4 shrink-0"
-                              />
-                              <span className="min-w-0 break-words">
-                                {task.title}
-                              </span>
-                            </label>
-                            <div className="flex shrink-0 items-center gap-1.5">
-                              <Badge
-                                variant="outline"
-                                className={difficultyBadgeClass(
-                                  task.difficulty,
-                                )}
-                              >
-                                {difficultyLabel(task.difficulty)}
-                              </Badge>
-                              <Button
-                                size="icon-sm"
-                                type="button"
-                                variant="ghost"
-                                aria-label={`Ver la pregunta ${task.title}`}
-                                onClick={() => openPreview(task)}
-                              >
-                                <EyeIcon />
-                              </Button>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                  <FieldError>{errors.tasks}</FieldError>
-                </FieldContent>
-              </Field>
-            </form>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={creating}
-                onClick={() => setCreateOpen(false)}
-              >
-                Cancelar
-              </Button>
-              <Button type="submit" form="practice-form" disabled={creating}>
-                {creating ? "Creando..." : "Crear práctica"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Button asChild className="shrink-0">
+          <a href="/mis-practicas/nueva">
+            <PlusIcon data-icon="inline-start" />
+            Nueva práctica
+          </a>
+        </Button>
       </div>
 
-      <ol className="flex flex-col gap-2 rounded-md border bg-muted/40 p-4 text-sm sm:flex-row sm:gap-6">
-        {[
-          "Creas la práctica y eliges sus preguntas.",
-          "Compartes su código con tu curso.",
-          "Cada estudiante lo escribe, pone su nombre y entra. Sin que inscribas a nadie.",
-        ].map((step, index) => (
-          <li key={step} className="flex min-w-0 flex-1 items-start gap-2">
-            <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background">
-              {index + 1}
-            </span>
-            <span className="min-w-0 text-muted-foreground">{step}</span>
-          </li>
-        ))}
-      </ol>
-
       {practices.length === 0 ? (
-        <Alert>
-          <AlertTitle>Todavía no tienes prácticas</AlertTitle>
-          <AlertDescription>
-            Crea una para que tus estudiantes practiquen antes del desafío. Solo
-            tú la ves.
-          </AlertDescription>
-        </Alert>
+        <p className="text-sm text-muted-foreground">
+          Todavía no tienes prácticas.
+        </p>
       ) : (
         <ul className="flex flex-col border-b">
           {practices.map((practice) => (
-            <li key={practice.id} className="border-t">
+            <li key={practice.id} className="border-t first:border-t-0">
               <div className="flex flex-col gap-3 py-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="flex min-w-0 flex-col gap-1.5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="secondary">{practice.category}</Badge>
+                    <Badge
+                      data-category
+                      style={categoryStyle(practice.category)}
+                    >
+                      {practice.category}
+                    </Badge>
                     <Badge variant="outline">
                       {CONTEST_STATE_LABELS[practice.state] ?? practice.state}
                     </Badge>
@@ -590,8 +165,10 @@ export function PracticesHome() {
                     </span>
                     <span className="flex items-center gap-1.5">
                       <UsersIcon className="size-4 shrink-0" />
-                      {practice.groupCount} grupo(s) · {practice.studentCount}{" "}
-                      estudiante(s)
+                      {practice.resultCount}{" "}
+                      {practice.resultCount === 1
+                        ? "la terminó"
+                        : "la terminaron"}
                     </span>
                   </div>
                   <p className="text-sm text-muted-foreground">
@@ -601,47 +178,17 @@ export function PracticesHome() {
                 </div>
 
                 <div className="grid w-full shrink-0 gap-2 lg:w-72 lg:grid-cols-2">
-                  {practice.accessCode && (
-                    <>
-                      <div className="flex w-full items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 lg:col-span-2">
-                        <span className="font-mono text-lg font-semibold tracking-widest">
-                          {practice.accessCode}
-                        </span>
-                        <Button
-                          size="icon-sm"
-                          type="button"
-                          variant="outline"
-                          aria-label="Copiar código"
-                          onClick={() =>
-                            void copy(
-                              practice.accessCode!,
-                              `Código copiado: ${practice.accessCode}`,
-                            )
-                          }
-                        >
-                          <CopyIcon />
-                        </Button>
-                      </div>
-                      <Button
-                        size="sm"
-                        type="button"
-                        variant="outline"
-                        className="w-full justify-start lg:col-span-2"
-                        onClick={() =>
-                          void copy(
-                            `${window.location.origin}/entrar?code=${practice.accessCode}`,
-                            "Enlace copiado. Compártelo con tu curso.",
-                          )
-                        }
-                      >
-                        <LinkIcon data-icon="inline-start" />
-                        Copiar enlace
-                      </Button>
-                    </>
+                  {practice.resultCount > 0 && (
+                    <Button
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                      onClick={() => openResults(practice)}
+                    >
+                      <BarChart3Icon data-icon="inline-start" />
+                      Resultados
+                    </Button>
                   )}
-                  <Button asChild size="sm" variant="outline">
-                    <a href="/grupos">Ver quién entró</a>
-                  </Button>
                   <Button
                     size="sm"
                     type="button"
@@ -658,65 +205,74 @@ export function PracticesHome() {
         </ul>
       )}
 
-      {/* Anidado dentro del de crear: dejar la selección intacta detrás es lo
-          que hace útil poder mirar el enunciado antes de decidir. */}
       <Dialog
-        open={preview !== null}
+        open={viewing !== null}
         onOpenChange={(open) => {
-          if (!open) {
-            setPreview(null);
-            setPreviewTask(null);
-          }
+          if (!open) setViewing(null);
         }}
       >
-        <DialogContent className="flex max-h-[85dvh] flex-col sm:max-w-2xl">
+        <DialogContent className="flex max-h-[85dvh] flex-col sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="break-words">
-              {preview?.title ?? ""}
+              {viewing?.title ?? ""}
             </DialogTitle>
-            <DialogDescription>
-              {preview
-                ? `Dificultad ${difficultyLabel(preview.difficulty).toLowerCase()} para esta categoría. Así la verá tu estudiante.`
-                : ""}
-            </DialogDescription>
           </DialogHeader>
-          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
-            {previewLoading || !previewTask ? (
-              <RowsSkeleton rows={5} label="Cargando la pregunta..." />
+          <div className="min-h-0 overflow-auto">
+            {!results ? (
+              <RowsSkeleton rows={5} label="Cargando resultados..." />
             ) : (
-              <>
-                <TaskContentRenderer
-                  blocks={previewTask.bodyBlocks}
-                  className="gap-4"
-                />
-                {previewTask.challengeBlocks.length > 0 && (
-                  <TaskContentRenderer
-                    blocks={previewTask.challengeBlocks}
-                    className="gap-4"
-                  />
-                )}
-                {previewTask.answerType === "interactive" && (
-                  <InteractiveTryout config={previewTask.answerConfig} />
-                )}
-              </>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-muted-foreground">
+                    <th className="py-2 pr-4 font-normal">Estudiante</th>
+                    <th className="px-2 py-2 text-right font-normal">
+                      Puntaje
+                    </th>
+                    {results.tasks.map((task, index) => (
+                      <th
+                        key={task.id}
+                        title={task.title}
+                        className="w-8 px-1 py-2 text-center font-normal tabular-nums"
+                      >
+                        {index + 1}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {results.results.map((row) => (
+                    <tr key={row.id} className="border-t">
+                      <td className="py-2.5 pr-4">{row.name}</td>
+                      <td className="px-2 py-2.5 text-right font-semibold tabular-nums">
+                        {row.totalScore}
+                      </td>
+                      {results.tasks.map((task, index) => {
+                        const mark = row.marks[index] ?? "-";
+                        return (
+                          <td
+                            key={task.id}
+                            title={`${task.title}: ${mark === "C" ? "correcta" : mark === "X" ? "incorrecta" : "sin responder"}`}
+                            className="px-1 py-2.5 text-center"
+                          >
+                            <span
+                              className={cn(
+                                "mx-auto block size-3",
+                                mark === "C"
+                                  ? "bg-difficulty-easy"
+                                  : mark === "X"
+                                    ? "bg-destructive"
+                                    : "bg-muted",
+                              )}
+                            />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setPreview(null)}
-            >
-              Cerrar
-            </Button>
-            {preview && (
-              <Button type="button" onClick={() => togglePicked(preview.id)}>
-                {picked.includes(preview.id)
-                  ? "Quitar de la práctica"
-                  : "Agregar a la práctica"}
-              </Button>
-            )}
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -731,11 +287,11 @@ export function PracticesHome() {
             <AlertDialogTitle>¿Eliminar esta práctica?</AlertDialogTitle>
             <AlertDialogDescription>
               {deleting
-                ? `Se borrarán también sus grupos${
-                    deleting.studentCount > 0
-                      ? `, sus ${deleting.studentCount} estudiante(s) inscrito(s)`
+                ? `Se borrarán también sus resultados${
+                    deleting.resultCount > 0
+                      ? ` (${deleting.resultCount} ${deleting.resultCount === 1 ? "estudiante" : "estudiantes"})`
                       : ""
-                  } y lo que hayan respondido. No se puede deshacer.`
+                  }. No se puede deshacer.`
                 : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
