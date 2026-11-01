@@ -473,169 +473,6 @@ function ScoreInput({
   );
 }
 
-function formatDateTime(value: string) {
-  const date = parseDateTimeLocal(value);
-  return date
-    ? date.toLocaleString("es-BO", { dateStyle: "long", timeStyle: "short" })
-    : "";
-}
-
-function SummaryRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="grid gap-1 border-b py-3 text-sm sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-4">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="min-w-0">{children}</dd>
-    </div>
-  );
-}
-
-/** Lo que se rinde, tal como quedó: ya no se edita. */
-function ContestSummary({
-  form,
-  tasksById,
-  onPreview,
-}: {
-  form: Form;
-  tasksById: Map<string, StoredTask>;
-  onPreview: (task: StoredTask) => void;
-}) {
-  const period = (startsAt: string, endsAt: string, empty: string) =>
-    startsAt && endsAt
-      ? `${formatDateTime(startsAt)} a ${formatDateTime(endsAt)}`
-      : empty;
-  const listOf = (items: Array<[boolean, string]>, empty: string) => {
-    const shown = items.filter(([on]) => on).map(([, label]) => label);
-    return shown.length > 0
-      ? shown.join(", ").replace(/^./, (letter) => letter.toUpperCase())
-      : empty;
-  };
-
-  return (
-    <div className="flex flex-col gap-10">
-      <section className="flex flex-col gap-6">
-        <h2 className="font-heading text-base font-semibold">Preguntas</h2>
-        {form.categories.map((category) => {
-          const tasks = (form.tasks[category] ?? [])
-            .map((id) => tasksById.get(id))
-            .filter((task): task is StoredTask => task !== undefined);
-          return (
-            <div key={category} className="flex flex-col gap-1">
-              <h3 className="text-sm font-semibold">
-                {category}{" "}
-                <span className="font-normal text-muted-foreground">
-                  · {tasks.length}{" "}
-                  {tasks.length === 1 ? "pregunta" : "preguntas"}
-                </span>
-              </h3>
-              <ol className="flex flex-col">
-                {tasks.map((task, index) => (
-                  <li
-                    key={task.id}
-                    className="flex min-w-0 items-center gap-3 border-b py-2 last:border-b-0"
-                  >
-                    <span className="w-5 shrink-0 text-right text-sm text-muted-foreground tabular-nums">
-                      {index + 1}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => onPreview(task)}
-                      className="min-w-0 flex-1 truncate text-left text-sm underline-offset-4 hover:underline"
-                    >
-                      {task.title}
-                    </button>
-                    <DifficultyTag difficulty={difficultyOf(task, category)} />
-                  </li>
-                ))}
-              </ol>
-            </div>
-          );
-        })}
-      </section>
-
-      <section className="flex flex-col">
-        <h2 className="pb-1 font-heading text-base font-semibold">
-          Cómo se rinde
-        </h2>
-        <dl>
-          <SummaryRow label="Inscripción">
-            {period(
-              form.registrationStartsAt,
-              form.registrationEndsAt,
-              "Abierta desde que se publicó hasta el inicio de la rendición",
-            )}
-          </SummaryRow>
-          <SummaryRow label="Rendición">
-            {form.scheduleMode === "category"
-              ? form.categories.map((category) => (
-                  <p key={category}>
-                    {category}:{" "}
-                    {period(
-                      form.schedules[category]?.startsAt ?? "",
-                      form.schedules[category]?.endsAt ?? "",
-                      "sin fechas",
-                    )}
-                  </p>
-                ))
-              : period(form.startsAt, form.endsAt, "Sin fechas")}
-          </SummaryRow>
-          <SummaryRow label="Resultados">
-            {form.resultsAt
-              ? `Se publican solos el ${formatDateTime(form.resultsAt)}`
-              : "Se publican solos al cerrar la rendición"}
-            {form.resultsUntil
-              ? ` y salen en la página principal hasta el ${formatDateTime(form.resultsUntil)}.`
-              : " y salen en la página principal durante 7 días."}
-          </SummaryRow>
-          <SummaryRow label="Tiempo por equipo">
-            {form.durationMinutes} minutos
-          </SummaryRow>
-          <SummaryRow label="Preguntas">
-            {form.questionDisplayMode === "all"
-              ? "Todas juntas"
-              : "Una por una"}
-            {form.shuffleOptions ? ", con las opciones mezcladas" : ""}
-          </SummaryRow>
-          <SummaryRow label="Modalidad">
-            {form.allowPairs ? "Individual o en pareja" : "Solo individual"}
-          </SummaryRow>
-          <SummaryRow label="Al entregar ve">
-            {listOf(
-              [
-                [form.showScoreOnSubmit, "su puntaje"],
-                [form.showFeedbackOnSubmit, "si acertó cada pregunta"],
-                [form.showSolutionsOnSubmit, "las soluciones"],
-              ],
-              "Solo que su prueba quedó entregada",
-            )}
-          </SummaryRow>
-          <SummaryRow label="Con los resultados ve">
-            {listOf(
-              [
-                [form.showTotalScore, "su puntaje y su posición"],
-                [form.showFeedback, "si acertó cada pregunta"],
-                [form.showSolutions, "las soluciones"],
-              ],
-              "Nada: los resultados los comparte el maestro",
-            )}
-          </SummaryRow>
-          <SummaryRow label="Puntaje">
-            {DIFFICULTY_KEYS.map(
-              (key) =>
-                `${BEBRAS_SCORING[key].label} +${form.scoring[key].correct} / ${form.scoring[key].wrong}`,
-            ).join(" · ")}
-          </SummaryRow>
-        </dl>
-      </section>
-    </div>
-  );
-}
-
 export function ContestEditor() {
   const [contestId] = useState(() =>
     typeof window === "undefined"
@@ -1067,531 +904,515 @@ export function ContestEditor() {
           />
         )}
 
-      {locked ? (
-        <ContestSummary
-          form={form}
-          tasksById={tasksById}
-          onPreview={setPreview}
-        />
-      ) : (
-        <>
-          <section className="flex flex-col gap-3">
-            <h2 className="font-heading text-base font-semibold">Categorías</h2>
-            <p className="-mt-1 text-sm text-muted-foreground">
-              Cada estudiante rinde las preguntas de la categoría de su curso.
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {CATEGORY_NAMES.map((category) => {
-                const selected = form.categories.includes(category);
+      <>
+        <section className="flex flex-col gap-3">
+          <h2 className="font-heading text-base font-semibold">Categorías</h2>
+          <p className="-mt-1 text-sm text-muted-foreground">
+            Cada estudiante rinde las preguntas de la categoría de su curso.
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {CATEGORY_NAMES.map((category) => {
+              const selected = form.categories.includes(category);
+              return (
+                <button
+                  key={category}
+                  type="button"
+                  aria-pressed={selected}
+                  disabled={locked}
+                  onClick={() =>
+                    update({
+                      categories: selected
+                        ? form.categories.filter((item) => item !== category)
+                        : CATEGORY_NAMES.filter(
+                            (item) =>
+                              item === category ||
+                              form.categories.includes(item),
+                          ),
+                    })
+                  }
+                  style={selected ? categoryStyle(category) : undefined}
+                  className={pillClass}
+                >
+                  {selected && <CheckIcon className="size-3.5" />}
+                  {category}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        {categories.length > 0 && (
+          <section className="flex flex-col gap-4">
+            <h2 className="font-heading text-base font-semibold">Preguntas</h2>
+            <div
+              role="tablist"
+              aria-label="Categoría"
+              className="-mx-4 flex gap-5 overflow-x-auto px-4 shadow-[inset_0_-1px_0_var(--border)] sm:mx-0 sm:px-0"
+            >
+              {categories.map((category) => {
+                const selected = category === activeCategory;
+                const count = (form.tasks[category] ?? []).length;
                 return (
                   <button
                     key={category}
                     type="button"
-                    aria-pressed={selected}
-                    disabled={locked}
-                    onClick={() =>
-                      update({
-                        categories: selected
-                          ? form.categories.filter((item) => item !== category)
-                          : CATEGORY_NAMES.filter(
-                              (item) =>
-                                item === category ||
-                                form.categories.includes(item),
-                            ),
-                      })
-                    }
-                    style={selected ? categoryStyle(category) : undefined}
-                    className={pillClass}
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => setActive(category)}
+                    className="relative flex shrink-0 items-baseline gap-1.5 py-2.5 text-sm whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground aria-selected:font-medium aria-selected:text-foreground"
                   >
-                    {selected && <CheckIcon className="size-3.5" />}
                     {category}
+                    <span
+                      className={cn(
+                        "text-xs tabular-nums",
+                        count === 0 ? "text-destructive" : "opacity-60",
+                      )}
+                    >
+                      {count}
+                    </span>
+                    {selected && (
+                      <span
+                        aria-hidden="true"
+                        className="absolute inset-x-0 bottom-0 h-0.5 bg-primary"
+                      />
+                    )}
                   </button>
                 );
               })}
             </div>
-          </section>
 
-          {categories.length > 0 && (
-            <section className="flex flex-col gap-4">
-              <h2 className="font-heading text-base font-semibold">
-                Preguntas
-              </h2>
-              <div
-                role="tablist"
-                aria-label="Categoría"
-                className="-mx-4 flex gap-5 overflow-x-auto px-4 shadow-[inset_0_-1px_0_var(--border)] sm:mx-0 sm:px-0"
-              >
-                {categories.map((category) => {
-                  const selected = category === activeCategory;
-                  const count = (form.tasks[category] ?? []).length;
-                  return (
-                    <button
-                      key={category}
-                      type="button"
-                      role="tab"
-                      aria-selected={selected}
-                      onClick={() => setActive(category)}
-                      className="relative flex shrink-0 items-baseline gap-1.5 py-2.5 text-sm whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground aria-selected:font-medium aria-selected:text-foreground"
-                    >
-                      {category}
-                      <span
-                        className={cn(
-                          "text-xs tabular-nums",
-                          count === 0 ? "text-destructive" : "opacity-60",
-                        )}
-                      >
-                        {count}
-                      </span>
-                      {selected && (
-                        <span
-                          aria-hidden="true"
-                          className="absolute inset-x-0 bottom-0 h-0.5 bg-primary"
-                        />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {activeTasks.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  {activeCategory} todavía no tiene preguntas.
-                </p>
-              ) : (
-                <ol className="flex flex-col">
-                  {activeTasks.map((task, index) => (
-                    <li
-                      key={task.id}
-                      className="flex min-w-0 items-center gap-3 border-b py-2 last:border-b-0"
-                    >
-                      <span className="w-5 shrink-0 text-right text-sm text-muted-foreground tabular-nums">
-                        {index + 1}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setPreview(task)}
-                        className="min-w-0 flex-1 truncate text-left text-sm font-medium underline-offset-4 hover:underline"
-                      >
-                        {task.title}
-                      </button>
-                      <DifficultyTag
-                        difficulty={difficultyOf(task, activeCategory)}
-                      />
-                      {!locked && (
-                        <div className="flex shrink-0 items-center">
-                          <Button
-                            type="button"
-                            size="icon-sm"
-                            variant="ghost"
-                            aria-label={`Subir ${task.title}`}
-                            disabled={index === 0}
-                            onClick={() => move(index, -1)}
-                          >
-                            <ArrowUpIcon />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="icon-sm"
-                            variant="ghost"
-                            aria-label={`Bajar ${task.title}`}
-                            disabled={index === activeTasks.length - 1}
-                            onClick={() => move(index, 1)}
-                          >
-                            <ArrowDownIcon />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="icon-sm"
-                            variant="ghost"
-                            aria-label={`Quitar ${task.title}`}
-                            onClick={() =>
-                              setActiveIds(
-                                activeIds.filter((id) => id !== task.id),
-                              )
-                            }
-                          >
-                            <XIcon />
-                          </Button>
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ol>
-              )}
-
-              {hasInteractive && (
-                <p className="bg-secondary/20 px-4 py-3 text-sm">
-                  {PAPER_BLOCKED_INTERACTIVE}
-                </p>
-              )}
-
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                {!locked && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      saveAndGo(
-                        `/desafios/preguntas?id=${contestId}&categoria=${encodeURIComponent(activeCategory)}`,
-                      )
-                    }
+            {activeTasks.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {activeCategory} todavía no tiene preguntas.
+              </p>
+            ) : (
+              <ol className="flex flex-col">
+                {activeTasks.map((task, index) => (
+                  <li
+                    key={task.id}
+                    className="flex min-w-0 items-center gap-3 border-b py-2 last:border-b-0"
                   >
-                    <PlusIcon data-icon="inline-start" />
-                    Agregar preguntas
-                  </Button>
-                )}
-                {activeTasks.length > 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    {DIFFICULTY_KEYS.filter((key) => summary.counts[key] > 0)
-                      .map(
-                        (key) =>
-                          `${BEBRAS_SCORING[key].label} ${summary.counts[key]}`,
-                      )
-                      .join(" · ")}
-                    {" · "}puntaje de 0 a {summary.max}
-                  </p>
-                )}
-              </div>
-            </section>
-          )}
-
-          <FormSection title="Fechas">
-            <div className="flex max-w-3xl min-w-0 flex-col gap-8">
-              <WindowField
-                id="contest-registration"
-                title="Inscripción"
-                help="Sin fechas, los maestros pueden inscribir desde que publicas hasta que empieza la rendición."
-                startsAt={form.registrationStartsAt}
-                endsAt={form.registrationEndsAt}
-                maxDate={parseDateTimeLocal(span.startsAt)}
-                disabled={locked || contestState === "inscripcion"}
-                onChange={(registrationStartsAt, registrationEndsAt) =>
-                  update({ registrationStartsAt, registrationEndsAt })
-                }
-              />
-              <div className="flex min-w-0 flex-col">
-                {(form.categories.length > 1 || byCategory) && (
-                  <div className="flex items-center gap-1.5 pb-4">
-                    <div
-                      role="group"
-                      aria-label="Horario de la rendición"
-                      className="flex flex-wrap gap-1.5"
+                    <span className="w-5 shrink-0 text-right text-sm text-muted-foreground tabular-nums">
+                      {index + 1}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPreview(task)}
+                      className="min-w-0 flex-1 truncate text-left text-sm font-medium underline-offset-4 hover:underline"
                     >
-                      <button
+                      {task.title}
+                    </button>
+                    <DifficultyTag
+                      difficulty={difficultyOf(task, activeCategory)}
+                    />
+                    <div className="flex shrink-0 items-center">
+                      <Button
                         type="button"
-                        aria-pressed={!byCategory}
-                        disabled={locked}
-                        onClick={() => setScheduleMode("single")}
-                        className={pillClass}
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={`Subir ${task.title}`}
+                        disabled={locked || index === 0}
+                        onClick={() => move(index, -1)}
                       >
-                        Todas a la vez
-                      </button>
-                      <button
+                        <ArrowUpIcon />
+                      </Button>
+                      <Button
                         type="button"
-                        aria-pressed={byCategory}
-                        disabled={locked}
-                        onClick={() => setScheduleMode("category")}
-                        className={pillClass}
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={`Bajar ${task.title}`}
+                        disabled={locked || index === activeTasks.length - 1}
+                        onClick={() => move(index, 1)}
                       >
-                        Por categoría
-                      </button>
+                        <ArrowDownIcon />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={`Quitar ${task.title}`}
+                        disabled={locked}
+                        onClick={() =>
+                          setActiveIds(activeIds.filter((id) => id !== task.id))
+                        }
+                      >
+                        <XIcon />
+                      </Button>
                     </div>
-                    <FieldHint>
-                      Por categoría, cada una rinde en su horario y pueden
-                      pisarse. Una categoría sin fechas todavía no puede rendir.
-                    </FieldHint>
+                  </li>
+                ))}
+              </ol>
+            )}
+
+            {hasInteractive && (
+              <p className="bg-secondary/20 px-4 py-3 text-sm">
+                {PAPER_BLOCKED_INTERACTIVE}
+              </p>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={locked || busy !== null}
+                onClick={() =>
+                  saveAndGo(
+                    `/desafios/preguntas?id=${contestId}&categoria=${encodeURIComponent(activeCategory)}`,
+                  )
+                }
+              >
+                <PlusIcon data-icon="inline-start" />
+                Agregar preguntas
+              </Button>
+              {activeTasks.length > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {DIFFICULTY_KEYS.filter((key) => summary.counts[key] > 0)
+                    .map(
+                      (key) =>
+                        `${BEBRAS_SCORING[key].label} ${summary.counts[key]}`,
+                    )
+                    .join(" · ")}
+                  {" · "}puntaje de 0 a {summary.max}
+                </p>
+              )}
+            </div>
+          </section>
+        )}
+
+        <FormSection title="Fechas">
+          <div className="flex max-w-3xl min-w-0 flex-col gap-8">
+            <WindowField
+              id="contest-registration"
+              title="Inscripción"
+              help="Sin fechas, los maestros pueden inscribir desde que publicas hasta que empieza la rendición."
+              startsAt={form.registrationStartsAt}
+              endsAt={form.registrationEndsAt}
+              maxDate={parseDateTimeLocal(span.startsAt)}
+              disabled={locked || contestState === "inscripcion"}
+              onChange={(registrationStartsAt, registrationEndsAt) =>
+                update({ registrationStartsAt, registrationEndsAt })
+              }
+            />
+            <div className="flex min-w-0 flex-col">
+              {(form.categories.length > 1 || byCategory) && (
+                <div className="flex items-center gap-1.5 pb-4">
+                  <div
+                    role="group"
+                    aria-label="Horario de la rendición"
+                    className="flex flex-wrap gap-1.5"
+                  >
+                    <button
+                      type="button"
+                      aria-pressed={!byCategory}
+                      disabled={locked}
+                      onClick={() => setScheduleMode("single")}
+                      className={pillClass}
+                    >
+                      Todas a la vez
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={byCategory}
+                      disabled={locked}
+                      onClick={() => setScheduleMode("category")}
+                      className={pillClass}
+                    >
+                      Por categoría
+                    </button>
                   </div>
-                )}
-                <Reveal open={!byCategory}>
+                  <FieldHint>
+                    Por categoría, cada una rinde en su horario y pueden
+                    pisarse. Una categoría sin fechas todavía no puede rendir.
+                  </FieldHint>
+                </div>
+              )}
+              <Reveal open={!byCategory}>
+                <WindowField
+                  id="contest-run"
+                  title="Rendición"
+                  help="Sin fechas todavía nadie puede rendir. Puedes ponerlas después de publicar."
+                  startsAt={form.startsAt}
+                  endsAt={form.endsAt}
+                  minDate={parseDateTimeLocal(form.registrationEndsAt)}
+                  disabled={locked}
+                  onChange={(startsAt, endsAt) =>
+                    updateRun({ startsAt, endsAt })
+                  }
+                />
+              </Reveal>
+              <Reveal open={byCategory} className="flex flex-col gap-6">
+                {form.categories.map((category) => (
                   <WindowField
-                    id="contest-run"
-                    title="Rendición"
-                    help="Sin fechas todavía nadie puede rendir. Puedes ponerlas después de publicar."
-                    startsAt={form.startsAt}
-                    endsAt={form.endsAt}
+                    key={category}
+                    id={`contest-run-${category}`}
+                    title={`Rendición de ${category}`}
+                    category={category}
+                    startsAt={form.schedules[category]?.startsAt ?? ""}
+                    endsAt={form.schedules[category]?.endsAt ?? ""}
                     minDate={parseDateTimeLocal(form.registrationEndsAt)}
                     disabled={locked}
                     onChange={(startsAt, endsAt) =>
-                      updateRun({ startsAt, endsAt })
+                      updateRun({
+                        schedules: {
+                          ...form.schedules,
+                          [category]: { startsAt, endsAt },
+                        },
+                      })
                     }
                   />
-                </Reveal>
-                <Reveal open={byCategory} className="flex flex-col gap-6">
-                  {form.categories.map((category) => (
-                    <WindowField
-                      key={category}
-                      id={`contest-run-${category}`}
-                      title={`Rendición de ${category}`}
-                      category={category}
-                      startsAt={form.schedules[category]?.startsAt ?? ""}
-                      endsAt={form.schedules[category]?.endsAt ?? ""}
-                      minDate={parseDateTimeLocal(form.registrationEndsAt)}
-                      disabled={locked}
-                      onChange={(startsAt, endsAt) =>
-                        updateRun({
-                          schedules: {
-                            ...form.schedules,
-                            [category]: { startsAt, endsAt },
-                          },
-                        })
-                      }
-                    />
-                  ))}
-                </Reveal>
-              </div>
-              <WindowField
-                id="contest-results"
-                title="Resultados"
-                help={`Desde: se publican solos y el desafío aparece con sus resultados en la página principal. Se pone sola al cierre de ${byCategory ? "la última categoría" : "la rendición"} y la puedes cambiar. Hasta: deja de salir ahí (sin fecha, 7 días después). Cada estudiante los sigue viendo con su código.`}
-                startsAt={form.resultsAt}
-                endsAt={form.resultsUntil}
-                minDate={parseDateTimeLocal(span.endsAt)}
-                disabled={locked}
-                startLabel="Desde"
-                endLabel="Hasta"
-                onChange={(resultsAt, resultsUntil) =>
-                  update({ resultsAt, resultsUntil })
-                }
-              />
-            </div>
-            <label className="flex flex-wrap items-center gap-3 text-sm">
-              Cada equipo tiene
-              <input
-                type="number"
-                min={1}
-                value={form.durationMinutes || ""}
-                disabled={locked}
-                onChange={(event) =>
-                  updateRun({
-                    durationMinutes: Number(event.target.value || 0),
-                  })
-                }
-                className="h-8 w-16 border-2 border-border/20 bg-transparent px-2 text-sm tabular-nums outline-none focus-visible:border-primary disabled:opacity-50"
-              />
-              minutos, desde que toca «Empezar».
-            </label>
-            <Reveal open={dateProblems.length > 0}>
-              <ul className="flex flex-col gap-1 text-sm text-destructive">
-                {shownDateProblems.map((problem) => (
-                  <li
-                    key={problem}
-                    className="duration-300 animate-in fade-in slide-in-from-top-1 motion-reduce:animate-none"
-                  >
-                    {problem}
-                  </li>
                 ))}
-              </ul>
-            </Reveal>
-          </FormSection>
+              </Reveal>
+            </div>
+            <WindowField
+              id="contest-results"
+              title="Resultados"
+              help={`Desde: se publican solos y el desafío aparece con sus resultados en la página principal. Se pone sola al cierre de ${byCategory ? "la última categoría" : "la rendición"} y la puedes cambiar. Hasta: deja de salir ahí (sin fecha, 7 días después). Cada estudiante los sigue viendo con su código.`}
+              startsAt={form.resultsAt}
+              endsAt={form.resultsUntil}
+              minDate={parseDateTimeLocal(span.endsAt)}
+              disabled={locked}
+              startLabel="Desde"
+              endLabel="Hasta"
+              onChange={(resultsAt, resultsUntil) =>
+                update({ resultsAt, resultsUntil })
+              }
+            />
+          </div>
+          <label className="flex flex-wrap items-center gap-3 text-sm">
+            Cada equipo tiene
+            <input
+              type="number"
+              min={1}
+              value={form.durationMinutes || ""}
+              disabled={locked}
+              onChange={(event) =>
+                updateRun({
+                  durationMinutes: Number(event.target.value || 0),
+                })
+              }
+              className="h-8 w-16 border-2 border-border/20 bg-transparent px-2 text-sm tabular-nums outline-none focus-visible:border-primary disabled:opacity-50"
+            />
+            minutos, desde que toca «Empezar».
+          </label>
+          <Reveal open={dateProblems.length > 0}>
+            <ul className="flex flex-col gap-1 text-sm text-destructive">
+              {shownDateProblems.map((problem) => (
+                <li
+                  key={problem}
+                  className="duration-300 animate-in fade-in slide-in-from-top-1 motion-reduce:animate-none"
+                >
+                  {problem}
+                </li>
+              ))}
+            </ul>
+          </Reveal>
+        </FormSection>
 
-          <FormSection title="Cómo se rinde">
-            <div className="flex flex-col gap-2">
-              <h3 className="text-sm font-semibold">Preguntas</h3>
-              <div className="flex flex-wrap gap-1.5">
+        <FormSection title="Cómo se rinde">
+          <div className="flex flex-col gap-2">
+            <h3 className="text-sm font-semibold">Preguntas</h3>
+            <div className="flex flex-wrap gap-1.5">
+              {(
+                [
+                  ["one_by_one", "Una por una"],
+                  ["all", "Todas juntas"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={form.questionDisplayMode === value}
+                  disabled={locked}
+                  onClick={() => update({ questionDisplayMode: value })}
+                  className={pillClass}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {(
+            [
+              ["allowPairs", "Se puede rendir en pareja"],
+              ["shuffleOptions", "Mezclar el orden de las opciones"],
+            ] as const
+          ).map(([key, label]) => (
+            <label key={key} className="flex items-center gap-3 text-sm">
+              <Checkbox
+                checked={form[key]}
+                disabled={locked}
+                onCheckedChange={(checked) =>
+                  update({ [key]: checked === true })
+                }
+              />
+              {label}
+            </label>
+          ))}
+        </FormSection>
+
+        <FormSection title="Qué ve el estudiante">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[26rem] text-sm">
+              <thead>
+                <tr className="text-left text-muted-foreground">
+                  <th className="py-2 pr-4 font-normal" />
+                  <th className="w-36 px-2 py-2 text-center font-normal">
+                    Al entregar su prueba
+                  </th>
+                  <th className="w-36 px-2 py-2 text-center font-normal">
+                    Al publicar los resultados
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
                 {(
                   [
-                    ["one_by_one", "Una por una"],
-                    ["all", "Todas juntas"],
+                    ["showScoreOnSubmit", "showTotalScore", "Su puntaje"],
+                    [
+                      "showFeedbackOnSubmit",
+                      "showFeedback",
+                      "Si acertó cada pregunta",
+                    ],
+                    [
+                      "showSolutionsOnSubmit",
+                      "showSolutions",
+                      "La solución de cada pregunta",
+                    ],
                   ] as const
-                ).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={form.questionDisplayMode === value}
-                    disabled={locked}
-                    onClick={() => update({ questionDisplayMode: value })}
-                    className={pillClass}
-                  >
-                    {label}
-                  </button>
+                ).map(([onSubmit, onResults, label]) => (
+                  <tr key={onSubmit} className="border-t">
+                    <td className="py-3 pr-4">{label}</td>
+                    <td className="px-2 py-3 text-center">
+                      <Checkbox
+                        className="mx-auto"
+                        aria-label={`${label}, al entregar su prueba`}
+                        checked={form[onSubmit]}
+                        disabled={locked}
+                        onCheckedChange={(checked) =>
+                          update(
+                            checked === true
+                              ? { [onSubmit]: true, [onResults]: true }
+                              : { [onSubmit]: false },
+                          )
+                        }
+                      />
+                    </td>
+                    <td className="px-2 py-3 text-center">
+                      <Checkbox
+                        className="mx-auto"
+                        aria-label={`${label}, al publicar los resultados`}
+                        checked={form[onResults] || form[onSubmit]}
+                        disabled={locked || form[onSubmit]}
+                        onCheckedChange={(checked) =>
+                          update({ [onResults]: checked === true })
+                        }
+                      />
+                    </td>
+                  </tr>
                 ))}
-              </div>
-            </div>
-            {(
-              [
-                ["allowPairs", "Se puede rendir en pareja"],
-                ["shuffleOptions", "Mezclar el orden de las opciones"],
-              ] as const
-            ).map(([key, label]) => (
-              <label key={key} className="flex items-center gap-3 text-sm">
-                <Checkbox
-                  checked={form[key]}
-                  disabled={locked}
-                  onCheckedChange={(checked) =>
-                    update({ [key]: checked === true })
-                  }
-                />
-                {label}
-              </label>
-            ))}
-          </FormSection>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Lo que ve al entregar lo sigue viendo con los resultados. La
+            posición en el ranking solo aparece al publicarlos.
+          </p>
+        </FormSection>
 
-          <FormSection title="Qué ve el estudiante">
+        <FormSection title="Puntaje">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+              {DIFFICULTY_KEYS.map((key) => (
+                <span key={key} className="flex items-center gap-2">
+                  <DifficultyTag difficulty={key} />
+                  <span className="tabular-nums">
+                    +{form.scoring[key].correct} / {form.scoring[key].wrong}
+                  </span>
+                </span>
+              ))}
+              <span className="text-muted-foreground">Sin responder, 0</span>
+            </div>
+            <button
+              type="button"
+              disabled={locked}
+              onClick={() => setScoringOpen((open) => !open)}
+              className="text-sm underline underline-offset-4 disabled:pointer-events-none disabled:opacity-50"
+            >
+              {scoringOpen ? "Listo" : "Cambiar"}
+            </button>
+          </div>
+          <Reveal open={scoringOpen && !locked}>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[26rem] text-sm">
+              <table className="w-full min-w-[22rem] text-sm">
                 <thead>
                   <tr className="text-left text-muted-foreground">
                     <th className="py-2 pr-4 font-normal" />
-                    <th className="w-36 px-2 py-2 text-center font-normal">
-                      Al entregar su prueba
+                    <th className="w-28 px-2 py-2 text-center font-normal">
+                      Acierta
                     </th>
-                    <th className="w-36 px-2 py-2 text-center font-normal">
-                      Al publicar los resultados
+                    <th className="w-28 px-2 py-2 text-center font-normal">
+                      Falla
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(
-                    [
-                      ["showScoreOnSubmit", "showTotalScore", "Su puntaje"],
-                      [
-                        "showFeedbackOnSubmit",
-                        "showFeedback",
-                        "Si acertó cada pregunta",
-                      ],
-                      [
-                        "showSolutionsOnSubmit",
-                        "showSolutions",
-                        "La solución de cada pregunta",
-                      ],
-                    ] as const
-                  ).map(([onSubmit, onResults, label]) => (
-                    <tr key={onSubmit} className="border-t">
-                      <td className="py-3 pr-4">{label}</td>
-                      <td className="px-2 py-3 text-center">
-                        <Checkbox
-                          className="mx-auto"
-                          aria-label={`${label}, al entregar su prueba`}
-                          checked={form[onSubmit]}
-                          disabled={locked}
-                          onCheckedChange={(checked) =>
-                            update(
-                              checked === true
-                                ? { [onSubmit]: true, [onResults]: true }
-                                : { [onSubmit]: false },
-                            )
-                          }
-                        />
+                  {DIFFICULTY_KEYS.map((key) => (
+                    <tr key={key} className="border-t">
+                      <td className="py-3 pr-4">
+                        <DifficultyTag difficulty={key} />
                       </td>
-                      <td className="px-2 py-3 text-center">
-                        <Checkbox
-                          className="mx-auto"
-                          aria-label={`${label}, al publicar los resultados`}
-                          checked={form[onResults] || form[onSubmit]}
-                          disabled={locked || form[onSubmit]}
-                          onCheckedChange={(checked) =>
-                            update({ [onResults]: checked === true })
-                          }
-                        />
+                      <td className="px-2 py-3">
+                        <div className="flex justify-center">
+                          <ScoreInput
+                            label={`Puntaje si acierta en ${BEBRAS_SCORING[key].label.toLowerCase()}`}
+                            value={form.scoring[key].correct}
+                            disabled={locked}
+                            onChange={(correct) =>
+                              update({
+                                scoring: {
+                                  ...form.scoring,
+                                  [key]: { ...form.scoring[key], correct },
+                                },
+                              })
+                            }
+                          />
+                        </div>
+                      </td>
+                      <td className="px-2 py-3">
+                        <div className="flex justify-center">
+                          <ScoreInput
+                            label={`Puntaje si falla en ${BEBRAS_SCORING[key].label.toLowerCase()}`}
+                            value={form.scoring[key].wrong}
+                            disabled={locked}
+                            onChange={(wrong) =>
+                              update({
+                                scoring: {
+                                  ...form.scoring,
+                                  [key]: { ...form.scoring[key], wrong },
+                                },
+                              })
+                            }
+                          />
+                        </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Lo que ve al entregar lo sigue viendo con los resultados. La
-              posición en el ranking solo aparece al publicarlos.
-            </p>
-          </FormSection>
-
-          <FormSection title="Puntaje">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-                {DIFFICULTY_KEYS.map((key) => (
-                  <span key={key} className="flex items-center gap-2">
-                    <DifficultyTag difficulty={key} />
-                    <span className="tabular-nums">
-                      +{form.scoring[key].correct} / {form.scoring[key].wrong}
-                    </span>
-                  </span>
-                ))}
-                <span className="text-muted-foreground">Sin responder, 0</span>
-              </div>
-              {!locked && (
-                <button
-                  type="button"
-                  onClick={() => setScoringOpen((open) => !open)}
-                  className="text-sm underline underline-offset-4"
-                >
-                  {scoringOpen ? "Listo" : "Cambiar"}
-                </button>
-              )}
-            </div>
-            <Reveal open={scoringOpen && !locked}>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[22rem] text-sm">
-                  <thead>
-                    <tr className="text-left text-muted-foreground">
-                      <th className="py-2 pr-4 font-normal" />
-                      <th className="w-28 px-2 py-2 text-center font-normal">
-                        Acierta
-                      </th>
-                      <th className="w-28 px-2 py-2 text-center font-normal">
-                        Falla
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {DIFFICULTY_KEYS.map((key) => (
-                      <tr key={key} className="border-t">
-                        <td className="py-3 pr-4">
-                          <DifficultyTag difficulty={key} />
-                        </td>
-                        <td className="px-2 py-3">
-                          <div className="flex justify-center">
-                            <ScoreInput
-                              label={`Puntaje si acierta en ${BEBRAS_SCORING[key].label.toLowerCase()}`}
-                              value={form.scoring[key].correct}
-                              disabled={locked}
-                              onChange={(correct) =>
-                                update({
-                                  scoring: {
-                                    ...form.scoring,
-                                    [key]: { ...form.scoring[key], correct },
-                                  },
-                                })
-                              }
-                            />
-                          </div>
-                        </td>
-                        <td className="px-2 py-3">
-                          <div className="flex justify-center">
-                            <ScoreInput
-                              label={`Puntaje si falla en ${BEBRAS_SCORING[key].label.toLowerCase()}`}
-                              value={form.scoring[key].wrong}
-                              disabled={locked}
-                              onChange={(wrong) =>
-                                update({
-                                  scoring: {
-                                    ...form.scoring,
-                                    [key]: { ...form.scoring[key], wrong },
-                                  },
-                                })
-                              }
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {!isStandardScoring(form.scoring) && (
-                <button
-                  type="button"
-                  onClick={() => update({ scoring: defaultContestScoring() })}
-                  className="mt-2 flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-                >
-                  <RotateCcwIcon className="size-3.5" />
-                  Volver a los de Bebras
-                </button>
-              )}
-            </Reveal>
-          </FormSection>
-        </>
-      )}
+            {!isStandardScoring(form.scoring) && (
+              <button
+                type="button"
+                onClick={() => update({ scoring: defaultContestScoring() })}
+                className="mt-2 flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+              >
+                <RotateCcwIcon className="size-3.5" />
+                Volver a los de Bebras
+              </button>
+            )}
+          </Reveal>
+        </FormSection>
+      </>
 
       {contestMeta && contestState !== "abierta" && (
         <div className="border-t pt-6">
@@ -1647,12 +1468,18 @@ export function ContestEditor() {
           />
         )}
         {locked ? (
-          <Button asChild variant="outline">
-            <a href={`/desafios/resultados?id=${contestId}`}>
-              <BarChart3Icon data-icon="inline-start" />
-              Resultados
-            </a>
-          </Button>
+          <>
+            <Button asChild variant="outline">
+              <a href={`/desafios/resultados?id=${contestId}`}>
+                <BarChart3Icon data-icon="inline-start" />
+                Resultados
+              </a>
+            </Button>
+            <Button type="button" disabled>
+              <SaveIcon data-icon="inline-start" />
+              Guardar
+            </Button>
+          </>
         ) : (
           <>
             {activeTasks.length > 0 && (
