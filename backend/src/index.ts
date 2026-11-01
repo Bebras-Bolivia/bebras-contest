@@ -8298,16 +8298,49 @@ async function contestTasksFor(contest: { id: string; updatedAt: Date }) {
     return cached.tasks;
   }
 
-  const rows = await prisma.contestTask.findMany({
-    where: { contestId: contest.id },
-    orderBy: { position: "asc" },
-    include: { taskDraft: true },
-  });
-  // El borrador crudo no se guarda: duplicaría en memoria cada imagen.
-  const tasks = rows.map(({ taskDraft, ...row }) => ({
-    ...row,
-    play: deserializeTask(taskDraft) as PlayTask,
-  }));
+  // Con cientos de estudiantes empezando a la vez, Cloudflare abre muchas
+  // instancias y cada una leería las preguntas de D1, que atiende de a una
+  // consulta: la copia en R2 se lee en paralelo y D1 se consulta una vez.
+  const edited = await db()
+    .prepare(
+      `SELECT MAX(t."updatedAt") AS "at" FROM "ContestTask" ct
+      JOIN "TaskDraft" t ON t."id" = ct."taskDraftId" WHERE ct."contestId" = ?`,
+    )
+    .bind(contest.id)
+    .first<{ at: string | null }>();
+  const snapshotKey = `contest-tasks/${contest.id}-${contest.updatedAt.getTime()}-${Date.parse(edited?.at ?? "") || 0}.json`;
+  let tasks: LoadedContestTask[] | null = null;
+  try {
+    const stored = await env.UPLOADS.get(snapshotKey);
+    if (stored) {
+      tasks = (await stored.json<LoadedContestTask[]>()).map((task) => ({
+        ...task,
+        createdAt: new Date(task.createdAt),
+      }));
+    }
+  } catch {
+    tasks = null;
+  }
+
+  if (!tasks) {
+    const rows = await prisma.contestTask.findMany({
+      where: { contestId: contest.id },
+      orderBy: { position: "asc" },
+      include: { taskDraft: true },
+    });
+    // El borrador crudo no se guarda: duplicaría en memoria cada imagen.
+    tasks = rows.map(({ taskDraft, ...row }) => ({
+      ...row,
+      play: deserializeTask(taskDraft) as PlayTask,
+    }));
+    try {
+      await env.UPLOADS.put(snapshotKey, JSON.stringify(tasks), {
+        httpMetadata: { contentType: "application/json" },
+      });
+    } catch {
+      // Sin la copia se sigue leyendo de D1, como antes.
+    }
+  }
 
   contestTasksCache.delete(contest.id);
   if (contestTasksCache.size >= 8) {

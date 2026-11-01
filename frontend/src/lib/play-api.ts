@@ -5,7 +5,7 @@ import type {
   StoredTaskDragDropTarget,
 } from "@/lib/task-schema";
 
-import { publicRequest as request } from "@/lib/api-client";
+import { ApiError, publicRequest as request } from "@/lib/api-client";
 
 export type PlayAnswerOption = {
   id: string;
@@ -182,12 +182,29 @@ export function sendPlayHeartbeat() {
   });
 }
 
+/** Cuando todos empiezan a la vez el servidor puede fallar un momento: se reintenta con espera creciente y al azar. */
+async function withRetry<T>(run: () => Promise<T>, attempts = 4) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await run();
+    } catch (error) {
+      const status = error instanceof ApiError ? error.status : 0;
+      if (attempt >= attempts || (status > 0 && status < 500)) throw error;
+      await new Promise((resolve) =>
+        setTimeout(resolve, 2 ** attempt * 500 + Math.random() * 1500),
+      );
+    }
+  }
+}
+
 export function getAttempt() {
-  return playRequest<AttemptState>("/api/play/attempt");
+  return withRetry(() => playRequest<AttemptState>("/api/play/attempt"));
 }
 
 export function startAttempt() {
-  return playRequest<{ ok: boolean }>("/api/play/start", { method: "POST" });
+  return withRetry(() =>
+    playRequest<{ ok: boolean }>("/api/play/start", { method: "POST" }),
+  );
 }
 
 export function saveAnswer(
