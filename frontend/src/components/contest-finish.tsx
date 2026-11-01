@@ -116,12 +116,14 @@ export function ContestFinish({
   outOfTime,
   visible,
   top,
+  bottom,
   onResultsDue,
 }: {
   attempt: AttemptState;
   outOfTime: boolean;
   visible: FinishVisibility;
   top?: ReactNode;
+  bottom?: ReactNode;
   onResultsDue?: () => void;
 }) {
   const releaseAt = attempt.resultsAt ?? attempt.contestEndsAt;
@@ -276,6 +278,7 @@ export function ContestFinish({
           </ul>
         </section>
       )}
+      {bottom}
     </div>
   );
 }

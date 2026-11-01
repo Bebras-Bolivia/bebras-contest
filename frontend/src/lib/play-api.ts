@@ -16,6 +16,7 @@ export type PlayTask = {
   taskId: string;
   position: number;
   title: string;
+  country?: string | null;
   bodyBlocks: ContentBlock[];
   challengeBlocks: ContentBlock[];
   answerType: string;

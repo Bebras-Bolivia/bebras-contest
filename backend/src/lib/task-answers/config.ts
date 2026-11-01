@@ -511,12 +511,6 @@ export function parseTaskAnswerConfig(body: Record<string, unknown>) {
         );
       }
 
-      if (!correctTargetId) {
-        throw new Error(
-          "Cada objeto arrastrable debe tener un destino correcto.",
-        );
-      }
-
       normalizedItems.push({
         id,
         label,
@@ -577,8 +571,16 @@ export function parseTaskAnswerConfig(body: Record<string, unknown>) {
       });
     }
 
+    if (!normalizedItems.some((item) => item.correctTargetId)) {
+      throw new Error("Al menos un objeto debe tener un destino correcto.");
+    }
+
     const usedTargetIds = new Set<string>();
     for (const item of normalizedItems) {
+      if (!item.correctTargetId) {
+        continue;
+      }
+
       if (!targetIds.has(item.correctTargetId)) {
         throw new Error(
           "El destino correcto de cada objeto debe existir en la tarea.",
@@ -645,18 +647,17 @@ export function parseTaskAnswerConfig(body: Record<string, unknown>) {
       }
 
       for (const item of normalizedItems) {
-        if (!Object.hasOwn(rawPlacements, item.id)) {
-          throw new Error(
-            "Cada solución alternativa debe colocar todos los objetos en destinos de la tarea.",
-          );
-        }
         const targetId = readText(
           (rawPlacements as Record<string, unknown>)[item.id],
         );
 
-        if (!targetId || !targetIds.has(targetId)) {
+        if (!targetId) {
+          continue;
+        }
+
+        if (!targetIds.has(targetId)) {
           throw new Error(
-            "Cada solución alternativa debe colocar todos los objetos en destinos de la tarea.",
+            "Cada solución alternativa debe colocar los objetos en destinos de la tarea.",
           );
         }
 

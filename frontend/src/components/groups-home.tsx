@@ -5,6 +5,7 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   CopyIcon,
+  DownloadIcon,
   LoaderCircleIcon,
   StarIcon,
 } from "lucide-react";
@@ -19,11 +20,14 @@ import {
   gradesForCategories,
 } from "@/lib/contest-schema";
 import {
+  downloadStudentCodes,
   listGroupContests,
   listGroups,
+  listMySchools,
   listPublishedContests,
   prepareCourseGroups,
   type GroupContestSummary,
+  type MySchool,
   type PublishedContest,
   type StoredGroup,
 } from "@/lib/groups-api";
@@ -41,11 +45,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+import { GroupsPageSkeleton } from "@/components/page-skeletons";
 
 type ListedGroup = StoredGroup & { pending?: boolean; canOpen?: boolean };
 
-async function prepareRows(rows: ListedGroup[], contestId?: string) {
+async function prepareRows(
+  rows: ListedGroup[],
+  contestId?: string,
+  schoolId: string | null = null,
+) {
   if (
     !contestId ||
     !rows.some(
@@ -54,7 +62,7 @@ async function prepareRows(rows: ListedGroup[], contestId?: string) {
     )
   )
     return rows;
-  const prepared = await prepareCourseGroups(contestId);
+  const prepared = await prepareCourseGroups(contestId, schoolId);
   const isFavorite =
     rows.find((group) => group.contestId === contestId)?.isFavorite ?? false;
   const merged = new Map(
@@ -173,9 +181,12 @@ async function loadContestRows(
   contestId: string,
   contests: PublishedContest[],
   user: ReturnType<typeof getUser>,
+  schoolId: string | null = null,
 ) {
   const isMaestro = user?.role === "maestro";
-  const stored = await listGroups({ contestId });
+  const stored = (await listGroups({ contestId })).filter(
+    (group) => !isMaestro || (group.schoolId ?? null) === schoolId,
+  );
   const rows: ListedGroup[] = stored.filter((group) => {
     if (group.teamCount > 0) return true;
     const categories = group.contestCategories;
@@ -200,7 +211,8 @@ async function loadContestRows(
       )
         continue;
       rows.push({
-        id: `course:${contest.id}:${grade.value}`,
+        id: `course:${contest.id}:${grade.value}:${schoolId ?? ""}`,
+        schoolId,
         pending: true,
         canOpen: contest.canEnroll,
         name: grade.label,
@@ -229,7 +241,7 @@ async function loadContestRows(
       });
     }
   }
-  return prepareRows(rows, contestId);
+  return prepareRows(rows, contestId, schoolId);
 }
 
 export function GroupsHome() {
@@ -240,27 +252,38 @@ export function GroupsHome() {
   const [published, setPublished] = useState<PublishedContest[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [choosing, setChoosing] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [schools, setSchools] = useState<MySchool[]>([]);
+  const [school, setSchool] = useState<string | null>(null);
+  const [switchingSchool, setSwitchingSchool] = useState(false);
   const [selected, setSelected] = useState(() =>
     new URLSearchParams(window.location.search).get("desafio"),
   );
 
   useEffect(() => {
     let active = true;
-    void Promise.all([listGroupContests(), listPublishedContests()])
-      .then(async ([summaries, contests]) => {
+    void Promise.all([
+      listGroupContests(),
+      listPublishedContests(),
+      isMaestro ? listMySchools().catch(() => []) : Promise.resolve([]),
+    ])
+      .then(async ([summaries, contests, mine]) => {
         if (!active) return;
         const list = sectionsFrom(summaries, contests);
-        const requested = new URLSearchParams(window.location.search).get(
-          "desafio",
-        );
+        const params = new URLSearchParams(window.location.search);
+        const requested = params.get("desafio");
         const initial =
           list.find((section) => section.id === requested) ?? list[0];
+        const initialSchool =
+          mine.find((item) => item.id === params.get("colegio"))?.id ?? null;
         const rows = initial
-          ? await loadContestRows(initial.id, contests, user)
+          ? await loadContestRows(initial.id, contests, user, initialSchool)
           : [];
         if (!active) return;
         setPublished(contests);
         setSections(list);
+        setSchools(mine);
+        setSchool(initialSchool);
         setSelected(initial?.id ?? null);
         setGroups(rows);
       })
@@ -275,7 +298,7 @@ export function GroupsHome() {
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [user, isMaestro]);
 
   const summary = sections.find((section) => section.id === selected);
   const current = summary && {
@@ -292,7 +315,7 @@ export function GroupsHome() {
     if (choosing) return;
     setChoosing(id);
     try {
-      setGroups(await loadContestRows(id, published, user));
+      setGroups(await loadContestRows(id, published, user, school));
       setSelected(id);
       const url = new URL(window.location.href);
       url.searchParams.set("desafio", id);
@@ -307,6 +330,40 @@ export function GroupsHome() {
     } finally {
       setChoosing(null);
     }
+  };
+
+  const chooseSchool = async (id: string | null) => {
+    if (switchingSchool || id === school || !selected) return;
+    setSwitchingSchool(true);
+    try {
+      setGroups(await loadContestRows(selected, published, user, id));
+      setSchool(id);
+      const url = new URL(window.location.href);
+      if (id) url.searchParams.set("colegio", id);
+      else url.searchParams.delete("colegio");
+      window.history.replaceState(null, "", url);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudieron cargar los cursos.",
+      );
+    } finally {
+      setSwitchingSchool(false);
+    }
+  };
+
+  const downloadCodes = (id: string) => {
+    setDownloading(true);
+    downloadStudentCodes(id, schools.length > 1 ? school : undefined)
+      .catch((error: unknown) =>
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "No se pudo descargar la lista de estudiantes.",
+        ),
+      )
+      .finally(() => setDownloading(false));
   };
 
   const copyCode = async (code: string) => {
@@ -409,8 +466,10 @@ export function GroupsHome() {
     );
   };
 
+  if (groups === null && !loadError) return <GroupsPageSkeleton />;
+
   return (
-    <div className="flex w-full flex-col gap-6">
+    <div className="flex w-full flex-col gap-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300">
       <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-5">
         <h1 className="font-heading text-3xl font-semibold tracking-tight">
           {isMaestro ? "Mis grupos" : "Grupos"}
@@ -423,8 +482,6 @@ export function GroupsHome() {
       </div>
       {loadError ? (
         <p className="text-sm text-destructive">{loadError}</p>
-      ) : groups === null ? (
-        <GroupsSkeleton />
       ) : !current ? (
         <p className="py-6 text-sm text-muted-foreground">
           {isMaestro
@@ -442,40 +499,95 @@ export function GroupsHome() {
             aria-labelledby="group-current-contest"
             className="flex min-w-0 flex-col gap-3"
           >
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-2">
-                <h2
-                  id="group-current-contest"
-                  className="text-lg font-semibold break-words"
-                >
-                  {current.title}
-                </h2>
-                {current.isFavorite && (
-                  <StarIcon
-                    aria-label="Desafío favorito"
-                    className="size-4 shrink-0 fill-primary text-primary"
-                  />
-                )}
-              </div>
-              <p className="text-sm text-muted-foreground">
-                <span
-                  className={cn(
-                    "font-medium",
-                    current.state === "abierta"
-                      ? "text-primary"
-                      : "text-foreground",
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <div className="flex items-center gap-2">
+                  <h2
+                    id="group-current-contest"
+                    className="text-lg font-semibold break-words"
+                  >
+                    {current.title}
+                  </h2>
+                  {current.isFavorite && (
+                    <StarIcon
+                      aria-label="Desafío favorito"
+                      className="size-4 shrink-0 fill-primary text-primary"
+                    />
                   )}
-                >
-                  {CONTEST_STATE_LABELS[current.state]}
-                </span>{" "}
-                · {current.groups.length}{" "}
-                {current.groups.length === 1 ? "grupo" : "grupos"} ·{" "}
-                {current.students}{" "}
-                {current.students === 1 ? "estudiante" : "estudiantes"}
-              </p>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  <span
+                    className={cn(
+                      "font-medium",
+                      current.state === "abierta"
+                        ? "text-primary"
+                        : "text-foreground",
+                    )}
+                  >
+                    {CONTEST_STATE_LABELS[current.state]}
+                  </span>{" "}
+                  · {current.groups.length}{" "}
+                  {current.groups.length === 1 ? "grupo" : "grupos"} ·{" "}
+                  {current.students}{" "}
+                  {current.students === 1 ? "estudiante" : "estudiantes"}
+                </p>
+              </div>
+              {current.students > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <FieldHint>
+                    Un Excel con el código personal de cada estudiante, por
+                    curso, listo para imprimir y repartir. Con ese código
+                    entran a rendir el desafío en{" "}
+                    <a
+                      href="/entrar"
+                      className="font-semibold text-foreground underline underline-offset-4 hover:text-primary"
+                    >
+                      Entrar al desafío
+                    </a>
+                    .
+                  </FieldHint>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={downloading}
+                    onClick={() => downloadCodes(current.id)}
+                  >
+                    <DownloadIcon data-icon="inline-start" />
+                    {downloading ? "Descargando…" : "Códigos"}
+                  </Button>
+                </div>
+              )}
             </div>
+            {isMaestro && schools.length > 1 && (
+              <div
+                role="tablist"
+                aria-label="Colegio"
+                className="flex flex-wrap gap-1.5"
+              >
+                {schools.map((item) => (
+                  <button
+                    key={item.id ?? "principal"}
+                    type="button"
+                    role="tab"
+                    aria-selected={item.id === school}
+                    disabled={switchingSchool}
+                    onClick={() => void chooseSchool(item.id)}
+                    className="border-2 border-border/20 px-3 py-1.5 text-sm text-muted-foreground transition-colors outline-none hover:border-primary/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/60 aria-selected:border-primary aria-selected:bg-primary/10 aria-selected:font-medium aria-selected:text-foreground"
+                  >
+                    {item.name}
+                  </button>
+                ))}
+              </div>
+            )}
             {isMaestro ? (
-              <ul className="divide-y border-b">
+              <ul
+                key={school ?? "principal"}
+                className={cn(
+                  "divide-y border-b transition-opacity duration-200",
+                  switchingSchool && "opacity-50",
+                )}
+              >
                 {current.groups.map(renderRow)}
               </ul>
             ) : (
@@ -795,26 +907,6 @@ function AdminGroups({
           Mostrar más ({filtered.length - limit})
         </Button>
       )}
-    </div>
-  );
-}
-
-function GroupsSkeleton() {
-  return (
-    <div aria-busy>
-      <span className="sr-only">Cargando grupos…</span>
-      <div className="flex flex-col gap-4">
-        <Skeleton className="h-5 w-64" />
-        <Skeleton className="h-4 w-48" />
-        <ul className="divide-y border-b">
-          {[0, 1, 2, 3].map((index) => (
-            <li key={index} className="flex flex-col gap-2 px-3 py-4">
-              <Skeleton className="h-5 w-48" />
-              <Skeleton className="h-4 w-24" />
-            </li>
-          ))}
-        </ul>
-      </div>
     </div>
   );
 }

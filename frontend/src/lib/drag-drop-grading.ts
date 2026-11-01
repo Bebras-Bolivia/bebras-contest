@@ -10,6 +10,8 @@
  * 2. **Varias soluciones.** Cada acomodo puede ocupar un subconjunto distinto
  *    de destinos. La solución principal sigue viviendo en el `correctTargetId`
  *    de cada objeto y las demás se guardan aparte.
+ * 3. **Piezas que sobran.** Un objeto sin `correctTargetId` no va en ningún
+ *    destino: la respuesta correcta lo deja afuera.
  *
  * El truco para resolver ambas de una vez es no comparar objeto por objeto,
  * sino reducir cada acomodo a una firma: qué *clase* de pieza quedó en cada
@@ -52,16 +54,19 @@ export function dragDropPieceKey(item: GradableDragDropItem) {
 }
 
 /**
- * Firma de un acomodo, o `null` si está incompleto (falta colocar un objeto)
- * o es imposible (dos objetos en el mismo destino).
+ * Firma de un acomodo, o `null` si no coloca nada, nombra un objeto que no es
+ * de la tarea o es imposible (dos objetos en el mismo destino).
  */
 export function dragDropSignature(
   items: GradableDragDropItem[],
   placements: Record<string, string>,
 ) {
+  const itemIds = new Set(items.map((item) => item.id));
+  const placed = Object.entries(placements).filter(([, targetId]) => targetId);
+
   if (
-    Object.keys(placements).length !== items.length ||
-    items.some((item) => !Object.hasOwn(placements, item.id))
+    placed.length === 0 ||
+    placed.some(([itemId]) => !itemIds.has(itemId))
   ) {
     return null;
   }
@@ -71,7 +76,11 @@ export function dragDropSignature(
   for (const item of items) {
     const targetId = placements[item.id];
 
-    if (!targetId || pieceByTarget.has(targetId)) {
+    if (!targetId) {
+      continue;
+    }
+
+    if (pieceByTarget.has(targetId)) {
       return null;
     }
 
@@ -90,7 +99,9 @@ export function dragDropPrimaryPlacements(items: GradableDragDropItem[]) {
   const placements: Record<string, string> = {};
 
   for (const item of items) {
-    placements[item.id] = item.correctTargetId;
+    if (item.correctTargetId) {
+      placements[item.id] = item.correctTargetId;
+    }
   }
 
   return placements;

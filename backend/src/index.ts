@@ -1752,6 +1752,13 @@ app.delete("/api/auth/me/schools/:id", requireAuth, async (req, res) => {
     return;
   }
 
+  if (await prisma.contestGroup.count({ where: { schoolId: school.id } })) {
+    res.status(409).json({
+      message: "Ese colegio ya tiene cursos con estudiantes; no se puede quitar.",
+    });
+    return;
+  }
+
   await prisma.teacherSchool.delete({ where: { id: school.id } });
   await cleanupDocumentKeys(school.letterFilename);
   res.status(204).end();
@@ -2552,6 +2559,7 @@ async function readPracticeTasks() {
     select: {
       id: true,
       title: true,
+      country: true,
       sourceTaskCode: true,
       answerType: true,
       difficulties: true,
@@ -2591,6 +2599,7 @@ function practiceListPayload(
       return {
         id: task.id,
         title: task.title,
+        country: task.country,
         answerType: task.answerType,
         difficulty: typeof level === "string" && level in rank ? level : null,
       };
@@ -2661,13 +2670,13 @@ async function refreshPracticeSnapshot(force = false) {
       FROM (SELECT "id", "updatedAt" FROM "TaskDraft" WHERE "isPractice" = 1 ORDER BY "id")`,
     )
     .first<{ print: string | null }>();
-  const print = blocked ? "bloqueada" : `v1|${row?.print ?? ""}`;
+  const print = blocked ? "bloqueada" : `v2|${row?.print ?? ""}`;
   const current = await store.bucket.get("practice/huella.txt");
   const previous = current ? await current.text() : "";
   if (!force && previous === print) return;
   // Solo se vuelve a escribir la tarea que cambió desde la última vez.
   const unchanged = new Set(
-    force || !previous.startsWith("v1|") ? [] : previous.slice(3).split(","),
+    force || !previous.startsWith("v2|") ? [] : previous.slice(3).split(","),
   );
 
   const json = (body: unknown) => ({
@@ -3126,7 +3135,7 @@ app.get("/api/practices/tasks", async (req, res) => {
 
   const drafts = await prisma.taskDraft.findMany({
     where: TEACHER_TASKS,
-    select: { id: true, title: true, difficulties: true },
+    select: { id: true, title: true, country: true, difficulties: true },
     orderBy: { title: "asc" },
   });
 
@@ -3139,7 +3148,7 @@ app.get("/api/practices/tasks", async (req, res) => {
     );
     const difficulty = difficulties[ageRange];
     return isDifficultyKey(difficulty)
-      ? [{ id: draft.id, title: draft.title, difficulty }]
+      ? [{ id: draft.id, title: draft.title, country: draft.country, difficulty }]
       : [];
   });
 
@@ -3299,21 +3308,26 @@ app.post("/api/practices", async (req, res) => {
   res.status(201).json(serializePractice(practice));
 });
 
-app.get("/api/practices/:id/results", async (req, res) => {
+async function loadPracticeResults(req: express.Request) {
   const practice = await prisma.contest.findFirst({
     where: { id: String(req.params.id), ...practiceOwnerWhere(req) },
-    select: { id: true, updatedAt: true, categories: true },
+    select: {
+      id: true,
+      title: true,
+      updatedAt: true,
+      categories: true,
+      durationMinutes: true,
+      startsAt: true,
+      endsAt: true,
+      createdAt: true,
+      createdById: true,
+    },
   });
 
-  if (!practice) {
-    res.status(404).json({ message: "Práctica no encontrada." });
-    return;
-  }
+  if (!practice) return null;
 
-  const tasks = tasksOfCategory(
-    await contestTasksFor(practice),
-    contestCategories(practice)[0] ?? null,
-  );
+  const category = contestCategories(practice)[0] ?? null;
+  const tasks = tasksOfCategory(await contestTasksFor(practice), category);
   const results = await prisma.practiceResult.findMany({
     where: { contestId: practice.id },
     orderBy: [{ totalScore: "desc" }, { finishedAt: "asc" }],
@@ -3328,19 +3342,209 @@ app.get("/api/practices/:id/results", async (req, res) => {
     },
   });
 
-  res.json({
-    tasks: tasks.map((task) => ({ id: task.taskDraftId, title: task.play.title })),
+  const grades = SCHOOL_GRADES.filter((grade) => grade.category === category).map(
+    (grade) => grade.value,
+  );
+  const enrolled =
+    practice.createdById && grades.length > 0
+      ? await prisma.team.findMany({
+          where: {
+            grade: { in: grades },
+            group: {
+              createdById: practice.createdById,
+              contest: { isPractice: false, trashedAt: null },
+            },
+          },
+          select: {
+            id: true,
+            memberOneFirstName: true,
+            memberOneLastName: true,
+            grade: true,
+          },
+        })
+      : [];
+  const done = new Set(
+    results.map((result) =>
+      `${nameKey(result.team.memberOneFirstName, result.team.memberOneLastName)}|${result.team.grade ?? ""}`,
+    ),
+  );
+  const pending = new Map<string, { id: string; name: string; grade: string | null }>();
+  for (const team of enrolled) {
+    const name = `${team.memberOneFirstName} ${team.memberOneLastName}`.trim();
+    const key = `${nameKey(team.memberOneFirstName, team.memberOneLastName)}|${team.grade ?? ""}`;
+    if (done.has(key) || pending.has(key)) continue;
+    pending.set(key, { id: team.id, name, grade: team.grade });
+  }
+
+  return {
+    practice: {
+      id: practice.id,
+      title: practice.title,
+      category: category ?? "",
+      durationMinutes: practice.durationMinutes,
+      startsAt: practice.startsAt?.toISOString() ?? null,
+      endsAt: practice.endsAt?.toISOString() ?? null,
+      state: computeContestState({
+        publishedAt: practice.createdAt,
+        startsAt: practice.startsAt,
+        endsAt: practice.endsAt,
+        isPractice: true,
+      }).state,
+    },
+    tasks: tasks.map((task) => ({
+      id: task.taskDraftId,
+      title: task.play.title,
+      difficulty: task.difficulty,
+      maxScore: task.maxScore,
+    })),
+    maxScore: initialScoreOf(tasks) + tasks.reduce((total, task) => total + task.maxScore, 0),
     results: results.map((result) => ({
       id: result.id,
       name: `${result.team.memberOneFirstName} ${result.team.memberOneLastName}`.trim(),
       grade: result.team.grade,
       totalScore: result.totalScore,
       correctCount: result.correctCount,
+      answeredCount: result.answeredCount,
       taskCount: result.taskCount,
       marks: result.marks,
       finishedAt: result.finishedAt.toISOString(),
     })),
+    pending: [...pending.values()].sort((left, right) =>
+      left.name.localeCompare(right.name, "es"),
+    ),
+  };
+}
+
+app.get("/api/practices/:id/results", async (req, res) => {
+  const data = await loadPracticeResults(req);
+  if (!data) {
+    res.status(404).json({ message: "Práctica no encontrada." });
+    return;
+  }
+  res.json(data);
+});
+
+app.get("/api/practices/:id/results.xlsx", async (req, res) => {
+  const data = await loadPracticeResults(req);
+  if (!data) {
+    res.status(404).json({ message: "Práctica no encontrada." });
+    return;
+  }
+
+  const { ANSWER_CELLS, writeBanner, writeHeader, writeRow } = excelKit();
+  const workbook = new ExcelJS.Workbook();
+  const gradeName = (grade: string | null) =>
+    SCHOOL_GRADES.find((item) => item.value === grade)?.label ?? "";
+  const subtitle = [data.practice.title, `Categoría ${data.practice.category}`].join(
+    "   ·   ",
+  );
+  const HEADER_ROW = 5;
+
+  const headers = [
+    "N.º",
+    "Estudiante",
+    "Curso",
+    "Puntaje",
+    "Correctas",
+    ...data.tasks.map((_, index) => `P${index + 1}`),
+  ];
+  const fixed = headers.length - data.tasks.length;
+  const sheet = workbook.addWorksheet("Resultados", {
+    pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
   });
+  sheet.columns = headers.map((_, index) => ({
+    width: index < fixed ? [6, 34, 18, 10, 11][index] : 5,
+  }));
+  writeBanner(sheet, Math.max(headers.length, 5), [
+    "Resultados de la práctica",
+    subtitle,
+    "Las columnas P1, P2… son las preguntas en orden: ✓ correcta, ✗ incorrecta, — sin responder.",
+  ]);
+  writeHeader(sheet, HEADER_ROW, headers);
+  data.tasks.forEach((task, index) => {
+    sheet.getRow(HEADER_ROW).getCell(fixed + index + 1).note = task.title;
+  });
+  const MARKS = { C: ANSWER_CELLS.correct, X: ANSWER_CELLS.wrong } as const;
+  data.results.forEach((result, index) => {
+    const row = writeRow(
+      sheet,
+      HEADER_ROW + 1 + index,
+      [
+        index + 1,
+        result.name,
+        gradeName(result.grade),
+        result.totalScore,
+        `${result.correctCount} de ${result.taskCount}`,
+      ],
+      headers.length,
+    );
+    data.tasks.forEach((_, taskIndex) => {
+      const mark = result.marks[taskIndex];
+      const style = mark === "C" || mark === "X" ? MARKS[mark] : ANSWER_CELLS.blank;
+      const cell = row.getCell(fixed + taskIndex + 1);
+      cell.value = style.text;
+      cell.fill = style.fill;
+      cell.font = { bold: true, color: { argb: style.color } };
+    });
+  });
+  data.pending.forEach((student, index) => {
+    const row = writeRow(
+      sheet,
+      HEADER_ROW + 1 + data.results.length + index,
+      ["", student.name, gradeName(student.grade), "Todavía no la hizo"],
+      fixed,
+    );
+    row.getCell(4).font = { color: { argb: "FF7F7F7F" } };
+  });
+
+  if (data.results.length > 0) {
+    const questionHeaders = [
+      "N.º",
+      "Pregunta",
+      "Dificultad",
+      "Correctas",
+      "Incorrectas",
+      "Sin responder",
+      "% de acierto",
+    ];
+    const questions = workbook.addWorksheet("Preguntas", {
+      pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+    });
+    questions.columns = questionHeaders.map((header) => ({
+      width: header === "Pregunta" ? 40 : header === "N.º" ? 6 : 14,
+    }));
+    writeBanner(questions, questionHeaders.length, [
+      "Preguntas",
+      subtitle,
+      `Cuántos de los ${data.results.length} que la terminaron respondieron bien cada pregunta.`,
+    ]);
+    writeHeader(questions, HEADER_ROW, questionHeaders);
+    data.tasks.forEach((task, index) => {
+      const correct = data.results.filter((result) => result.marks[index] === "C").length;
+      const wrong = data.results.filter((result) => result.marks[index] === "X").length;
+      const row = writeRow(
+        questions,
+        HEADER_ROW + 1 + index,
+        [
+          `P${index + 1}`,
+          task.title,
+          DIFFICULTY_LABELS[task.difficulty] ?? task.difficulty,
+          correct,
+          wrong,
+          data.results.length - correct - wrong,
+          correct / data.results.length,
+        ],
+        questionHeaders.length,
+      );
+      row.getCell(questionHeaders.length).numFmt = "0%";
+    });
+  }
+
+  await sendWorkbook(
+    res,
+    workbook,
+    `practica-${excelFileName(data.practice.title)}.xlsx`,
+  );
 });
 
 app.delete("/api/practices/:id", async (req, res) => {
@@ -4444,6 +4648,8 @@ function serializeGroup(group: {
   grade: string | null;
   autoKey: string | null;
   createdById: number | null;
+  schoolId?: string | null;
+  school?: { schoolName: string } | null;
   accessCode: string;
   contestId: string;
   firstUsedAt: Date | null;
@@ -4502,7 +4708,8 @@ function serializeGroup(group: {
       ? formatPersonName(ownerName)
       : responsible?.email ?? null,
     ownerEmail: responsible?.email ?? null,
-    ownerSchool: responsible?.schoolName ?? null,
+    schoolId: group.schoolId ?? null,
+    ownerSchool: group.school?.schoolName ?? responsible?.schoolName ?? null,
     ownerDepartment: responsible?.department ?? null,
     contestCreatedAt: group.contest?.createdAt?.toISOString() ?? group.createdAt.toISOString(),
     category: group.category,
@@ -4564,6 +4771,7 @@ const groupContestSelect = {
       department: true,
     },
   },
+  school: { select: { schoolName: true } },
 } as const;
 
 // ---- Gestión de maestros (solo admin) ----
@@ -4976,6 +5184,190 @@ app.get("/api/groups", async (req, res) => {
   );
 });
 
+app.get("/api/groups/students.xlsx", async (req, res) => {
+  const { ownerId } = groupListFilters(req);
+  const contestId = typeof req.query.contestId === "string" ? req.query.contestId : "";
+  const contest = contestId
+    ? await prisma.contest.findFirst({
+        where: { id: contestId, isPractice: false, trashedAt: null },
+      })
+    : null;
+
+  if (!contest) {
+    res.status(404).json({ message: "Desafío no encontrado." });
+    return;
+  }
+
+  const schoolFilter =
+    ownerId && typeof req.query.schoolId === "string"
+      ? { schoolId: req.query.schoolId === "principal" ? null : req.query.schoolId }
+      : {};
+  const groups = await prisma.contestGroup.findMany({
+    where: {
+      contestId: contest.id,
+      ...(ownerId ? { createdById: ownerId } : {}),
+      ...schoolFilter,
+    },
+    select: {
+      name: true,
+      grade: true,
+      accessCode: true,
+      school: { select: { schoolName: true } },
+      createdBy: {
+        select: { firstName: true, lastName: true, email: true, schoolName: true },
+      },
+      teams: {
+        select: {
+          personalCode: true,
+          grade: true,
+          participationMode: true,
+          memberOneFirstName: true,
+          memberOneLastName: true,
+          memberTwoFirstName: true,
+          memberTwoLastName: true,
+        },
+      },
+    },
+  });
+
+  const withOwner = !ownerId;
+  const gradeOrder = (grade: string | null) => {
+    const index = SCHOOL_GRADES.findIndex((item) => item.value === grade);
+    return index === -1 ? SCHOOL_GRADES.length : index;
+  };
+  const gradeName = (grade: string | null) =>
+    SCHOOL_GRADES.find((item) => item.value === grade)?.label ?? "";
+  const ownerName = (group: (typeof groups)[number]) =>
+    group.createdBy
+      ? `${group.createdBy.firstName ?? ""} ${group.createdBy.lastName ?? ""}`.trim() ||
+        group.createdBy.email
+      : "";
+  const students = groups
+    .flatMap((group) =>
+      group.teams.map((team) => ({
+        school: (group.school?.schoolName ?? group.createdBy?.schoolName) ?? "",
+        owner: ownerName(group),
+        grade: team.grade ?? group.grade,
+        name: [
+          `${team.memberOneLastName} ${team.memberOneFirstName}`.trim(),
+          team.participationMode === "pareja" && team.memberTwoFirstName
+            ? `${team.memberTwoLastName ?? ""} ${team.memberTwoFirstName}`.trim()
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" y "),
+        code: team.personalCode,
+      })),
+    )
+    .sort(
+      (left, right) =>
+        left.school.localeCompare(right.school, "es") ||
+        left.owner.localeCompare(right.owner, "es") ||
+        gradeOrder(left.grade) - gradeOrder(right.grade) ||
+        left.name.localeCompare(right.name, "es"),
+    );
+
+  const { CELL_BORDER, fill, writeBanner, writeHeader, writeRow } = excelKit();
+  const workbook = new ExcelJS.Workbook();
+  const subtitle = [contest.title, !withOwner && groups[0] ? ownerName(groups[0]) : ""]
+    .filter(Boolean)
+    .join("   ·   ");
+
+  const headers = [
+    "N.º",
+    "Estudiante",
+    "Curso",
+    "Código personal",
+    ...(withOwner ? ["Colegio", "Maestro"] : []),
+  ];
+  const sheet = workbook.addWorksheet("Estudiantes", {
+    pageSetup: { orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+  });
+  sheet.columns = headers.map((header) => ({
+    width: { "N.º": 6, Estudiante: 40, Curso: 20, "Código personal": 18 }[header] ?? 32,
+  }));
+  writeBanner(sheet, headers.length, [
+    "Estudiantes y sus códigos",
+    subtitle,
+    "Cada estudiante entra al desafío con su código personal.",
+  ]);
+  const HEADER_ROW = 5;
+  writeHeader(sheet, HEADER_ROW, headers);
+  students.forEach((student, index) => {
+    const row = writeRow(
+      sheet,
+      HEADER_ROW + 1 + index,
+      [
+        index + 1,
+        student.name,
+        gradeName(student.grade),
+        student.code,
+        ...(withOwner ? [student.school, student.owner] : []),
+      ],
+      headers.length,
+      withOwner ? [1, 4, 5] : [1],
+    );
+    row.getCell(4).font = { bold: true, name: "Consolas" };
+  });
+  if (students.length > 0) {
+    sheet.autoFilter = {
+      from: { row: HEADER_ROW, column: 1 },
+      to: { row: HEADER_ROW + students.length, column: headers.length },
+    };
+  }
+
+  if (contestRegistrationIsOpen(contest)) {
+    const courseHeaders = [
+      "Curso",
+      "Código del curso",
+      "Estudiantes",
+      ...(withOwner ? ["Colegio", "Maestro"] : []),
+    ];
+    const courses = workbook.addWorksheet("Cursos");
+    courses.columns = courseHeaders.map((header) => ({
+      width: header === "Curso" ? 22 : header === "Código del curso" ? 20 : header === "Estudiantes" ? 14 : 32,
+    }));
+    writeBanner(courses, courseHeaders.length, [
+      "Códigos de los cursos",
+      subtitle,
+      "Con el código del curso los estudiantes pueden inscribirse solos mientras la inscripción esté abierta.",
+    ]);
+    writeHeader(courses, HEADER_ROW, courseHeaders);
+    courses.views = [{ state: "frozen", ySplit: HEADER_ROW }];
+    [...groups]
+      .sort(
+        (left, right) =>
+          ((left.school?.schoolName ?? left.createdBy?.schoolName) ?? "").localeCompare((right.school?.schoolName ?? right.createdBy?.schoolName) ?? "", "es") ||
+          ownerName(left).localeCompare(ownerName(right), "es") ||
+          gradeOrder(left.grade) - gradeOrder(right.grade),
+      )
+      .forEach((group, index) => {
+        const row = writeRow(
+          courses,
+          HEADER_ROW + 1 + index,
+          [
+            group.grade ? gradeName(group.grade) : group.name,
+            group.accessCode,
+            group.teams.length,
+            ...(withOwner ? [(group.school?.schoolName ?? group.createdBy?.schoolName) ?? "", ownerName(group)] : []),
+          ],
+          courseHeaders.length,
+          withOwner ? [0, 3, 4] : [0],
+        );
+        row.getCell(2).font = { bold: true, name: "Consolas" };
+        row.getCell(2).fill = fill("FFFFF4E5");
+        row.getCell(2).border = CELL_BORDER;
+      });
+  }
+
+  const owner = withOwner ? null : groups[0];
+  const fileLabel =
+    (owner?.school?.schoolName ?? owner?.createdBy?.schoolName)?.trim() ||
+    (owner ? ownerName(owner) : "") ||
+    contest.title;
+  await sendWorkbook(res, workbook, `codigos-${excelFileName(fileLabel)}.xlsx`);
+});
+
 app.get("/api/groups/contests", async (req, res) => {
   const { ownerId } = groupListFilters(req);
   const { results } = await db()
@@ -5232,16 +5624,7 @@ const DIFFICULTY_LABELS: Record<string, string> = {
   hard: "Difícil",
 };
 
-app.get("/api/groups/:id/results.xlsx", async (req, res) => {
-  const results = await loadGroupResults(req.params.id, req.user);
-
-  if (!results) {
-    res.status(404).json({ message: "Grupo no encontrado." });
-    return;
-  }
-
-  const { group, contest, showScores } = results;
-  const withRank = showScores && contest.resultsPublished;
+function excelKit() {
   const thin = { style: "thin" as const, color: { argb: "FFBFBFBF" } };
   const CELL_BORDER: Partial<ExcelJS.Borders> = {
     top: thin,
@@ -5259,12 +5642,6 @@ app.get("/api/groups/:id/results.xlsx", async (req, res) => {
     wrong: { text: "✗", fill: fill("FFFADAD7"), color: "FFB3261E" },
     blank: { text: "—", fill: fill("FFEFEFEF"), color: "FF7F7F7F" },
   };
-
-  const workbook = new ExcelJS.Workbook();
-  const categories = results.categories.filter((category) =>
-    results.teams.some((team) => team.category === category),
-  );
-  const sheets = categories.length > 0 ? categories : [null];
 
   const writeBanner = (
     sheet: ExcelJS.Worksheet,
@@ -5305,6 +5682,78 @@ app.get("/api/groups/:id/results.xlsx", async (req, res) => {
     row.getCell(2).alignment = { vertical: "middle", indent: 1 };
     sheet.views = [{ state: "frozen", ySplit: rowNumber, xSplit: 2 }];
   };
+
+  const writeRow = (
+    sheet: ExcelJS.Worksheet,
+    rowNumber: number,
+    values: ExcelJS.CellValue[],
+    width: number,
+    leftColumns: number[] = [1],
+  ) => {
+    const row = sheet.getRow(rowNumber);
+    row.values = values;
+    row.height = 20;
+    for (let column = 0; column < width; column += 1) {
+      const cell = row.getCell(column + 1);
+      const left = leftColumns.includes(column);
+      cell.border = CELL_BORDER;
+      cell.alignment = {
+        vertical: "middle",
+        horizontal: left ? "left" : "center",
+        indent: left ? 1 : 0,
+      };
+    }
+    return row;
+  };
+
+  return { CELL_BORDER, fill, ANSWER_CELLS, writeBanner, writeHeader, writeRow };
+}
+
+async function sendWorkbook(
+  res: express.Response,
+  workbook: ExcelJS.Workbook,
+  filename: string,
+) {
+  const buffer = await workbook.xlsx.writeBuffer();
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  );
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${filename.replace(/[^\w.-]+/g, "-")}"`,
+  );
+  res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
+  res.end(Buffer.from(buffer as unknown as ArrayBuffer));
+}
+
+function excelFileName(text: string) {
+  return text
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[^\w-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+}
+
+app.get("/api/groups/:id/results.xlsx", async (req, res) => {
+  const results = await loadGroupResults(req.params.id, req.user);
+
+  if (!results) {
+    res.status(404).json({ message: "Grupo no encontrado." });
+    return;
+  }
+
+  const { group, contest, showScores } = results;
+  const withRank = showScores && contest.resultsPublished;
+  const { CELL_BORDER, fill, ANSWER_CELLS, writeBanner, writeHeader } =
+    excelKit();
+
+  const workbook = new ExcelJS.Workbook();
+  const categories = results.categories.filter((category) =>
+    results.teams.some((team) => team.category === category),
+  );
+  const sheets = categories.length > 0 ? categories : [null];
 
   for (const category of sheets) {
     const teams = results.teams
@@ -5493,24 +5942,34 @@ app.get("/api/groups/:id/results.xlsx", async (req, res) => {
   res.end(Buffer.from(buffer as unknown as ArrayBuffer));
 });
 
+function courseKey(
+  ownerId: number,
+  contestId: string,
+  grade: string,
+  schoolId: string | null,
+) {
+  return `${ownerId}:${contestId}:${grade}${schoolId ? `:${schoolId}` : ""}`;
+}
+
 function courseGroupInsert(
   contestId: string,
   grade: (typeof SCHOOL_GRADES)[number],
   ownerId: number,
   accessCode: string,
   stamp: string,
+  schoolId: string | null = null,
 ) {
   return db().prepare(`INSERT INTO "ContestGroup"
     ("id", "contestId", "createdById", "name", "category", "grade", "autoKey",
-     "accessCode", "recoveryCode", "createdAt", "updatedAt")
-    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM "Contest" c
+     "schoolId", "accessCode", "recoveryCode", "createdAt", "updatedAt")
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM "Contest" c
     WHERE c."id" = ? AND c."trashedAt" IS NULL
       AND EXISTS (SELECT 1 FROM json_each(c."categories") WHERE value = ?)
     ON CONFLICT("autoKey") DO NOTHING`)
     .bind(
       randomUUID(), contestId, ownerId, grade.label, grade.category, grade.value,
-      `${ownerId}:${contestId}:${grade.value}`, accessCode, generateCode(10), stamp, stamp,
-      contestId, grade.category,
+      courseKey(ownerId, contestId, grade.value, schoolId), schoolId, accessCode,
+      generateCode(10), stamp, stamp, contestId, grade.category,
     );
 }
 
@@ -5518,12 +5977,24 @@ async function ensureCourseGroup(
   contestId: string,
   grade: (typeof SCHOOL_GRADES)[number],
   ownerId: number,
+  schoolId: string | null = null,
 ) {
-  const autoKey = `${ownerId}:${contestId}:${grade.value}`;
+  const autoKey = courseKey(ownerId, contestId, grade.value, schoolId);
   const existing = await prisma.contestGroup.findUnique({ where: { autoKey } });
   if (existing) return existing;
-  await courseGroupInsert(contestId, grade, ownerId, await generateUniqueAccessCode(), currentDate().toISOString()).run();
+  await courseGroupInsert(contestId, grade, ownerId, await generateUniqueAccessCode(), currentDate().toISOString(), schoolId).run();
   return prisma.contestGroup.findUniqueOrThrow({ where: { autoKey } });
+}
+
+async function requestedSchool(req: express.Request, raw: unknown) {
+  if (req.user?.role !== "maestro" || typeof raw !== "string" || !raw) {
+    return { schoolId: null };
+  }
+  const school = await prisma.teacherSchool.findFirst({
+    where: { id: raw, userId: req.user.id, status: "approved" },
+    select: { id: true },
+  });
+  return school ? { schoolId: school.id } : null;
 }
 
 app.post("/api/groups/courses", async (req, res) => {
@@ -5541,6 +6012,12 @@ app.post("/api/groups/courses", async (req, res) => {
     res.status(409).json({ message: registrationWindowMessage(contest) });
     return;
   }
+  const chosen = await requestedSchool(req, req.body?.schoolId);
+  if (!chosen) {
+    res.status(404).json({ message: "Colegio no encontrado." });
+    return;
+  }
+  const { schoolId } = chosen;
   const grades = gradesForCategories(contestCategories(contest));
   const ownerId = req.user!.id;
   const existing = await prisma.contestGroup.findMany({
@@ -5548,7 +6025,9 @@ app.post("/api/groups/courses", async (req, res) => {
     select: { autoKey: true },
   });
   const keys = new Set(existing.map((group) => group.autoKey));
-  const missing = grades.filter((grade) => !keys.has(`${ownerId}:${contestId}:${grade.value}`));
+  const missing = grades.filter(
+    (grade) => !keys.has(courseKey(ownerId, contestId, grade.value, schoolId)),
+  );
   const reserved = new Set<string>();
   const inserts: D1PreparedStatement[] = [];
   const stamp = currentDate().toISOString();
@@ -5556,11 +6035,11 @@ app.post("/api/groups/courses", async (req, res) => {
     let code = await generateUniqueAccessCode();
     while (reserved.has(code)) code = await generateUniqueAccessCode();
     reserved.add(code);
-    inserts.push(courseGroupInsert(contestId, grade, ownerId, code, stamp));
+    inserts.push(courseGroupInsert(contestId, grade, ownerId, code, stamp, schoolId));
   }
   if (inserts.length) await db().batch(inserts);
   const groups = await prisma.contestGroup.findMany({
-    where: { contestId, createdById: ownerId, autoKey: { not: null }, grade: { in: grades.map((grade) => grade.value) } },
+    where: { contestId, createdById: ownerId, schoolId, autoKey: { not: null }, grade: { in: grades.map((grade) => grade.value) } },
     include: { ...groupContestSelect, teams: true },
   });
   res.json(groups.map(serializeGroup));
@@ -5588,8 +6067,13 @@ app.post("/api/groups/course", async (req, res) => {
     res.status(400).json({ message: error instanceof Error ? error.message : "Curso inválido." });
     return;
   }
+  const chosen = await requestedSchool(req, req.body?.schoolId);
+  if (!chosen) {
+    res.status(404).json({ message: "Colegio no encontrado." });
+    return;
+  }
   const course = SCHOOL_GRADES.find((item) => item.value === grade)!;
-  const courseGroup = await ensureCourseGroup(contest.id, course, req.user!.id);
+  const courseGroup = await ensureCourseGroup(contest.id, course, req.user!.id, chosen.schoolId);
   const group = await prisma.contestGroup.findUniqueOrThrow({
     where: { id: courseGroup.id },
     include: { ...groupContestSelect, teams: true },
@@ -6730,6 +7214,7 @@ app.post("/api/groups/:id/roster", rosterUploadMiddleware, async (req, res) => {
         where: {
           contestId: group.contestId,
           createdById: group.createdById,
+          schoolId: group.schoolId,
           autoKey: { not: null },
         },
         select: { id: true, grade: true },
@@ -6890,7 +7375,7 @@ app.post("/api/groups/:id/roster", rosterUploadMiddleware, async (req, res) => {
       for (const grade of new Set(drafts.map((draft) => draft.grade))) {
         if (destinations.has(grade)) continue;
         const course = SCHOOL_GRADES.find((item) => item.value === grade)!;
-        const destination = await ensureCourseGroup(group.contestId, course, group.createdById!);
+        const destination = await ensureCourseGroup(group.contestId, course, group.createdById!, group.schoolId);
         destinations.set(grade, destination.id);
       }
     }

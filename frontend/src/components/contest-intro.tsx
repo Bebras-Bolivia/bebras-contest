@@ -70,6 +70,7 @@ const READING_SECONDS = 5;
 export function ContestIntro({
   attempt,
   top,
+  bottom,
   notice,
   canStart,
   starting,
@@ -78,6 +79,7 @@ export function ContestIntro({
 }: {
   attempt: AttemptState;
   top?: ReactNode;
+  bottom?: ReactNode;
   notice?: ReactNode;
   canStart: boolean;
   starting: boolean;
@@ -240,19 +242,24 @@ export function ContestIntro({
 
       <div className="flex flex-col gap-4 border-t pt-6">
         {notice}
-        {canStart && (
-          <Button
-            size="lg"
-            className="w-full tabular-nums sm:ml-auto sm:w-auto"
-            onClick={onStart}
-            disabled={starting || readingLeft > 0}
-          >
-            {starting
-              ? "Empezando..."
-              : readingLeft > 0
-                ? `Lee las reglas… ${readingLeft}`
-                : "Empezar el desafío"}
-          </Button>
+        {(canStart || bottom) && (
+          <div className="flex items-center justify-end gap-3">
+            {bottom}
+            {canStart && (
+              <Button
+                size="lg"
+                className="flex-1 tabular-nums sm:flex-none"
+                onClick={onStart}
+                disabled={starting || readingLeft > 0}
+              >
+                {starting
+                  ? "Empezando..."
+                  : readingLeft > 0
+                    ? `Lee las reglas… ${readingLeft}`
+                    : "Empezar el desafío"}
+              </Button>
+            )}
+          </div>
         )}
       </div>
     </div>

@@ -57,6 +57,7 @@ import {
 } from "@/components/ui/popover";
 import { openMyDocument, openMySchoolLetter } from "@/lib/users-api";
 import { SchoolPicker, type SchoolValue } from "@/components/school-picker";
+import { ProfileSkeleton } from "@/components/page-skeletons";
 
 type ProfileDocuments = {
   institutionType: "school" | "homeschool";
@@ -299,23 +300,7 @@ export function ProfilePage() {
   };
 
   if (loading) {
-    return (
-      <div aria-busy className="flex w-full flex-col gap-8">
-        <span className="sr-only">Cargando tu cuenta...</span>
-        <div className="flex items-center gap-5">
-          <div className="size-16 shrink-0 animate-pulse rounded-full bg-muted" />
-          <div className="flex flex-col gap-2">
-            <div className="h-7 w-56 animate-pulse bg-muted" />
-            <div className="h-4 w-72 max-w-full animate-pulse bg-muted/70" />
-          </div>
-        </div>
-        <div className="h-36 animate-pulse bg-muted/60" />
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="h-20 animate-pulse bg-muted/50" />
-          <div className="h-20 animate-pulse bg-muted/50" />
-        </div>
-      </div>
-    );
+    return <ProfileSkeleton />;
   }
 
   if (!profile) {

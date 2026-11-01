@@ -27,6 +27,7 @@ export type DragDropConfig = {
 export type PlayTask = {
   id: string;
   title: string;
+  country?: string | null;
   bodyBlocks: unknown;
   challengeBlocks: unknown;
   answerType: string;

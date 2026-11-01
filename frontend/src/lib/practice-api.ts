@@ -11,6 +11,7 @@ export type PracticeCategory = {
 export type PracticeTaskItem = {
   id: string;
   title: string;
+  country?: string | null;
   answerType: string;
   difficulty: "easy" | "medium" | "hard" | null;
 };

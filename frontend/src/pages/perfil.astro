@@ -1,12 +1,15 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { ProfilePage } from "../components/profile-page";
+import { ProfileSkeleton } from "../components/page-skeletons";
 
 const title = "Mi cuenta — Bebras";
 ---
 
 <Layout title={title} heading="Mi cuenta" requireAuth allowMaestro>
   <main class="mx-auto flex w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-    <ProfilePage client:only="react" />
+    <ProfilePage client:only="react">
+      <ProfileSkeleton slot="fallback" />
+    </ProfilePage>
   </main>
 </Layout>

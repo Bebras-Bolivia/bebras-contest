@@ -28,6 +28,7 @@ export type StoredGroup = {
   id: string;
   name: string;
   grade: string | null;
+  schoolId?: string | null;
   isDefault: boolean;
   ownerId: number | null;
   accessCode: string;
@@ -118,11 +119,29 @@ export function openCourseGroup(contestId: string, grade: string) {
   });
 }
 
-export function prepareCourseGroups(contestId: string) {
+export function prepareCourseGroups(
+  contestId: string,
+  schoolId: string | null = null,
+) {
   return request<StoredGroup[]>("/api/groups/courses", {
     method: "POST",
-    body: JSON.stringify({ contestId }),
+    body: JSON.stringify({ contestId, schoolId }),
   });
+}
+
+export type MySchool = { id: string | null; name: string };
+
+export async function listMySchools(): Promise<MySchool[]> {
+  const me = await request<{
+    schoolName: string | null;
+    schools: { id: string; schoolName: string; status: string }[];
+  }>("/api/auth/me");
+  return [
+    { id: null, name: me.schoolName || "Mi colegio" },
+    ...me.schools
+      .filter((school) => school.status === "approved")
+      .map((school) => ({ id: school.id, name: school.schoolName })),
+  ];
 }
 
 export function removeGroup(groupId: string) {
@@ -178,6 +197,34 @@ export async function downloadGroupResults(groupId: string, name: string) {
   const link = document.createElement("a");
   link.href = url;
   link.download = `resultados-${name}.xlsx`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+export async function downloadStudentCodes(
+  contestId: string,
+  schoolId?: string | null,
+) {
+  const school =
+    schoolId === undefined
+      ? ""
+      : `&schoolId=${encodeURIComponent(schoolId ?? "principal")}`;
+  const response = await fetch(
+    `${API_BASE_URL}/api/groups/students.xlsx?contestId=${encodeURIComponent(contestId)}${school}`,
+    { headers: await authorizationHeaders() },
+  );
+
+  if (!response.ok) {
+    throw new Error("No se pudo descargar la lista de estudiantes.");
+  }
+
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download =
+    response.headers
+      .get("Content-Disposition")
+      ?.match(/filename="([^"]+)"/)?.[1] ?? "codigos.xlsx";
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

@@ -561,15 +561,15 @@ function validateForm(state: FormState) {
     const correctTargetIds = state.dragDropItems.map(
       (item) => item.correctTargetId,
     );
+    const placedTargetIds = correctTargetIds.filter(Boolean);
     const hasOneToOneMapping =
-      state.dragDropItems.length <= state.dragDropTargets.length &&
+      placedTargetIds.length > 0 &&
       itemIds.every(Boolean) &&
       targetIds.every(Boolean) &&
-      correctTargetIds.every(Boolean) &&
       new Set(itemIds).size === itemIds.length &&
       new Set(targetIds).size === targetIds.length &&
-      new Set(correctTargetIds).size === correctTargetIds.length &&
-      correctTargetIds.every((targetId) => targetIds.includes(targetId));
+      new Set(placedTargetIds).size === placedTargetIds.length &&
+      placedTargetIds.every((targetId) => targetIds.includes(targetId));
 
     if (!hasOneToOneMapping) {
       errors.push("Cada pieza debe ir a un solo lugar.");
@@ -619,11 +619,11 @@ function validateForm(state: FormState) {
       for (const item of state.dragDropItems) {
         const targetId = solution.placements[item.id];
 
-        if (
-          !targetId ||
-          !targetIds.includes(targetId) ||
-          usedTargets.has(targetId)
-        ) {
+        if (!targetId) {
+          continue;
+        }
+
+        if (!targetIds.includes(targetId) || usedTargets.has(targetId)) {
           valid = false;
           break;
         }
@@ -633,7 +633,7 @@ function validateForm(state: FormState) {
 
       if (!valid) {
         errors.push(
-          "Cada otra respuesta correcta debe poner todas las piezas, cada una en un lugar distinto.",
+          "En cada otra respuesta correcta, cada pieza va en un lugar distinto.",
         );
         break;
       }

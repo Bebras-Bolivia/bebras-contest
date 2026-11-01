@@ -215,6 +215,7 @@ export function renderSafeTask(
     taskId: task.id,
     position: contestTask.position,
     title: task.title,
+    country: task.country ?? null,
     bodyBlocks: publicBlocks(task.bodyBlocks),
     challengeBlocks: publicBlocks(task.challengeBlocks),
     answerType: task.answerType,

@@ -1,6 +1,7 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import { GroupsHome } from "../../components/groups-home";
+import { GroupsPageSkeleton } from "../../components/page-skeletons";
 
 const title = "Grupos";
 ---
@@ -8,7 +9,9 @@ const title = "Grupos";
 <Layout title={title} requireAuth allowMaestro>
   <main class="mx-auto flex w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
     <div class="flex w-full flex-col gap-6">
-      <GroupsHome client:only="react" />
+      <GroupsHome client:only="react">
+        <GroupsPageSkeleton slot="fallback" />
+      </GroupsHome>
     </div>
   </main>
 </Layout>

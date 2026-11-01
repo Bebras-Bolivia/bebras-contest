@@ -1,11 +1,17 @@
 "use client";
 
-import { RowsSkeleton } from "@/components/page-skeletons";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckIcon, ChevronLeftIcon, EyeIcon, PlusIcon } from "lucide-react";
+import { TaskPickSkeleton } from "@/components/page-skeletons";
+import { useEffect, useMemo, useState } from "react";
+import {
+  CheckIcon,
+  ChevronLeftIcon,
+  PlayCircleIcon,
+  PlusIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
+import { enter } from "@/lib/surface";
 import {
   CONTEST_CATEGORIES,
   fromDatetimeLocalValue,
@@ -16,22 +22,12 @@ import {
   listPracticeTasks,
   type PracticeTask,
 } from "@/lib/practices-api";
-import { getPracticeTask } from "@/lib/practice-api";
-import type { PlayTask } from "@/lib/play-api";
 import { categoryStyle } from "@/components/category-logo";
 import { DifficultyTag } from "@/components/contest-task-parts";
 import { DateTimeField, parseDateTimeLocal } from "@/components/datetime-field";
 import { FormSection } from "@/components/form-section";
-import { InteractiveTryout } from "@/components/interactive-player";
-import { TaskContentRenderer } from "@/components/task-content-renderer";
+import { PracticeTaskTester } from "@/components/practice-task-tester";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 
 const pillClass =
   "flex h-8 items-center gap-1.5 border-2 border-border/20 px-3 text-sm text-muted-foreground transition-colors outline-none hover:border-primary/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/60 aria-pressed:font-medium aria-pressed:text-foreground";
@@ -59,9 +55,7 @@ export function PracticeEditor() {
   const [tried, setTried] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<PracticeTask | null>(null);
-  const [previewTask, setPreviewTask] = useState<PlayTask | null>(null);
-  const previewCache = useRef(new Map<string, PlayTask>());
+  const [testing, setTesting] = useState<string | null>(null);
 
   useEffect(() => {
     if (!category) return;
@@ -110,22 +104,6 @@ export function PracticeEditor() {
         : [...current, taskId],
     );
 
-  const openPreview = (task: PracticeTask) => {
-    setPreview(task);
-    const cached = previewCache.current.get(task.id);
-    setPreviewTask(cached ?? null);
-    if (cached) return;
-    void getPracticeTask(task.id)
-      .then((loaded) => {
-        previewCache.current.set(task.id, loaded);
-        setPreviewTask(loaded);
-      })
-      .catch(() => {
-        setPreview(null);
-        toast.error("No se pudo cargar la pregunta.");
-      });
-  };
-
   const save = async () => {
     setTried(true);
     if (problems.length > 0) return;
@@ -153,8 +131,30 @@ export function PracticeEditor() {
 
   const message = tried ? (problems[0] ?? saveError) : saveError;
 
+  const closeTester = () => {
+    const taskId = testing;
+    setTesting(null);
+    requestAnimationFrame(() =>
+      document
+        .getElementById(`practice-task-${taskId}`)
+        ?.scrollIntoView({ block: "center" }),
+    );
+  };
+
+  if (testing) {
+    return (
+      <PracticeTaskTester
+        tasks={pool}
+        startId={testing}
+        picked={picked}
+        onToggle={toggle}
+        onClose={closeTester}
+      />
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-10 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300">
       <input
         aria-label="Nombre de la práctica"
         placeholder="Nombre de la práctica"
@@ -191,65 +191,75 @@ export function PracticeEditor() {
       </FormSection>
 
       {category && (
-        <FormSection
-          title={`Preguntas${picked.length > 0 ? ` · ${picked.length}` : ""}`}
-        >
-          {poolLoading ? (
-            <RowsSkeleton rows={4} label="Cargando preguntas..." />
-          ) : pool.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Todavía no hay preguntas para esta categoría.
-            </p>
-          ) : (
-            <ul className="flex flex-col border-b">
-              {pool.map((task) => {
-                const active = picked.includes(task.id);
-                return (
-                  <li
-                    key={task.id}
-                    className={cn(
-                      "flex items-center gap-3 border-t px-2 py-2.5 transition-colors first:border-t-0",
-                      active && "bg-primary/5",
-                    )}
-                  >
-                    <button
-                      type="button"
-                      aria-pressed={active}
-                      onClick={() => toggle(task.id)}
-                      className="flex min-w-0 flex-1 items-center gap-3 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+        <div key={category} className={enter}>
+          <FormSection
+            title={`Preguntas${picked.length > 0 ? ` · ${picked.length}` : ""}`}
+          >
+            {poolLoading ? (
+              <TaskPickSkeleton />
+            ) : pool.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Todavía no hay preguntas para esta categoría.
+              </p>
+            ) : (
+              <ul className="flex flex-col border-b">
+                {pool.map((task, index) => {
+                  const active = picked.includes(task.id);
+                  return (
+                    <li
+                      key={task.id}
+                      id={`practice-task-${task.id}`}
+                      style={{
+                        animationDelay: `${Math.min(index, 12) * 30}ms`,
+                      }}
+                      className={cn(
+                        enter,
+                        "flex items-center gap-3 border-t px-2 py-2.5 transition-colors first:border-t-0",
+                        active && "bg-difficulty-easy/10",
+                      )}
                     >
-                      <span
-                        className={cn(
-                          "flex size-5 shrink-0 items-center justify-center border-2 transition-colors",
-                          active
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-border/30",
-                        )}
+                      <button
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => toggle(task.id)}
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
                       >
-                        {active ? (
-                          <CheckIcon className="size-3.5" />
-                        ) : (
-                          <PlusIcon className="size-3.5 text-muted-foreground" />
-                        )}
-                      </span>
-                      <span className="min-w-0 break-words">{task.title}</span>
-                    </button>
-                    <DifficultyTag difficulty={task.difficulty} />
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant="ghost"
-                      aria-label={`Ver ${task.title}`}
-                      onClick={() => openPreview(task)}
-                    >
-                      <EyeIcon />
-                    </Button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </FormSection>
+                        <span
+                          className={cn(
+                            "flex size-5 shrink-0 items-center justify-center border-2 transition-colors",
+                            active
+                              ? "border-difficulty-easy bg-difficulty-easy text-white"
+                              : "border-border/30",
+                          )}
+                        >
+                          {active ? (
+                            <CheckIcon className="size-3.5" />
+                          ) : (
+                            <PlusIcon className="size-3.5 text-muted-foreground" />
+                          )}
+                        </span>
+                        <span className="min-w-0 break-words">
+                          {task.title}
+                        </span>
+                      </button>
+                      <DifficultyTag difficulty={task.difficulty} />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        aria-label={`Probar ${task.title}`}
+                        onClick={() => setTesting(task.id)}
+                      >
+                        <PlayCircleIcon data-icon="inline-start" />
+                        Probar
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </FormSection>
+        </div>
       )}
 
       <FormSection title="Fechas">
@@ -320,51 +330,6 @@ export function PracticeEditor() {
           {saving ? "Creando…" : "Crear práctica"}
         </Button>
       </div>
-
-      <Dialog
-        open={preview !== null}
-        onOpenChange={(open) => {
-          if (!open) setPreview(null);
-        }}
-      >
-        <DialogContent className="flex max-h-[85dvh] flex-col sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="break-words">
-              {preview?.title ?? ""}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
-            {!previewTask ? (
-              <RowsSkeleton rows={5} label="Cargando la pregunta..." />
-            ) : (
-              <>
-                <TaskContentRenderer
-                  blocks={previewTask.bodyBlocks}
-                  className="gap-4"
-                />
-                {previewTask.challengeBlocks.length > 0 && (
-                  <TaskContentRenderer
-                    blocks={previewTask.challengeBlocks}
-                    className="gap-4"
-                  />
-                )}
-                {previewTask.answerType === "interactive" && (
-                  <InteractiveTryout config={previewTask.answerConfig} />
-                )}
-              </>
-            )}
-          </div>
-          <DialogFooter>
-            {preview && (
-              <Button type="button" onClick={() => toggle(preview.id)}>
-                {picked.includes(preview.id)
-                  ? "Quitar de la práctica"
-                  : "Agregar a la práctica"}
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

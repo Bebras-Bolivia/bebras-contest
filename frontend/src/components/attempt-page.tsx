@@ -10,7 +10,6 @@ import {
   type ReactNode,
 } from "react";
 import {
-  ArrowLeftIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   ClockIcon,
@@ -20,6 +19,7 @@ import {
 import { toast } from "sonner";
 
 import { TaskPlayContent } from "@/components/task-play-content";
+import { TaskCountry } from "@/components/task-country";
 import { ContestIntro } from "@/components/contest-intro";
 import { ContestFinish } from "@/components/contest-finish";
 import {
@@ -709,7 +709,7 @@ export function AttemptPage({
   const studentExit = (
     <div>
       <Button type="button" variant="outline" size="sm" onClick={leaveAttempt}>
-        <ArrowLeftIcon data-icon="inline-start" />
+        <ChevronLeftIcon data-icon="inline-start" />
         Salir
       </Button>
     </div>
@@ -719,7 +719,7 @@ export function AttemptPage({
     <div>
       <Button asChild variant="outline" size="sm">
         <a href="/">
-          <ArrowLeftIcon data-icon="inline-start" />
+          <ChevronLeftIcon data-icon="inline-start" />
           Ir al inicio
         </a>
       </Button>
@@ -908,7 +908,7 @@ export function AttemptPage({
     return (
       <ContestIntro
         attempt={attempt}
-        top={studentExit}
+        bottom={studentExit}
         notice={notice}
         canStart={attempt.state === "abierta"}
         starting={starting}
@@ -993,7 +993,8 @@ export function AttemptPage({
         }
         outOfTime={outOfTime}
         visible={visible}
-        top={finishTop ?? homeLink}
+        top={finishTop}
+        bottom={preview ? undefined : homeLink}
         onResultsDue={preview ? undefined : () => void load()}
       />
     );
@@ -1019,8 +1020,8 @@ export function AttemptPage({
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
       {previewNotice}
-      <div className="sticky top-2 z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-md border bg-background px-4 py-3 shadow-sm">
-        <div className="min-w-0">
+      <div className="sticky top-2 z-10 flex items-center justify-between gap-x-4 rounded-md border bg-background px-3 py-2 shadow-sm sm:px-4 sm:py-3">
+        <div className="min-w-0 max-sm:hidden">
           <p className="truncate text-sm font-semibold">
             {attempt.contestTitle}
           </p>
@@ -1028,7 +1029,7 @@ export function AttemptPage({
             {attempt.tasks.length} tarea(s)
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 max-sm:w-full max-sm:justify-between">
           <span
             className={cn(
               "inline-flex items-center gap-1.5 font-mono text-lg font-semibold",
@@ -1236,7 +1237,10 @@ function TaskSection({
         <span className="text-xs font-medium text-muted-foreground">
           Tarea {task.position}
         </span>
-        <h2 className="text-xl font-semibold">{task.title}</h2>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <h2 className="text-xl font-semibold">{task.title}</h2>
+          <TaskCountry country={task.country} />
+        </div>
       </div>
       <TaskPlayContent
         task={task}

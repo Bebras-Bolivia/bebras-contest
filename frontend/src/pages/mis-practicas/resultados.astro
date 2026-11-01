@@ -1,0 +1,17 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { PracticeResultsPage } from "../../components/practice-results";
+import { PracticeResultsSkeleton } from "../../components/page-skeletons";
+
+const title = "Resultados de la práctica";
+---
+
+<Layout title={title} backHref="/mis-practicas" requireAuth allowMaestro>
+  <main class="mx-auto flex w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+    <div class="flex w-full flex-col gap-6">
+      <PracticeResultsPage client:only="react">
+        <PracticeResultsSkeleton slot="fallback" />
+      </PracticeResultsPage>
+    </div>
+  </main>
+</Layout>

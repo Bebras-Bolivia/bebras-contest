@@ -1565,6 +1565,7 @@ export const ContestGroupScalarFieldEnum = {
   category: 'category',
   grade: 'grade',
   autoKey: 'autoKey',
+  schoolId: 'schoolId',
   accessCode: 'accessCode',
   recoveryCode: 'recoveryCode',
   firstUsedAt: 'firstUsedAt',

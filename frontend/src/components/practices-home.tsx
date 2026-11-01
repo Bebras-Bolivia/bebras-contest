@@ -1,7 +1,6 @@
 "use client";
 
-import { RowsSkeleton } from "@/components/page-skeletons";
-import { ListPageSkeleton } from "@/components/page-skeletons";
+import { PracticesSkeleton } from "@/components/page-skeletons";
 import { useEffect, useState } from "react";
 import {
   BarChart3Icon,
@@ -12,28 +11,21 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { cn } from "@/lib/utils";
 import {
   CONTEST_STATE_LABELS,
   formatContestWindow,
 } from "@/lib/contest-schema";
 import {
-  listPracticeResults,
   listPractices,
   removePractice,
-  type PracticeResults,
   type StoredPractice,
 } from "@/lib/practices-api";
+import { cn } from "@/lib/utils";
+import { enter } from "@/lib/surface";
 import { FieldHint } from "@/components/field-hint";
 import { categoryStyle } from "@/components/category-logo";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,8 +41,6 @@ export function PracticesHome() {
   const [practices, setPractices] = useState<StoredPractice[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<StoredPractice | null>(null);
-  const [viewing, setViewing] = useState<StoredPractice | null>(null);
-  const [results, setResults] = useState<PracticeResults | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -75,21 +65,6 @@ export function PracticesHome() {
     };
   }, []);
 
-  const openResults = (practice: StoredPractice) => {
-    setViewing(practice);
-    setResults(null);
-    void listPracticeResults(practice.id)
-      .then(setResults)
-      .catch((error: unknown) => {
-        setViewing(null);
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "No se pudieron cargar los resultados.",
-        );
-      });
-  };
-
   const confirmDelete = () => {
     if (!deleting) return;
     const target = deleting;
@@ -110,11 +85,11 @@ export function PracticesHome() {
   };
 
   if (loading) {
-    return <ListPageSkeleton label="Cargando prácticas..." />;
+    return <PracticesSkeleton />;
   }
 
   return (
-    <div className="flex w-full flex-col gap-8">
+    <div className="flex w-full flex-col gap-8 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300">
       <div className="flex flex-col gap-4 border-b pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex min-w-0 items-center gap-2">
           <h1 className="font-heading text-3xl font-semibold tracking-tight">
@@ -139,8 +114,12 @@ export function PracticesHome() {
         </p>
       ) : (
         <ul className="flex flex-col border-b">
-          {practices.map((practice) => (
-            <li key={practice.id} className="border-t first:border-t-0">
+          {practices.map((practice, index) => (
+            <li
+              key={practice.id}
+              style={{ animationDelay: `${Math.min(index, 10) * 40}ms` }}
+              className={cn(enter, "border-t first:border-t-0")}
+            >
               <div className="flex flex-col gap-3 py-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="flex min-w-0 flex-col gap-1.5">
                   <div className="flex flex-wrap items-center gap-2">
@@ -179,14 +158,13 @@ export function PracticesHome() {
 
                 <div className="grid w-full shrink-0 gap-2 lg:w-72 lg:grid-cols-2">
                   {practice.resultCount > 0 && (
-                    <Button
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                      onClick={() => openResults(practice)}
-                    >
-                      <BarChart3Icon data-icon="inline-start" />
-                      Resultados
+                    <Button asChild size="sm" variant="outline">
+                      <a
+                        href={`/mis-practicas/resultados?id=${encodeURIComponent(practice.id)}`}
+                      >
+                        <BarChart3Icon data-icon="inline-start" />
+                        Resultados
+                      </a>
                     </Button>
                   )}
                   <Button
@@ -204,77 +182,6 @@ export function PracticesHome() {
           ))}
         </ul>
       )}
-
-      <Dialog
-        open={viewing !== null}
-        onOpenChange={(open) => {
-          if (!open) setViewing(null);
-        }}
-      >
-        <DialogContent className="flex max-h-[85dvh] flex-col sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle className="break-words">
-              {viewing?.title ?? ""}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="min-h-0 overflow-auto">
-            {!results ? (
-              <RowsSkeleton rows={5} label="Cargando resultados..." />
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-muted-foreground">
-                    <th className="py-2 pr-4 font-normal">Estudiante</th>
-                    <th className="px-2 py-2 text-right font-normal">
-                      Puntaje
-                    </th>
-                    {results.tasks.map((task, index) => (
-                      <th
-                        key={task.id}
-                        title={task.title}
-                        className="w-8 px-1 py-2 text-center font-normal tabular-nums"
-                      >
-                        {index + 1}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {results.results.map((row) => (
-                    <tr key={row.id} className="border-t">
-                      <td className="py-2.5 pr-4">{row.name}</td>
-                      <td className="px-2 py-2.5 text-right font-semibold tabular-nums">
-                        {row.totalScore}
-                      </td>
-                      {results.tasks.map((task, index) => {
-                        const mark = row.marks[index] ?? "-";
-                        return (
-                          <td
-                            key={task.id}
-                            title={`${task.title}: ${mark === "C" ? "correcta" : mark === "X" ? "incorrecta" : "sin responder"}`}
-                            className="px-1 py-2.5 text-center"
-                          >
-                            <span
-                              className={cn(
-                                "mx-auto block size-3",
-                                mark === "C"
-                                  ? "bg-difficulty-easy"
-                                  : mark === "X"
-                                    ? "bg-destructive"
-                                    : "bg-muted",
-                              )}
-                            />
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <AlertDialog
         open={deleting !== null}

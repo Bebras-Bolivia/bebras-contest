@@ -81,9 +81,12 @@ test("explicit equivalence accepts swaps even when image files differ", () => {
 });
 
 test("empty, partial, colliding and unknown-item configurations are invalid", () => {
+  assert.equal(
+    isDragDropAnswerCorrect(items, alternatives, { b1: "position-2" }),
+    false,
+  );
   const invalidPlacements: Record<string, string>[] = [
     {},
-    { b1: "position-2" },
     { ...primary, b2: "position-2" },
     { ...primary, extra: "position-4" },
   ];

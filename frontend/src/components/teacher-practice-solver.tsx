@@ -12,6 +12,7 @@ import { toast } from "sonner";
 
 import { AnswerResult } from "@/components/answer-result";
 import { TaskPlayContent } from "@/components/task-play-content";
+import { TaskCountry } from "@/components/task-country";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -259,7 +260,10 @@ export function TeacherPracticeSolver() {
         key={task.taskId}
         className="flex flex-col gap-5 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300"
       >
-        <h1 className="text-xl font-semibold">{task.title}</h1>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <h1 className="text-xl font-semibold">{task.title}</h1>
+          <TaskCountry country={task.country} />
+        </div>
         <TaskPlayContent
           task={task}
           value={answer}

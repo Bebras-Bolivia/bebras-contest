@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { HelpCircleIcon } from "lucide-react";
 
 import { FieldLabel } from "@/components/ui/field";
 import {
@@ -24,12 +23,17 @@ export function FieldHint({ children }: { children: ReactNode }) {
               event.preventDefault();
               setOpen(true);
             }}
-            className="inline-flex size-4 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            data-state-open={open || undefined}
+            className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-xs font-bold text-foreground/70 transition-colors hover:bg-primary hover:text-primary-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring data-state-open:bg-primary data-state-open:text-primary-foreground"
           >
-            <HelpCircleIcon className="size-4" />
+            ?
           </button>
         </TooltipTrigger>
-        <TooltipContent className="max-w-80 px-4 py-3 text-sm leading-6 text-pretty">
+        <TooltipContent
+          data-hint
+          sideOffset={8}
+          className="block max-w-80 px-4 py-3 text-sm leading-6 text-pretty"
+        >
           {children}
         </TooltipContent>
       </Tooltip>

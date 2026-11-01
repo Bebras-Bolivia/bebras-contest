@@ -75,7 +75,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { GroupPageSkeleton } from "@/components/page-skeletons";
 import { Input } from "@/components/ui/input";
 
 type View = "estudiantes" | "resultados";
@@ -155,6 +155,7 @@ export function GroupPage() {
 
   const contestId = group?.contestId;
   const ownerId = group?.ownerId;
+  const schoolId = group?.schoolId ?? null;
   useEffect(() => {
     if (!contestId) return;
     let active = true;
@@ -169,6 +170,7 @@ export function GroupPage() {
               (item) =>
                 item.contestId === contestId &&
                 item.ownerId === ownerId &&
+                (item.schoolId ?? null) === schoolId &&
                 item.grade,
             )
             .sort((left, right) => order(left.grade) - order(right.grade)),
@@ -178,7 +180,7 @@ export function GroupPage() {
     return () => {
       active = false;
     };
-  }, [contestId, ownerId]);
+  }, [contestId, ownerId, schoolId]);
 
   const state = results?.contest.state;
   const live = Boolean(state && LIVE_STATES.includes(state));
@@ -209,7 +211,7 @@ export function GroupPage() {
   }
 
   if (!group || !results) {
-    return <GroupSkeleton />;
+    return <GroupPageSkeleton />;
   }
 
   const teams = results.teams;
@@ -1156,11 +1158,11 @@ function StudentsTab({
                         <span className="font-medium break-words">
                           {teamName(team)}
                         </span>
-                        <span className="text-sm text-muted-foreground">
-                          {gradeLabel(team.grade)}
+                        <span className="text-sm text-muted-foreground empty:hidden">
+                          {!group.grade && gradeLabel(team.grade)}
                           {progressLabel(team) && (
                             <>
-                              {" · "}
+                              {!group.grade && " · "}
                               <span
                                 className={cn(
                                   team.progress === "in_progress" &&
@@ -1542,15 +1544,16 @@ function ResultsTab({ results }: { results: GroupResults }) {
                 <span className="font-medium break-words">
                   {teamName(team)}
                 </span>
-                <span className="text-sm text-muted-foreground">
-                  {gradeLabel(team.grade)}
-                  {team.paper && " · en papel"}
-                  {team.rank !== null && (
-                    <>
-                      {" "}
-                      · Lugar {team.rank} en {team.category}
-                    </>
-                  )}
+                <span className="text-sm text-muted-foreground empty:hidden">
+                  {[
+                    results.group.grade ? null : gradeLabel(team.grade),
+                    team.paper ? "en papel" : null,
+                    team.rank !== null
+                      ? `Lugar ${team.rank} en ${team.category}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </span>
               </div>
               {showScores && team.answers ? (
@@ -1712,37 +1715,5 @@ function TaskStats({ tasks }: { tasks: GroupResultTask[] }) {
         })}
       </ol>
     </section>
-  );
-}
-
-/** La silueta de la pantalla del grupo: nombre, código, pestañas y lista. */
-function GroupSkeleton() {
-  return (
-    <div aria-busy className="flex w-full flex-col gap-6">
-      <span className="sr-only">Cargando grupo...</span>
-      <div className="flex flex-col gap-5 border-b pb-6 lg:flex-row lg:items-end lg:justify-between">
-        <div className="flex flex-col gap-2.5">
-          <Skeleton className="h-8 w-56 rounded-none" />
-          <Skeleton className="h-4 w-72 max-w-full rounded-none" />
-        </div>
-        <div className="flex flex-col gap-2 lg:items-end">
-          <Skeleton className="h-3 w-28 rounded-none" />
-          <Skeleton className="h-9 w-64 rounded-none" />
-        </div>
-      </div>
-      <div className="flex gap-6">
-        <Skeleton className="h-6 w-28 rounded-none" />
-        <Skeleton className="h-6 w-24 rounded-none" />
-      </div>
-      <div className="flex flex-col divide-y border-y">
-        {[0, 1, 2, 3].map((row) => (
-          <div key={row} className="flex items-center gap-4 py-3">
-            <Skeleton className="h-5 flex-1 rounded-none" />
-            <Skeleton className="h-5 w-24 rounded-none" />
-            <Skeleton className="h-5 w-20 rounded-none" />
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }

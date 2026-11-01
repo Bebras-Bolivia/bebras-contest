@@ -42,6 +42,7 @@ export type ContestGroupMinAggregateOutputType = {
   category: string | null
   grade: string | null
   autoKey: string | null
+  schoolId: string | null
   accessCode: string | null
   recoveryCode: string | null
   firstUsedAt: Date | null
@@ -58,6 +59,7 @@ export type ContestGroupMaxAggregateOutputType = {
   category: string | null
   grade: string | null
   autoKey: string | null
+  schoolId: string | null
   accessCode: string | null
   recoveryCode: string | null
   firstUsedAt: Date | null
@@ -74,6 +76,7 @@ export type ContestGroupCountAggregateOutputType = {
   category: number
   grade: number
   autoKey: number
+  schoolId: number
   accessCode: number
   recoveryCode: number
   firstUsedAt: number
@@ -100,6 +103,7 @@ export type ContestGroupMinAggregateInputType = {
   category?: true
   grade?: true
   autoKey?: true
+  schoolId?: true
   accessCode?: true
   recoveryCode?: true
   firstUsedAt?: true
@@ -116,6 +120,7 @@ export type ContestGroupMaxAggregateInputType = {
   category?: true
   grade?: true
   autoKey?: true
+  schoolId?: true
   accessCode?: true
   recoveryCode?: true
   firstUsedAt?: true
@@ -132,6 +137,7 @@ export type ContestGroupCountAggregateInputType = {
   category?: true
   grade?: true
   autoKey?: true
+  schoolId?: true
   accessCode?: true
   recoveryCode?: true
   firstUsedAt?: true
@@ -235,6 +241,7 @@ export type ContestGroupGroupByOutputType = {
   category: string | null
   grade: string | null
   autoKey: string | null
+  schoolId: string | null
   accessCode: string
   recoveryCode: string
   firstUsedAt: Date | null
@@ -274,6 +281,7 @@ export type ContestGroupWhereInput = {
   category?: Prisma.StringNullableFilter<"ContestGroup"> | string | null
   grade?: Prisma.StringNullableFilter<"ContestGroup"> | string | null
   autoKey?: Prisma.StringNullableFilter<"ContestGroup"> | string | null
+  schoolId?: Prisma.StringNullableFilter<"ContestGroup"> | string | null
   accessCode?: Prisma.StringFilter<"ContestGroup"> | string
   recoveryCode?: Prisma.StringFilter<"ContestGroup"> | string
   firstUsedAt?: Prisma.DateTimeNullableFilter<"ContestGroup"> | Date | string | null
@@ -282,6 +290,7 @@ export type ContestGroupWhereInput = {
   updatedAt?: Prisma.DateTimeFilter<"ContestGroup"> | Date | string
   contest?: Prisma.XOR<Prisma.ContestScalarRelationFilter, Prisma.ContestWhereInput>
   createdBy?: Prisma.XOR<Prisma.UserNullableScalarRelationFilter, Prisma.UserWhereInput> | null
+  school?: Prisma.XOR<Prisma.TeacherSchoolNullableScalarRelationFilter, Prisma.TeacherSchoolWhereInput> | null
   teams?: Prisma.TeamListRelationFilter
 }
 
@@ -293,6 +302,7 @@ export type ContestGroupOrderByWithRelationInput = {
   category?: Prisma.SortOrderInput | Prisma.SortOrder
   grade?: Prisma.SortOrderInput | Prisma.SortOrder
   autoKey?: Prisma.SortOrderInput | Prisma.SortOrder
+  schoolId?: Prisma.SortOrderInput | Prisma.SortOrder
   accessCode?: Prisma.SortOrder
   recoveryCode?: Prisma.SortOrder
   firstUsedAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -301,6 +311,7 @@ export type ContestGroupOrderByWithRelationInput = {
   updatedAt?: Prisma.SortOrder
   contest?: Prisma.ContestOrderByWithRelationInput
   createdBy?: Prisma.UserOrderByWithRelationInput
+  school?: Prisma.TeacherSchoolOrderByWithRelationInput
   teams?: Prisma.TeamOrderByRelationAggregateInput
 }
 
@@ -316,6 +327,7 @@ export type ContestGroupWhereUniqueInput = Prisma.AtLeast<{
   name?: Prisma.StringFilter<"ContestGroup"> | string
   category?: Prisma.StringNullableFilter<"ContestGroup"> | string | null
   grade?: Prisma.StringNullableFilter<"ContestGroup"> | string | null
+  schoolId?: Prisma.StringNullableFilter<"ContestGroup"> | string | null
   recoveryCode?: Prisma.StringFilter<"ContestGroup"> | string
   firstUsedAt?: Prisma.DateTimeNullableFilter<"ContestGroup"> | Date | string | null
   expiresAt?: Prisma.DateTimeNullableFilter<"ContestGroup"> | Date | string | null
@@ -323,6 +335,7 @@ export type ContestGroupWhereUniqueInput = Prisma.AtLeast<{
   updatedAt?: Prisma.DateTimeFilter<"ContestGroup"> | Date | string
   contest?: Prisma.XOR<Prisma.ContestScalarRelationFilter, Prisma.ContestWhereInput>
   createdBy?: Prisma.XOR<Prisma.UserNullableScalarRelationFilter, Prisma.UserWhereInput> | null
+  school?: Prisma.XOR<Prisma.TeacherSchoolNullableScalarRelationFilter, Prisma.TeacherSchoolWhereInput> | null
   teams?: Prisma.TeamListRelationFilter
 }, "id" | "autoKey" | "accessCode">
 
@@ -334,6 +347,7 @@ export type ContestGroupOrderByWithAggregationInput = {
   category?: Prisma.SortOrderInput | Prisma.SortOrder
   grade?: Prisma.SortOrderInput | Prisma.SortOrder
   autoKey?: Prisma.SortOrderInput | Prisma.SortOrder
+  schoolId?: Prisma.SortOrderInput | Prisma.SortOrder
   accessCode?: Prisma.SortOrder
   recoveryCode?: Prisma.SortOrder
   firstUsedAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -358,6 +372,7 @@ export type ContestGroupScalarWhereWithAggregatesInput = {
   category?: Prisma.StringNullableWithAggregatesFilter<"ContestGroup"> | string | null
   grade?: Prisma.StringNullableWithAggregatesFilter<"ContestGroup"> | string | null
   autoKey?: Prisma.StringNullableWithAggregatesFilter<"ContestGroup"> | string | null
+  schoolId?: Prisma.StringNullableWithAggregatesFilter<"ContestGroup"> | string | null
   accessCode?: Prisma.StringWithAggregatesFilter<"ContestGroup"> | string
   recoveryCode?: Prisma.StringWithAggregatesFilter<"ContestGroup"> | string
   firstUsedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"ContestGroup"> | Date | string | null
@@ -380,6 +395,7 @@ export type ContestGroupCreateInput = {
   updatedAt?: Date | string
   contest: Prisma.ContestCreateNestedOneWithoutGroupsInput
   createdBy?: Prisma.UserCreateNestedOneWithoutGroupsInput
+  school?: Prisma.TeacherSchoolCreateNestedOneWithoutGroupsInput
   teams?: Prisma.TeamCreateNestedManyWithoutGroupInput
 }
 
@@ -391,6 +407,7 @@ export type ContestGroupUncheckedCreateInput = {
   category?: string | null
   grade?: string | null
   autoKey?: string | null
+  schoolId?: string | null
   accessCode: string
   recoveryCode: string
   firstUsedAt?: Date | string | null
@@ -414,6 +431,7 @@ export type ContestGroupUpdateInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   contest?: Prisma.ContestUpdateOneRequiredWithoutGroupsNestedInput
   createdBy?: Prisma.UserUpdateOneWithoutGroupsNestedInput
+  school?: Prisma.TeacherSchoolUpdateOneWithoutGroupsNestedInput
   teams?: Prisma.TeamUpdateManyWithoutGroupNestedInput
 }
 
@@ -425,6 +443,7 @@ export type ContestGroupUncheckedUpdateInput = {
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   autoKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  schoolId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
   recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
   firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -442,6 +461,7 @@ export type ContestGroupCreateManyInput = {
   category?: string | null
   grade?: string | null
   autoKey?: string | null
+  schoolId?: string | null
   accessCode: string
   recoveryCode: string
   firstUsedAt?: Date | string | null
@@ -472,6 +492,7 @@ export type ContestGroupUncheckedUpdateManyInput = {
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   autoKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  schoolId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
   recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
   firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -498,6 +519,7 @@ export type ContestGroupCountOrderByAggregateInput = {
   category?: Prisma.SortOrder
   grade?: Prisma.SortOrder
   autoKey?: Prisma.SortOrder
+  schoolId?: Prisma.SortOrder
   accessCode?: Prisma.SortOrder
   recoveryCode?: Prisma.SortOrder
   firstUsedAt?: Prisma.SortOrder
@@ -518,6 +540,7 @@ export type ContestGroupMaxOrderByAggregateInput = {
   category?: Prisma.SortOrder
   grade?: Prisma.SortOrder
   autoKey?: Prisma.SortOrder
+  schoolId?: Prisma.SortOrder
   accessCode?: Prisma.SortOrder
   recoveryCode?: Prisma.SortOrder
   firstUsedAt?: Prisma.SortOrder
@@ -534,6 +557,7 @@ export type ContestGroupMinOrderByAggregateInput = {
   category?: Prisma.SortOrder
   grade?: Prisma.SortOrder
   autoKey?: Prisma.SortOrder
+  schoolId?: Prisma.SortOrder
   accessCode?: Prisma.SortOrder
   recoveryCode?: Prisma.SortOrder
   firstUsedAt?: Prisma.SortOrder
@@ -590,6 +614,48 @@ export type ContestGroupUncheckedUpdateManyWithoutCreatedByNestedInput = {
   connect?: Prisma.ContestGroupWhereUniqueInput | Prisma.ContestGroupWhereUniqueInput[]
   update?: Prisma.ContestGroupUpdateWithWhereUniqueWithoutCreatedByInput | Prisma.ContestGroupUpdateWithWhereUniqueWithoutCreatedByInput[]
   updateMany?: Prisma.ContestGroupUpdateManyWithWhereWithoutCreatedByInput | Prisma.ContestGroupUpdateManyWithWhereWithoutCreatedByInput[]
+  deleteMany?: Prisma.ContestGroupScalarWhereInput | Prisma.ContestGroupScalarWhereInput[]
+}
+
+export type ContestGroupCreateNestedManyWithoutSchoolInput = {
+  create?: Prisma.XOR<Prisma.ContestGroupCreateWithoutSchoolInput, Prisma.ContestGroupUncheckedCreateWithoutSchoolInput> | Prisma.ContestGroupCreateWithoutSchoolInput[] | Prisma.ContestGroupUncheckedCreateWithoutSchoolInput[]
+  connectOrCreate?: Prisma.ContestGroupCreateOrConnectWithoutSchoolInput | Prisma.ContestGroupCreateOrConnectWithoutSchoolInput[]
+  createMany?: Prisma.ContestGroupCreateManySchoolInputEnvelope
+  connect?: Prisma.ContestGroupWhereUniqueInput | Prisma.ContestGroupWhereUniqueInput[]
+}
+
+export type ContestGroupUncheckedCreateNestedManyWithoutSchoolInput = {
+  create?: Prisma.XOR<Prisma.ContestGroupCreateWithoutSchoolInput, Prisma.ContestGroupUncheckedCreateWithoutSchoolInput> | Prisma.ContestGroupCreateWithoutSchoolInput[] | Prisma.ContestGroupUncheckedCreateWithoutSchoolInput[]
+  connectOrCreate?: Prisma.ContestGroupCreateOrConnectWithoutSchoolInput | Prisma.ContestGroupCreateOrConnectWithoutSchoolInput[]
+  createMany?: Prisma.ContestGroupCreateManySchoolInputEnvelope
+  connect?: Prisma.ContestGroupWhereUniqueInput | Prisma.ContestGroupWhereUniqueInput[]
+}
+
+export type ContestGroupUpdateManyWithoutSchoolNestedInput = {
+  create?: Prisma.XOR<Prisma.ContestGroupCreateWithoutSchoolInput, Prisma.ContestGroupUncheckedCreateWithoutSchoolInput> | Prisma.ContestGroupCreateWithoutSchoolInput[] | Prisma.ContestGroupUncheckedCreateWithoutSchoolInput[]
+  connectOrCreate?: Prisma.ContestGroupCreateOrConnectWithoutSchoolInput | Prisma.ContestGroupCreateOrConnectWithoutSchoolInput[]
+  upsert?: Prisma.ContestGroupUpsertWithWhereUniqueWithoutSchoolInput | Prisma.ContestGroupUpsertWithWhereUniqueWithoutSchoolInput[]
+  createMany?: Prisma.ContestGroupCreateManySchoolInputEnvelope
+  set?: Prisma.ContestGroupWhereUniqueInput | Prisma.ContestGroupWhereUniqueInput[]
+  disconnect?: Prisma.ContestGroupWhereUniqueInput | Prisma.ContestGroupWhereUniqueInput[]
+  delete?: Prisma.ContestGroupWhereUniqueInput | Prisma.ContestGroupWhereUniqueInput[]
+  connect?: Prisma.ContestGroupWhereUniqueInput | Prisma.ContestGroupWhereUniqueInput[]
+  update?: Prisma.ContestGroupUpdateWithWhereUniqueWithoutSchoolInput | Prisma.ContestGroupUpdateWithWhereUniqueWithoutSchoolInput[]
+  updateMany?: Prisma.ContestGroupUpdateManyWithWhereWithoutSchoolInput | Prisma.ContestGroupUpdateManyWithWhereWithoutSchoolInput[]
+  deleteMany?: Prisma.ContestGroupScalarWhereInput | Prisma.ContestGroupScalarWhereInput[]
+}
+
+export type ContestGroupUncheckedUpdateManyWithoutSchoolNestedInput = {
+  create?: Prisma.XOR<Prisma.ContestGroupCreateWithoutSchoolInput, Prisma.ContestGroupUncheckedCreateWithoutSchoolInput> | Prisma.ContestGroupCreateWithoutSchoolInput[] | Prisma.ContestGroupUncheckedCreateWithoutSchoolInput[]
+  connectOrCreate?: Prisma.ContestGroupCreateOrConnectWithoutSchoolInput | Prisma.ContestGroupCreateOrConnectWithoutSchoolInput[]
+  upsert?: Prisma.ContestGroupUpsertWithWhereUniqueWithoutSchoolInput | Prisma.ContestGroupUpsertWithWhereUniqueWithoutSchoolInput[]
+  createMany?: Prisma.ContestGroupCreateManySchoolInputEnvelope
+  set?: Prisma.ContestGroupWhereUniqueInput | Prisma.ContestGroupWhereUniqueInput[]
+  disconnect?: Prisma.ContestGroupWhereUniqueInput | Prisma.ContestGroupWhereUniqueInput[]
+  delete?: Prisma.ContestGroupWhereUniqueInput | Prisma.ContestGroupWhereUniqueInput[]
+  connect?: Prisma.ContestGroupWhereUniqueInput | Prisma.ContestGroupWhereUniqueInput[]
+  update?: Prisma.ContestGroupUpdateWithWhereUniqueWithoutSchoolInput | Prisma.ContestGroupUpdateWithWhereUniqueWithoutSchoolInput[]
+  updateMany?: Prisma.ContestGroupUpdateManyWithWhereWithoutSchoolInput | Prisma.ContestGroupUpdateManyWithWhereWithoutSchoolInput[]
   deleteMany?: Prisma.ContestGroupScalarWhereInput | Prisma.ContestGroupScalarWhereInput[]
 }
 
@@ -662,6 +728,7 @@ export type ContestGroupCreateWithoutCreatedByInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   contest: Prisma.ContestCreateNestedOneWithoutGroupsInput
+  school?: Prisma.TeacherSchoolCreateNestedOneWithoutGroupsInput
   teams?: Prisma.TeamCreateNestedManyWithoutGroupInput
 }
 
@@ -672,6 +739,7 @@ export type ContestGroupUncheckedCreateWithoutCreatedByInput = {
   category?: string | null
   grade?: string | null
   autoKey?: string | null
+  schoolId?: string | null
   accessCode: string
   recoveryCode: string
   firstUsedAt?: Date | string | null
@@ -717,12 +785,72 @@ export type ContestGroupScalarWhereInput = {
   category?: Prisma.StringNullableFilter<"ContestGroup"> | string | null
   grade?: Prisma.StringNullableFilter<"ContestGroup"> | string | null
   autoKey?: Prisma.StringNullableFilter<"ContestGroup"> | string | null
+  schoolId?: Prisma.StringNullableFilter<"ContestGroup"> | string | null
   accessCode?: Prisma.StringFilter<"ContestGroup"> | string
   recoveryCode?: Prisma.StringFilter<"ContestGroup"> | string
   firstUsedAt?: Prisma.DateTimeNullableFilter<"ContestGroup"> | Date | string | null
   expiresAt?: Prisma.DateTimeNullableFilter<"ContestGroup"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"ContestGroup"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"ContestGroup"> | Date | string
+}
+
+export type ContestGroupCreateWithoutSchoolInput = {
+  id?: string
+  name: string
+  category?: string | null
+  grade?: string | null
+  autoKey?: string | null
+  accessCode: string
+  recoveryCode: string
+  firstUsedAt?: Date | string | null
+  expiresAt?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  contest: Prisma.ContestCreateNestedOneWithoutGroupsInput
+  createdBy?: Prisma.UserCreateNestedOneWithoutGroupsInput
+  teams?: Prisma.TeamCreateNestedManyWithoutGroupInput
+}
+
+export type ContestGroupUncheckedCreateWithoutSchoolInput = {
+  id?: string
+  contestId: string
+  createdById?: number | null
+  name: string
+  category?: string | null
+  grade?: string | null
+  autoKey?: string | null
+  accessCode: string
+  recoveryCode: string
+  firstUsedAt?: Date | string | null
+  expiresAt?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  teams?: Prisma.TeamUncheckedCreateNestedManyWithoutGroupInput
+}
+
+export type ContestGroupCreateOrConnectWithoutSchoolInput = {
+  where: Prisma.ContestGroupWhereUniqueInput
+  create: Prisma.XOR<Prisma.ContestGroupCreateWithoutSchoolInput, Prisma.ContestGroupUncheckedCreateWithoutSchoolInput>
+}
+
+export type ContestGroupCreateManySchoolInputEnvelope = {
+  data: Prisma.ContestGroupCreateManySchoolInput | Prisma.ContestGroupCreateManySchoolInput[]
+}
+
+export type ContestGroupUpsertWithWhereUniqueWithoutSchoolInput = {
+  where: Prisma.ContestGroupWhereUniqueInput
+  update: Prisma.XOR<Prisma.ContestGroupUpdateWithoutSchoolInput, Prisma.ContestGroupUncheckedUpdateWithoutSchoolInput>
+  create: Prisma.XOR<Prisma.ContestGroupCreateWithoutSchoolInput, Prisma.ContestGroupUncheckedCreateWithoutSchoolInput>
+}
+
+export type ContestGroupUpdateWithWhereUniqueWithoutSchoolInput = {
+  where: Prisma.ContestGroupWhereUniqueInput
+  data: Prisma.XOR<Prisma.ContestGroupUpdateWithoutSchoolInput, Prisma.ContestGroupUncheckedUpdateWithoutSchoolInput>
+}
+
+export type ContestGroupUpdateManyWithWhereWithoutSchoolInput = {
+  where: Prisma.ContestGroupScalarWhereInput
+  data: Prisma.XOR<Prisma.ContestGroupUpdateManyMutationInput, Prisma.ContestGroupUncheckedUpdateManyWithoutSchoolInput>
 }
 
 export type ContestGroupCreateWithoutContestInput = {
@@ -738,6 +866,7 @@ export type ContestGroupCreateWithoutContestInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   createdBy?: Prisma.UserCreateNestedOneWithoutGroupsInput
+  school?: Prisma.TeacherSchoolCreateNestedOneWithoutGroupsInput
   teams?: Prisma.TeamCreateNestedManyWithoutGroupInput
 }
 
@@ -748,6 +877,7 @@ export type ContestGroupUncheckedCreateWithoutContestInput = {
   category?: string | null
   grade?: string | null
   autoKey?: string | null
+  schoolId?: string | null
   accessCode: string
   recoveryCode: string
   firstUsedAt?: Date | string | null
@@ -796,6 +926,7 @@ export type ContestGroupCreateWithoutTeamsInput = {
   updatedAt?: Date | string
   contest: Prisma.ContestCreateNestedOneWithoutGroupsInput
   createdBy?: Prisma.UserCreateNestedOneWithoutGroupsInput
+  school?: Prisma.TeacherSchoolCreateNestedOneWithoutGroupsInput
 }
 
 export type ContestGroupUncheckedCreateWithoutTeamsInput = {
@@ -806,6 +937,7 @@ export type ContestGroupUncheckedCreateWithoutTeamsInput = {
   category?: string | null
   grade?: string | null
   autoKey?: string | null
+  schoolId?: string | null
   accessCode: string
   recoveryCode: string
   firstUsedAt?: Date | string | null
@@ -844,6 +976,7 @@ export type ContestGroupUpdateWithoutTeamsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   contest?: Prisma.ContestUpdateOneRequiredWithoutGroupsNestedInput
   createdBy?: Prisma.UserUpdateOneWithoutGroupsNestedInput
+  school?: Prisma.TeacherSchoolUpdateOneWithoutGroupsNestedInput
 }
 
 export type ContestGroupUncheckedUpdateWithoutTeamsInput = {
@@ -854,6 +987,7 @@ export type ContestGroupUncheckedUpdateWithoutTeamsInput = {
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   autoKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  schoolId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
   recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
   firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -869,6 +1003,7 @@ export type ContestGroupCreateManyCreatedByInput = {
   category?: string | null
   grade?: string | null
   autoKey?: string | null
+  schoolId?: string | null
   accessCode: string
   recoveryCode: string
   firstUsedAt?: Date | string | null
@@ -890,12 +1025,80 @@ export type ContestGroupUpdateWithoutCreatedByInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   contest?: Prisma.ContestUpdateOneRequiredWithoutGroupsNestedInput
+  school?: Prisma.TeacherSchoolUpdateOneWithoutGroupsNestedInput
   teams?: Prisma.TeamUpdateManyWithoutGroupNestedInput
 }
 
 export type ContestGroupUncheckedUpdateWithoutCreatedByInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   contestId?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  autoKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  schoolId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  accessCode?: Prisma.StringFieldUpdateOperationsInput | string
+  recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
+  firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  teams?: Prisma.TeamUncheckedUpdateManyWithoutGroupNestedInput
+}
+
+export type ContestGroupUncheckedUpdateManyWithoutCreatedByInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  contestId?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  autoKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  schoolId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  accessCode?: Prisma.StringFieldUpdateOperationsInput | string
+  recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
+  firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
+export type ContestGroupCreateManySchoolInput = {
+  id?: string
+  contestId: string
+  createdById?: number | null
+  name: string
+  category?: string | null
+  grade?: string | null
+  autoKey?: string | null
+  accessCode: string
+  recoveryCode: string
+  firstUsedAt?: Date | string | null
+  expiresAt?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+}
+
+export type ContestGroupUpdateWithoutSchoolInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  autoKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  accessCode?: Prisma.StringFieldUpdateOperationsInput | string
+  recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
+  firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  contest?: Prisma.ContestUpdateOneRequiredWithoutGroupsNestedInput
+  createdBy?: Prisma.UserUpdateOneWithoutGroupsNestedInput
+  teams?: Prisma.TeamUpdateManyWithoutGroupNestedInput
+}
+
+export type ContestGroupUncheckedUpdateWithoutSchoolInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  contestId?: Prisma.StringFieldUpdateOperationsInput | string
+  createdById?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -909,9 +1112,10 @@ export type ContestGroupUncheckedUpdateWithoutCreatedByInput = {
   teams?: Prisma.TeamUncheckedUpdateManyWithoutGroupNestedInput
 }
 
-export type ContestGroupUncheckedUpdateManyWithoutCreatedByInput = {
+export type ContestGroupUncheckedUpdateManyWithoutSchoolInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   contestId?: Prisma.StringFieldUpdateOperationsInput | string
+  createdById?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -931,6 +1135,7 @@ export type ContestGroupCreateManyContestInput = {
   category?: string | null
   grade?: string | null
   autoKey?: string | null
+  schoolId?: string | null
   accessCode: string
   recoveryCode: string
   firstUsedAt?: Date | string | null
@@ -952,6 +1157,7 @@ export type ContestGroupUpdateWithoutContestInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdBy?: Prisma.UserUpdateOneWithoutGroupsNestedInput
+  school?: Prisma.TeacherSchoolUpdateOneWithoutGroupsNestedInput
   teams?: Prisma.TeamUpdateManyWithoutGroupNestedInput
 }
 
@@ -962,6 +1168,7 @@ export type ContestGroupUncheckedUpdateWithoutContestInput = {
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   autoKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  schoolId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
   recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
   firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -978,6 +1185,7 @@ export type ContestGroupUncheckedUpdateManyWithoutContestInput = {
   category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   grade?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   autoKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  schoolId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   accessCode?: Prisma.StringFieldUpdateOperationsInput | string
   recoveryCode?: Prisma.StringFieldUpdateOperationsInput | string
   firstUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1025,6 +1233,7 @@ export type ContestGroupSelect<ExtArgs extends runtime.Types.Extensions.Internal
   category?: boolean
   grade?: boolean
   autoKey?: boolean
+  schoolId?: boolean
   accessCode?: boolean
   recoveryCode?: boolean
   firstUsedAt?: boolean
@@ -1033,6 +1242,7 @@ export type ContestGroupSelect<ExtArgs extends runtime.Types.Extensions.Internal
   updatedAt?: boolean
   contest?: boolean | Prisma.ContestDefaultArgs<ExtArgs>
   createdBy?: boolean | Prisma.ContestGroup$createdByArgs<ExtArgs>
+  school?: boolean | Prisma.ContestGroup$schoolArgs<ExtArgs>
   teams?: boolean | Prisma.ContestGroup$teamsArgs<ExtArgs>
   _count?: boolean | Prisma.ContestGroupCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["contestGroup"]>
@@ -1045,6 +1255,7 @@ export type ContestGroupSelectCreateManyAndReturn<ExtArgs extends runtime.Types.
   category?: boolean
   grade?: boolean
   autoKey?: boolean
+  schoolId?: boolean
   accessCode?: boolean
   recoveryCode?: boolean
   firstUsedAt?: boolean
@@ -1053,6 +1264,7 @@ export type ContestGroupSelectCreateManyAndReturn<ExtArgs extends runtime.Types.
   updatedAt?: boolean
   contest?: boolean | Prisma.ContestDefaultArgs<ExtArgs>
   createdBy?: boolean | Prisma.ContestGroup$createdByArgs<ExtArgs>
+  school?: boolean | Prisma.ContestGroup$schoolArgs<ExtArgs>
 }, ExtArgs["result"]["contestGroup"]>
 
 export type ContestGroupSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -1063,6 +1275,7 @@ export type ContestGroupSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.
   category?: boolean
   grade?: boolean
   autoKey?: boolean
+  schoolId?: boolean
   accessCode?: boolean
   recoveryCode?: boolean
   firstUsedAt?: boolean
@@ -1071,6 +1284,7 @@ export type ContestGroupSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.
   updatedAt?: boolean
   contest?: boolean | Prisma.ContestDefaultArgs<ExtArgs>
   createdBy?: boolean | Prisma.ContestGroup$createdByArgs<ExtArgs>
+  school?: boolean | Prisma.ContestGroup$schoolArgs<ExtArgs>
 }, ExtArgs["result"]["contestGroup"]>
 
 export type ContestGroupSelectScalar = {
@@ -1081,6 +1295,7 @@ export type ContestGroupSelectScalar = {
   category?: boolean
   grade?: boolean
   autoKey?: boolean
+  schoolId?: boolean
   accessCode?: boolean
   recoveryCode?: boolean
   firstUsedAt?: boolean
@@ -1089,20 +1304,23 @@ export type ContestGroupSelectScalar = {
   updatedAt?: boolean
 }
 
-export type ContestGroupOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "contestId" | "createdById" | "name" | "category" | "grade" | "autoKey" | "accessCode" | "recoveryCode" | "firstUsedAt" | "expiresAt" | "createdAt" | "updatedAt", ExtArgs["result"]["contestGroup"]>
+export type ContestGroupOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "contestId" | "createdById" | "name" | "category" | "grade" | "autoKey" | "schoolId" | "accessCode" | "recoveryCode" | "firstUsedAt" | "expiresAt" | "createdAt" | "updatedAt", ExtArgs["result"]["contestGroup"]>
 export type ContestGroupInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   contest?: boolean | Prisma.ContestDefaultArgs<ExtArgs>
   createdBy?: boolean | Prisma.ContestGroup$createdByArgs<ExtArgs>
+  school?: boolean | Prisma.ContestGroup$schoolArgs<ExtArgs>
   teams?: boolean | Prisma.ContestGroup$teamsArgs<ExtArgs>
   _count?: boolean | Prisma.ContestGroupCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type ContestGroupIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   contest?: boolean | Prisma.ContestDefaultArgs<ExtArgs>
   createdBy?: boolean | Prisma.ContestGroup$createdByArgs<ExtArgs>
+  school?: boolean | Prisma.ContestGroup$schoolArgs<ExtArgs>
 }
 export type ContestGroupIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   contest?: boolean | Prisma.ContestDefaultArgs<ExtArgs>
   createdBy?: boolean | Prisma.ContestGroup$createdByArgs<ExtArgs>
+  school?: boolean | Prisma.ContestGroup$schoolArgs<ExtArgs>
 }
 
 export type $ContestGroupPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1110,6 +1328,7 @@ export type $ContestGroupPayload<ExtArgs extends runtime.Types.Extensions.Intern
   objects: {
     contest: Prisma.$ContestPayload<ExtArgs>
     createdBy: Prisma.$UserPayload<ExtArgs> | null
+    school: Prisma.$TeacherSchoolPayload<ExtArgs> | null
     teams: Prisma.$TeamPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
@@ -1120,6 +1339,7 @@ export type $ContestGroupPayload<ExtArgs extends runtime.Types.Extensions.Intern
     category: string | null
     grade: string | null
     autoKey: string | null
+    schoolId: string | null
     accessCode: string
     recoveryCode: string
     firstUsedAt: Date | null
@@ -1522,6 +1742,7 @@ export interface Prisma__ContestGroupClient<T, Null = never, ExtArgs extends run
   readonly [Symbol.toStringTag]: "PrismaPromise"
   contest<T extends Prisma.ContestDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ContestDefaultArgs<ExtArgs>>): Prisma.Prisma__ContestClient<runtime.Types.Result.GetResult<Prisma.$ContestPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   createdBy<T extends Prisma.ContestGroup$createdByArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ContestGroup$createdByArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+  school<T extends Prisma.ContestGroup$schoolArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ContestGroup$schoolArgs<ExtArgs>>): Prisma.Prisma__TeacherSchoolClient<runtime.Types.Result.GetResult<Prisma.$TeacherSchoolPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   teams<T extends Prisma.ContestGroup$teamsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ContestGroup$teamsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TeamPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
@@ -1559,6 +1780,7 @@ export interface ContestGroupFieldRefs {
   readonly category: Prisma.FieldRef<"ContestGroup", 'String'>
   readonly grade: Prisma.FieldRef<"ContestGroup", 'String'>
   readonly autoKey: Prisma.FieldRef<"ContestGroup", 'String'>
+  readonly schoolId: Prisma.FieldRef<"ContestGroup", 'String'>
   readonly accessCode: Prisma.FieldRef<"ContestGroup", 'String'>
   readonly recoveryCode: Prisma.FieldRef<"ContestGroup", 'String'>
   readonly firstUsedAt: Prisma.FieldRef<"ContestGroup", 'DateTime'>
@@ -1980,6 +2202,25 @@ export type ContestGroup$createdByArgs<ExtArgs extends runtime.Types.Extensions.
    */
   include?: Prisma.UserInclude<ExtArgs> | null
   where?: Prisma.UserWhereInput
+}
+
+/**
+ * ContestGroup.school
+ */
+export type ContestGroup$schoolArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the TeacherSchool
+   */
+  select?: Prisma.TeacherSchoolSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the TeacherSchool
+   */
+  omit?: Prisma.TeacherSchoolOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TeacherSchoolInclude<ExtArgs> | null
+  where?: Prisma.TeacherSchoolWhereInput
 }
 
 /**

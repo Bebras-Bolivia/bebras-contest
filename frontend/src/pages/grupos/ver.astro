@@ -1,6 +1,7 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import { GroupPage } from "../../components/group-page";
+import { GroupPageSkeleton } from "../../components/page-skeletons";
 
 const title = "Grupo";
 ---
@@ -13,6 +14,8 @@ const title = "Grupo";
   allowMaestro
 >
   <main class="mx-auto flex w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-    <GroupPage client:only="react" />
+    <GroupPage client:only="react">
+      <GroupPageSkeleton slot="fallback" />
+    </GroupPage>
   </main>
 </Layout>
