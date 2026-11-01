@@ -400,8 +400,16 @@ function ContestCardsSkeleton({ count }: { count: number }) {
             </div>
             <Skeleton className="h-12 w-24 shrink-0 rounded-none" />
           </div>
-          <div className="flex gap-1.5">
-            <Skeleton className="h-6 w-36 rounded-none" />
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {Array.from({ length: 6 }, (_, tile) => (
+              <div
+                key={tile}
+                className="flex items-center gap-2.5 border-2 border-border/10 px-2.5 py-2"
+              >
+                <Skeleton className="size-10 shrink-0 rounded-none" />
+                <Skeleton className="h-4 w-16 rounded-none" />
+              </div>
+            ))}
           </div>
           <div className="flex flex-col gap-2">
             <Skeleton className="h-4 w-2/3 rounded-none" />

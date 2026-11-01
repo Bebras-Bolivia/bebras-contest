@@ -74,20 +74,40 @@ function RankingSkeleton() {
         <Skeleton className="h-7 w-36 rounded-none" />
         <Skeleton className="h-4 w-56 rounded-none" />
       </div>
-      <div className="flex gap-1.5">
-        {[16, 12, 18, 14].map((width, index) => (
-          <Skeleton
+      <div className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap">
+        {[24, 20, 14, 22, 24, 18].map((width, index) => (
+          <div
             key={index}
-            className="h-8 rounded-none"
-            style={{ width: `${width * 0.25}rem` }}
-          />
+            className="flex flex-col items-center gap-1 px-1 py-1 sm:flex-row sm:gap-2 sm:pr-3 sm:pl-1.5"
+          >
+            <Skeleton className="h-7 w-8 rounded-none sm:h-8 sm:w-10" />
+            <Skeleton
+              className="h-3.5 rounded-none"
+              style={{ width: `${width * 0.25}rem` }}
+            />
+          </div>
         ))}
       </div>
-      <div className="flex flex-col divide-y border-y">
-        {[48, 40, 56, 36, 44].map((width, index) => (
-          <div key={index} className="flex items-center gap-3 py-3 sm:gap-4">
+      <div className="mx-auto grid w-full max-w-2xl grid-cols-3 items-end gap-2 sm:gap-3">
+        {[
+          { castor: "h-20 sm:h-24", step: "h-14" },
+          { castor: "h-28 sm:h-32", step: "h-20" },
+          { castor: "h-20 sm:h-24", step: "h-10" },
+        ].map((size, index) => (
+          <div key={index} className="flex flex-col items-center gap-1.5">
+            <Skeleton className="h-4 w-3/4 rounded-none" />
+            <Skeleton className="h-3 w-2/3 rounded-none" />
+            <Skeleton className="h-5 w-12 rounded-none" />
+            <Skeleton className={cn("w-16 rounded-none", size.castor)} />
+            <Skeleton className={cn("w-full rounded-none", size.step)} />
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-col divide-y border-t">
+        {[48, 40, 56, 36, 44, 52, 38].map((width, index) => (
+          <div key={index} className="flex items-center gap-3 py-2.5 sm:gap-4">
+            <Skeleton className="h-5 w-7 shrink-0 rounded-none" />
             <Skeleton className="size-9 shrink-0 rounded-none" />
-            <Skeleton className="size-10 shrink-0 rounded-none" />
             <div className="flex flex-1 flex-col gap-1.5">
               <Skeleton
                 className="h-4 rounded-none"
@@ -95,7 +115,7 @@ function RankingSkeleton() {
               />
               <Skeleton className="h-3.5 w-1/3 rounded-none" />
             </div>
-            <Skeleton className="h-6 w-14 shrink-0 rounded-none" />
+            <Skeleton className="h-5 w-14 shrink-0 rounded-none" />
           </div>
         ))}
       </div>
