@@ -52,6 +52,7 @@ import {
 
 type Form = {
   title: string;
+  isTest: boolean;
   categories: string[];
   durationMinutes: number;
   registrationStartsAt: string;
@@ -104,6 +105,7 @@ function formFromContest(contest: StoredContest): Form {
 
   return {
     title: contest.title,
+    isTest: contest.isTest,
     categories: contest.categories,
     durationMinutes: contest.durationMinutes,
     registrationStartsAt: localValue(contest.registrationStartsAt),
@@ -134,6 +136,7 @@ function toPayload(form: Form): ContestDraftInput {
 
   return {
     title: form.title.trim(),
+    isTest: form.isTest,
     categories: form.categories,
     durationMinutes: form.durationMinutes,
     registrationStartsAt: iso(form.registrationStartsAt),
@@ -1081,18 +1084,20 @@ export function ContestEditor() {
 
         <FormSection title="Fechas">
           <div className="flex max-w-3xl min-w-0 flex-col gap-8">
-            <WindowField
-              id="contest-registration"
-              title="Inscripción"
-              help="Sin fechas, los maestros pueden inscribir desde que publicas hasta que empieza la rendición."
-              startsAt={form.registrationStartsAt}
-              endsAt={form.registrationEndsAt}
-              maxDate={parseDateTimeLocal(span.startsAt)}
-              disabled={locked || contestState === "inscripcion"}
-              onChange={(registrationStartsAt, registrationEndsAt) =>
-                update({ registrationStartsAt, registrationEndsAt })
-              }
-            />
+            {!form.isTest && (
+              <WindowField
+                id="contest-registration"
+                title="Inscripción"
+                help="Sin fechas, los maestros pueden inscribir desde que publicas hasta que empieza la rendición."
+                startsAt={form.registrationStartsAt}
+                endsAt={form.registrationEndsAt}
+                maxDate={parseDateTimeLocal(span.startsAt)}
+                disabled={locked || contestState === "inscripcion"}
+                onChange={(registrationStartsAt, registrationEndsAt) =>
+                  update({ registrationStartsAt, registrationEndsAt })
+                }
+              />
+            )}
             <div className="flex min-w-0 flex-col">
               {(form.categories.length > 1 || byCategory) && (
                 <div className="flex items-center gap-1.5 pb-4">
@@ -1163,20 +1168,22 @@ export function ContestEditor() {
                 ))}
               </Reveal>
             </div>
-            <WindowField
-              id="contest-results"
-              title="Resultados"
-              help={`Desde: se publican solos y el desafío aparece con sus resultados en la página principal. Se pone sola al cierre de ${byCategory ? "la última categoría" : "la rendición"} y la puedes cambiar. Hasta: deja de salir ahí (sin fecha, 7 días después). Cada estudiante los sigue viendo con su código.`}
-              startsAt={form.resultsAt}
-              endsAt={form.resultsUntil}
-              minDate={parseDateTimeLocal(span.endsAt)}
-              disabled={locked}
-              startLabel="Desde"
-              endLabel="Hasta"
-              onChange={(resultsAt, resultsUntil) =>
-                update({ resultsAt, resultsUntil })
-              }
-            />
+            {!form.isTest && (
+              <WindowField
+                id="contest-results"
+                title="Resultados"
+                help={`Desde: se publican solos y el desafío aparece con sus resultados en la página principal. Se pone sola al cierre de ${byCategory ? "la última categoría" : "la rendición"} y la puedes cambiar. Hasta: deja de salir ahí (sin fecha, 7 días después). Cada estudiante los sigue viendo con su código.`}
+                startsAt={form.resultsAt}
+                endsAt={form.resultsUntil}
+                minDate={parseDateTimeLocal(span.endsAt)}
+                disabled={locked}
+                startLabel="Desde"
+                endLabel="Hasta"
+                onChange={(resultsAt, resultsUntil) =>
+                  update({ resultsAt, resultsUntil })
+                }
+              />
+            )}
           </div>
           <label className="flex flex-wrap items-center gap-3 text-sm">
             Cada equipo tiene
@@ -1236,88 +1243,109 @@ export function ContestEditor() {
               ["allowPairs", "Se puede rendir en pareja"],
               ["shuffleOptions", "Mezclar el orden de las opciones"],
             ] as const
-          ).map(([key, label]) => (
-            <label key={key} className="flex items-center gap-3 text-sm">
-              <Checkbox
-                checked={form[key]}
-                disabled={locked}
-                onCheckedChange={(checked) =>
-                  update({ [key]: checked === true })
-                }
-              />
-              {label}
-            </label>
-          ))}
+          )
+            .filter(([key]) => !(form.isTest && key === "allowPairs"))
+            .map(([key, label]) => (
+              <label key={key} className="flex items-center gap-3 text-sm">
+                <Checkbox
+                  checked={form[key]}
+                  disabled={locked}
+                  onCheckedChange={(checked) =>
+                    update({ [key]: checked === true })
+                  }
+                />
+                {label}
+              </label>
+            ))}
+          <label className="flex items-start gap-3 text-sm">
+            <Checkbox
+              className="mt-0.5"
+              checked={form.isTest}
+              disabled={locked || contestState !== "borrador"}
+              onCheckedChange={(checked) =>
+                update({ isTest: checked === true })
+              }
+            />
+            <span className="flex flex-col gap-0.5">
+              Es un desafío de prueba
+              <span className="text-muted-foreground">
+                Sin inscripción ni resultados: se entra con el nombre y el
+                curso, y cada uno ve su puntaje al entregar.
+              </span>
+            </span>
+          </label>
         </FormSection>
 
-        <FormSection title="Qué ve el estudiante">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[26rem] text-sm">
-              <thead>
-                <tr className="text-left text-muted-foreground">
-                  <th className="py-2 pr-4 font-normal" />
-                  <th className="w-36 px-2 py-2 text-center font-normal">
-                    Al entregar su prueba
-                  </th>
-                  <th className="w-36 px-2 py-2 text-center font-normal">
-                    Al publicar los resultados
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {(
-                  [
-                    ["showScoreOnSubmit", "showTotalScore", "Su puntaje"],
-                    [
-                      "showFeedbackOnSubmit",
-                      "showFeedback",
-                      "Si acertó cada pregunta",
-                    ],
-                    [
-                      "showSolutionsOnSubmit",
-                      "showSolutions",
-                      "La solución de cada pregunta",
-                    ],
-                  ] as const
-                ).map(([onSubmit, onResults, label]) => (
-                  <tr key={onSubmit} className="border-t">
-                    <td className="py-3 pr-4">{label}</td>
-                    <td className="px-2 py-3 text-center">
-                      <Checkbox
-                        className="mx-auto"
-                        aria-label={`${label}, al entregar su prueba`}
-                        checked={form[onSubmit]}
-                        disabled={locked}
-                        onCheckedChange={(checked) =>
-                          update(
-                            checked === true
-                              ? { [onSubmit]: true, [onResults]: true }
-                              : { [onSubmit]: false },
-                          )
-                        }
-                      />
-                    </td>
-                    <td className="px-2 py-3 text-center">
-                      <Checkbox
-                        className="mx-auto"
-                        aria-label={`${label}, al publicar los resultados`}
-                        checked={form[onResults] || form[onSubmit]}
-                        disabled={locked || form[onSubmit]}
-                        onCheckedChange={(checked) =>
-                          update({ [onResults]: checked === true })
-                        }
-                      />
-                    </td>
+        {!form.isTest && (
+          <FormSection title="Qué ve el estudiante">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-muted-foreground">
+                    <th className="py-2 pr-2 font-normal sm:pr-4" />
+                    <th className="w-24 px-1 py-2 text-center text-xs font-normal sm:w-36 sm:px-2 sm:text-sm">
+                      Al entregar su prueba
+                    </th>
+                    <th className="w-24 px-1 py-2 text-center text-xs font-normal sm:w-36 sm:px-2 sm:text-sm">
+                      Al publicar los resultados
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Lo que ve al entregar lo sigue viendo con los resultados. La
-            posición en el ranking solo aparece al publicarlos.
-          </p>
-        </FormSection>
+                </thead>
+                <tbody>
+                  {(
+                    [
+                      ["showScoreOnSubmit", "showTotalScore", "Su puntaje"],
+                      [
+                        "showFeedbackOnSubmit",
+                        "showFeedback",
+                        "Si acertó cada pregunta",
+                      ],
+                      [
+                        "showSolutionsOnSubmit",
+                        "showSolutions",
+                        "La solución de cada pregunta",
+                      ],
+                    ] as const
+                  ).map(([onSubmit, onResults, label]) => (
+                    <tr key={onSubmit} className="border-t">
+                      <td className="py-3 pr-4">{label}</td>
+                      <td className="px-2 py-3 text-center">
+                        <Checkbox
+                          className="mx-auto"
+                          aria-label={`${label}, al entregar su prueba`}
+                          checked={form[onSubmit]}
+                          disabled={locked}
+                          onCheckedChange={(checked) =>
+                            update(
+                              checked === true
+                                ? { [onSubmit]: true, [onResults]: true }
+                                : { [onSubmit]: false },
+                            )
+                          }
+                        />
+                      </td>
+                      <td className="px-2 py-3 text-center">
+                        <Checkbox
+                          className="mx-auto"
+                          aria-label={`${label}, al publicar los resultados`}
+                          checked={form[onResults] || form[onSubmit]}
+                          disabled={locked || form[onSubmit]}
+                          onCheckedChange={(checked) =>
+                            update({ [onResults]: checked === true })
+                          }
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Lo que ve al entregar lo sigue viendo con los resultados. La
+              posición en el ranking solo aparece al publicarlos.
+            </p>
+          </FormSection>
+        )}
 
         <FormSection title="Puntaje">
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -1469,12 +1497,14 @@ export function ContestEditor() {
         )}
         {locked ? (
           <>
-            <Button asChild variant="outline">
-              <a href={`/desafios/resultados?id=${contestId}`}>
-                <BarChart3Icon data-icon="inline-start" />
-                Resultados
-              </a>
-            </Button>
+            {!form.isTest && (
+              <Button asChild variant="outline">
+                <a href={`/desafios/resultados?id=${contestId}`}>
+                  <BarChart3Icon data-icon="inline-start" />
+                  Resultados
+                </a>
+              </Button>
+            )}
             <Button type="button" disabled>
               <SaveIcon data-icon="inline-start" />
               Guardar

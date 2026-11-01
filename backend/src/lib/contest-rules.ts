@@ -277,6 +277,7 @@ export function registrationOpenAt(
     startsAt: Date | null;
     endsAt: Date | null;
     isPractice?: boolean;
+    isTest?: boolean;
   },
 ) {
   if (!contest.publishedAt || contest.stoppedAt || contest.trashedAt) {
@@ -284,7 +285,7 @@ export function registrationOpenAt(
   }
 
   // Una práctica no tiene fase de inscripción: admite grupos mientras dure.
-  if (contest.isPractice) {
+  if (contest.isPractice || contest.isTest) {
     return !contestHasEnded(contestStateAt(now, contest).state);
   }
 
@@ -312,6 +313,7 @@ export function contestStateAt(
     startsAt: Date | null;
     endsAt: Date | null;
     isPractice?: boolean;
+    isTest?: boolean;
   },
 ): { state: ContestState; isOpen: boolean } {
   if (contest.trashedAt) return { state: "eliminada", isOpen: false };
@@ -322,7 +324,7 @@ export function contestStateAt(
 
   if (!contest.startsAt || !contest.endsAt || now < contest.startsAt) {
     // Una práctica no tiene inscripción: solo espera su horario.
-    if (contest.isPractice) {
+    if (contest.isPractice || contest.isTest) {
       return {
         state: contest.startsAt ? "programada" : "preparacion",
         isOpen: false,

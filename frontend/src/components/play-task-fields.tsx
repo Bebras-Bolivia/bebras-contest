@@ -197,6 +197,13 @@ export function PlayTaskFields({
             onChange={(regionId) => onChange({ version: 1, regionId })}
           />
         )}
+      {task.answerType === "multiple_choice" &&
+        task.multipleChoiceMode === "all" && (
+          <p className="text-sm font-medium">
+            Puedes marcar varias: marca todas las correctas.
+          </p>
+        )}
+
       {task.answerType === "multiple_choice" && (
         <div
           className={cn(
@@ -297,13 +304,6 @@ export function PlayTaskFields({
           })}
         </div>
       )}
-
-      {task.answerType === "multiple_choice" &&
-        task.multipleChoiceMode === "all" && (
-          <p className="text-xs text-muted-foreground">
-            Debes marcar todas las opciones correctas.
-          </p>
-        )}
 
       {task.answerType === "short_text" && (
         // Un campo propio y no el Input del sistema: el marco global de los

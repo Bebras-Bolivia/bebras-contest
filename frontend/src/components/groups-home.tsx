@@ -536,8 +536,8 @@ export function GroupsHome() {
                 <div className="flex items-center gap-1.5">
                   <FieldHint>
                     Un Excel con el código personal de cada estudiante, por
-                    curso, listo para imprimir y repartir. Con ese código
-                    entran a rendir el desafío en{" "}
+                    curso, listo para imprimir y repartir. Con ese código entran
+                    a rendir el desafío en{" "}
                     <a
                       href="/entrar"
                       className="font-semibold text-foreground underline underline-offset-4 hover:text-primary"
@@ -762,40 +762,45 @@ function AdminGroups({
             );
             if (ofLevel.length === 0) return null;
             return (
-              <div key={level} className="flex flex-wrap items-center gap-2">
-                <span className="w-24 text-sm text-muted-foreground">
+              <div
+                key={level}
+                className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2"
+              >
+                <span className="text-sm text-muted-foreground sm:w-24">
                   {label}
                 </span>
-                {ofLevel.map((group) => {
-                  const chipClass =
-                    "flex min-w-14 items-center justify-center px-3 py-1.5 text-sm transition-opacity outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary/60";
-                  const style = group.category
-                    ? categorySoftStyle(group.category)
-                    : undefined;
-                  const text = gradeLabel(group.grade).split(" ")[0];
-                  const title = `${gradeLabel(group.grade)} · ${studentCount(group)} ${studentCount(group) === 1 ? "estudiante" : "estudiantes"}`;
-                  return group.pending ? (
-                    <span
-                      key={group.id}
-                      title={title}
-                      style={style}
-                      className={cn(chipClass, "opacity-50")}
-                    >
-                      {text}
-                    </span>
-                  ) : (
-                    <a
-                      key={group.id}
-                      href={`/grupos/ver?id=${group.id}&vista=estudiantes`}
-                      title={title}
-                      aria-label={title}
-                      style={style}
-                      className={chipClass}
-                    >
-                      {text}
-                    </a>
-                  );
-                })}
+                <div className="grid grid-cols-6 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
+                  {ofLevel.map((group) => {
+                    const chipClass =
+                      "flex min-h-10 items-center justify-center px-1 py-1.5 text-sm transition-opacity outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary/60 sm:min-h-0 sm:min-w-14 sm:px-3";
+                    const style = group.category
+                      ? categorySoftStyle(group.category)
+                      : undefined;
+                    const text = gradeLabel(group.grade).split(" ")[0];
+                    const title = `${gradeLabel(group.grade)} · ${studentCount(group)} ${studentCount(group) === 1 ? "estudiante" : "estudiantes"}`;
+                    return group.pending ? (
+                      <span
+                        key={group.id}
+                        title={title}
+                        style={style}
+                        className={cn(chipClass, "opacity-50")}
+                      >
+                        {text}
+                      </span>
+                    ) : (
+                      <a
+                        key={group.id}
+                        href={`/grupos/ver?id=${group.id}&vista=estudiantes`}
+                        title={title}
+                        aria-label={title}
+                        style={style}
+                        className={chipClass}
+                      >
+                        {text}
+                      </a>
+                    );
+                  })}
+                </div>
               </div>
             );
           })}

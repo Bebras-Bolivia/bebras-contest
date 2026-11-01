@@ -161,7 +161,7 @@ export function ContestFinish({
         </h1>
         <p className="max-w-md text-muted-foreground">
           {outOfTime
-            ? "Entregamos tus respuestas tal como estaban."
+            ? "Tus respuestas hasta ahora quedaron enviadas y guardadas. No te preocupes."
             : "Tus respuestas quedaron entregadas."}
         </p>
       </section>

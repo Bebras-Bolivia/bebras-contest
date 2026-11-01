@@ -134,6 +134,9 @@ model Contest {
   // Una practica la crea un maestro para sus propios estudiantes: solo el la
   // ve y nunca sale en los listados publicos ni en los del administrador.
   isPractice           Boolean        @default(false)
+  // Un desafío de prueba no tiene inscripción ni resultados: se entra con el
+  // nombre y el curso y solo cuenta su fecha de rendición.
+  isTest               Boolean        @default(false)
   createdById          Int?
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt

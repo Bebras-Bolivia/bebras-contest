@@ -1532,6 +1532,7 @@ export const ContestScalarFieldEnum = {
   resultsReleasedAt: 'resultsReleasedAt',
   resultsUntil: 'resultsUntil',
   isPractice: 'isPractice',
+  isTest: 'isTest',
   createdById: 'createdById',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'

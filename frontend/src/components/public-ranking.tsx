@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { TrophyIcon } from "lucide-react";
 
+import { CategoryLogo, categoryColor } from "@/components/category-logo";
 import { Expand } from "@/components/reveal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { API_BASE_URL } from "@/lib/api-client";
@@ -26,12 +27,6 @@ type ContestRanking = {
   title: string;
   categories: Array<{ name: string; rows: RankingRow[] }>;
 };
-
-const PODIUM = [
-  "bg-secondary text-secondary-foreground border-foreground",
-  "bg-muted text-foreground border-foreground/60",
-  "bg-primary/15 text-foreground border-primary/60",
-];
 
 /** Los mejores de cada categoría en los desafíos con resultados publicados. */
 export function PublicRanking() {
@@ -123,6 +118,10 @@ function RankingBoard({
     contest.categories.find((item) => item.name === category) ??
     contest.categories[0];
 
+  const color = categoryColor(current.name);
+  const podium = current.rows.slice(0, 3);
+  const rest = current.rows.slice(3);
+
   return (
     <section id="ranking" className="flex scroll-mt-6 flex-col gap-5">
       <div className="flex flex-col gap-1">
@@ -137,68 +136,180 @@ function RankingBoard({
         <div
           role="tablist"
           aria-label="Categoría"
-          className="flex flex-wrap gap-1.5"
+          className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap"
         >
-          {contest.categories.map((item) => (
-            <button
-              key={item.name}
-              type="button"
-              role="tab"
-              aria-selected={item.name === current.name}
-              onClick={() => onCategory(item.name)}
-              className="px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground aria-selected:bg-primary/10 aria-selected:font-medium aria-selected:text-foreground"
-            >
-              {item.name}
-            </button>
-          ))}
+          {contest.categories.map((item) => {
+            const selected = item.name === current.name;
+            const itemColor = categoryColor(item.name);
+            return (
+              <button
+                key={item.name}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => onCategory(item.name)}
+                style={
+                  selected && itemColor
+                    ? {
+                        borderColor: itemColor,
+                        backgroundColor: `color-mix(in srgb, ${itemColor} 12%, transparent)`,
+                      }
+                    : undefined
+                }
+                className={cn(
+                  "flex min-w-0 flex-col items-center gap-0.5 border-2 px-1 py-1 text-xs sm:flex-row transition-colors sm:gap-2 sm:pr-3 sm:pl-1.5 sm:text-sm",
+                  selected
+                    ? "font-semibold text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <CategoryLogo
+                  name={item.name}
+                  className={cn(
+                    "h-7 w-8 sm:h-8 sm:w-10",
+                    !selected && "opacity-50",
+                  )}
+                />
+                {item.name}
+              </button>
+            );
+          })}
         </div>
       )}
 
-      <ol
+      <div
         key={`${contest.id}-${current.name}`}
-        className="flex flex-col divide-y border-y"
+        className="flex flex-col gap-4"
       >
-        {current.rows.map((row, index) => (
-          <li
-            key={`${row.rank}-${index}`}
-            style={{ animationDelay: `${Math.min(index, 9) * 45}ms` }}
-            className={cn(
-              enter,
-              "group/row flex items-center gap-3 py-3 transition-colors hover:bg-muted/40 sm:gap-4",
-            )}
-          >
-            <span
-              className={cn(
-                "flex size-9 shrink-0 items-center justify-center border-2 font-heading font-semibold tabular-nums",
-                PODIUM[row.rank - 1] ??
-                  "border-transparent text-muted-foreground",
-              )}
-            >
-              {row.rank}
-            </span>
-            <img
-              src={`/castores/${row.department ?? "estandar"}-cabeza.webp`}
-              alt=""
-              title={row.place ?? undefined}
-              className="h-10 w-10 shrink-0 object-contain transition-transform duration-200 group-hover/row:-translate-y-0.5 group-hover/row:-rotate-6"
-            />
-            <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate font-medium">{row.name}</span>
-              {(row.school || row.place) && (
-                <span className="truncate text-sm text-muted-foreground">
-                  {[row.place, row.school].filter(Boolean).join(" · ")}
+        {podium.length > 0 && (
+          <div className="mx-auto grid w-full max-w-2xl grid-cols-3 items-end gap-2 sm:gap-3">
+            {[podium[1], podium[0], podium[2]].map((row, slot) => {
+              if (!row) return <div key={`empty-${slot}`} />;
+              const first = row.rank === 1;
+              return (
+                <div
+                  key={`${row.rank}-${slot}`}
+                  className={cn(
+                    enter,
+                    "flex min-w-0 flex-col items-center gap-1.5 text-center",
+                  )}
+                  style={{ animationDelay: `${slot * 60}ms` }}
+                >
+                  <span
+                    className={cn(
+                      "line-clamp-3 leading-tight break-words",
+                      first
+                        ? "text-base font-semibold sm:text-lg"
+                        : "text-sm font-medium",
+                    )}
+                  >
+                    {row.name}
+                  </span>
+                  {(row.place || row.school) && (
+                    <span className="line-clamp-2 text-xs leading-snug text-muted-foreground">
+                      {[row.place, row.school].filter(Boolean).join(" · ")}
+                    </span>
+                  )}
+                  <span
+                    className={cn(
+                      "font-semibold tabular-nums",
+                      first ? "text-xl sm:text-2xl" : "text-base",
+                    )}
+                    style={first ? { color } : undefined}
+                  >
+                    {row.score}
+                    <span className="ml-1 text-xs font-normal text-muted-foreground">
+                      pts
+                    </span>
+                  </span>
+                  <img
+                    src={`/castores/${row.department ?? "estandar"}.webp`}
+                    alt=""
+                    title={row.place ?? undefined}
+                    className={cn(
+                      "-mb-1.5 object-contain object-bottom",
+                      first ? "h-28 sm:h-32" : "h-20 sm:h-24",
+                    )}
+                  />
+                  <div
+                    className={cn(
+                      "relative -mt-1.5 flex w-full items-center justify-center font-heading font-semibold",
+                      first
+                        ? "h-20 text-5xl text-white sm:text-6xl"
+                        : row.rank === 2
+                          ? "h-14 text-3xl sm:text-4xl"
+                          : "h-10 text-3xl sm:text-4xl",
+                    )}
+                    style={
+                      first
+                        ? { backgroundColor: color }
+                        : {
+                            color,
+                            backgroundColor: color
+                              ? `color-mix(in srgb, ${color} ${row.rank === 2 ? 30 : 18}%, transparent)`
+                              : undefined,
+                          }
+                    }
+                  >
+                    <span
+                      className={cn(
+                        "relative",
+                        first && "[text-shadow:0_2px_6px_rgb(0_0_0/0.3)]",
+                      )}
+                      style={
+                        first || !color
+                          ? undefined
+                          : { color: `color-mix(in srgb, ${color} 75%, black)` }
+                      }
+                    >
+                      {row.rank}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {rest.length > 0 && (
+          <ol className="flex flex-col divide-y border-t">
+            {rest.map((row, index) => (
+              <li
+                key={`${row.rank}-${index}`}
+                style={{ animationDelay: `${Math.min(index, 9) * 45}ms` }}
+                className={cn(
+                  enter,
+                  "flex items-center gap-3 py-2.5 transition-colors hover:bg-muted/40 sm:gap-4",
+                )}
+              >
+                <span className="w-7 shrink-0 text-center font-heading font-semibold text-muted-foreground tabular-nums">
+                  {row.rank}
                 </span>
-              )}
-            </div>
-            <span className="shrink-0 text-lg font-semibold tabular-nums">
-              {row.score}
-              <span className="ml-1 text-xs font-normal text-muted-foreground">
-                pts
-              </span>
-            </span>
-          </li>
-        ))}
-      </ol>
+                <img
+                  src={`/castores/${row.department ?? "estandar"}-cabeza.webp`}
+                  alt=""
+                  title={row.place ?? undefined}
+                  className="size-9 shrink-0 object-contain"
+                />
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="font-medium break-words">{row.name}</span>
+                  {(row.school || row.place) && (
+                    <span className="line-clamp-1 text-sm text-muted-foreground">
+                      {[row.place, row.school].filter(Boolean).join(" · ")}
+                    </span>
+                  )}
+                </div>
+                <span className="shrink-0 font-semibold tabular-nums">
+                  {row.score}
+                  <span className="ml-1 text-xs font-normal text-muted-foreground">
+                    pts
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
     </section>
   );
 }

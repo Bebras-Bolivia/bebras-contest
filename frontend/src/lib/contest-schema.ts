@@ -204,6 +204,8 @@ export type StoredContest = {
   resultsAt: string | null;
   /** Hasta cuándo sale con sus resultados en la portada; sin fecha, 7 días. */
   resultsUntil: string | null;
+  /** Una prueba no tiene inscripción ni resultados: solo su fecha de rendición. */
+  isTest: boolean;
   initialScores: Record<string, number>;
   scoring: ContestScoring;
   questionDisplayMode: QuestionDisplayMode;
@@ -232,6 +234,7 @@ export type StoredContest = {
 
 export type ContestDraftInput = {
   title: string;
+  isTest?: boolean;
   categories: string[];
   durationMinutes: number;
   registrationStartsAt: string;

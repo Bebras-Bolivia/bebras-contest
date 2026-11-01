@@ -1026,6 +1026,7 @@ function deserializeContest(contest: {
   resultsPublishedAt: Date | null;
   resultsAt: Date | null;
   resultsUntil: Date | null;
+  isTest?: boolean;
   createdAt: Date;
   updatedAt: Date;
   tasks?: Array<{
@@ -1100,6 +1101,7 @@ function deserializeContest(contest: {
     resultsPublishedAt: contest.resultsPublishedAt?.toISOString() ?? null,
     resultsAt: contest.resultsAt?.toISOString() ?? null,
     resultsUntil: contest.resultsUntil?.toISOString() ?? null,
+    isTest: Boolean(contest.isTest),
     state,
     isOpen,
     createdAt: contest.createdAt.toISOString(),
@@ -1155,21 +1157,23 @@ function parseContestPayload(body: Record<string, unknown>) {
   const questionDisplayMode =
     body.questionDisplayMode === "all" ? "all" : "one_by_one";
 
+  const isTest = body.isTest === true;
   const basePayload = {
     title,
     categories,
+    isTest,
     durationMinutes,
     scoring: parseContestScoring(body.scoring),
     questionDisplayMode,
-    allowPairs: body.allowPairs === true,
+    allowPairs: !isTest && body.allowPairs === true,
     shuffleOptions: body.shuffleOptions === true,
-    showFeedback: body.showFeedback === true,
-    showSolutions: body.showSolutions === true,
+    showFeedback: isTest || body.showFeedback === true,
+    showSolutions: isTest || body.showSolutions === true,
     showTotalScore:
-      body.showTotalScore === true || body.showScoreOnSubmit === true,
-    showScoreOnSubmit: body.showScoreOnSubmit === true,
-    showFeedbackOnSubmit: body.showFeedbackOnSubmit === true,
-    showSolutionsOnSubmit: body.showSolutionsOnSubmit === true,
+      isTest || body.showTotalScore === true || body.showScoreOnSubmit === true,
+    showScoreOnSubmit: isTest || body.showScoreOnSubmit === true,
+    showFeedbackOnSubmit: isTest || body.showFeedbackOnSubmit === true,
+    showSolutionsOnSubmit: isTest || body.showSolutionsOnSubmit === true,
     tasks,
   };
 
@@ -1187,15 +1191,18 @@ function parseContestPayload(body: Record<string, unknown>) {
     : body.endsAt
       ? parseDateInput(body.endsAt, "endsAt")
       : null;
-  const registrationStartsAt = body.registrationStartsAt
-    ? parseDateInput(body.registrationStartsAt, "registrationStartsAt")
-    : null;
-  const registrationEndsAt = body.registrationEndsAt
-    ? parseDateInput(body.registrationEndsAt, "registrationEndsAt")
-    : null;
-  const resultsAt = body.resultsAt
-    ? parseDateInput(body.resultsAt, "resultsAt")
-    : null;
+  const registrationStartsAt =
+    !isTest && body.registrationStartsAt
+      ? parseDateInput(body.registrationStartsAt, "registrationStartsAt")
+      : null;
+  const registrationEndsAt =
+    !isTest && body.registrationEndsAt
+      ? parseDateInput(body.registrationEndsAt, "registrationEndsAt")
+      : null;
+  const resultsAt =
+    !isTest && body.resultsAt
+      ? parseDateInput(body.resultsAt, "resultsAt")
+      : null;
 
   if (resultsAt && endsAt && resultsAt < endsAt) {
     throw new Error(
@@ -1203,9 +1210,10 @@ function parseContestPayload(body: Record<string, unknown>) {
     );
   }
 
-  const resultsUntil = body.resultsUntil
-    ? parseDateInput(body.resultsUntil, "resultsUntil")
-    : null;
+  const resultsUntil =
+    !isTest && body.resultsUntil
+      ? parseDateInput(body.resultsUntil, "resultsUntil")
+      : null;
   const resultsFrom = resultsAt ?? endsAt;
 
   if (resultsUntil && resultsFrom && resultsUntil <= resultsFrom) {
@@ -2128,11 +2136,18 @@ app.get("/api/public-contests", async (_req, res) => {
       resultsPublishedAt: true,
       resultsAt: true,
       resultsUntil: true,
+      isTest: true,
     },
   });
 
   const enrolled = await prisma.team.findMany({
-    where: { group: { contestId: { in: contests.map((contest) => contest.id) } } },
+    where: {
+      group: {
+        contestId: {
+          in: contests.filter((contest) => !contest.isTest).map((contest) => contest.id),
+        },
+      },
+    },
     select: { participationMode: true, group: { select: { contestId: true } } },
   });
   const participantsOf = new Map<string, number>();
@@ -2149,6 +2164,7 @@ app.get("/api/public-contests", async (_req, res) => {
       const { state, isOpen } = computeContestState(contest);
       const window = resultsWindow(contest);
       return {
+        isTest: contest.isTest,
         participants: participantsOf.get(contest.id) ?? 0,
         resultsAt: window.from?.toISOString() ?? null,
         resultsUntil: window.until?.toISOString() ?? null,
@@ -4000,6 +4016,7 @@ app.post("/api/contests", async (req, res) => {
   const contest = await prisma.contest.create({
     data: {
       title: payload.title,
+      isTest: payload.isTest,
       categories: JSON.stringify(payload.categories),
       durationMinutes: payload.durationMinutes,
       registrationStartsAt: payload.registrationStartsAt,
@@ -4062,6 +4079,20 @@ app.put("/api/contests/:id", async (req, res) => {
       message: "Contest not found",
     });
     return;
+  }
+
+  if (existingContest.isTest !== payload.isTest) {
+    const enrolled = await prisma.team.findFirst({
+      where: { group: { contestId: existingContest.id } },
+      select: { id: true },
+    });
+    if (existingContest.publishedAt || enrolled) {
+      res.status(400).json({
+        message:
+          "Solo un borrador sin estudiantes puede pasar a prueba o dejar de serlo.",
+      });
+      return;
+    }
   }
 
   const { state: currentState } = computeContestState(existingContest);
@@ -4140,13 +4171,13 @@ app.put("/api/contests/:id", async (req, res) => {
   await db().batch([
     db().prepare('DELETE FROM "ContestTask" WHERE "contestId" = ?').bind(contestId),
     db().prepare(`UPDATE "Contest" SET
-      "title" = ?, "categories" = ?, "durationMinutes" = ?,
+      "title" = ?, "isTest" = ?, "categories" = ?, "durationMinutes" = ?,
       "registrationStartsAt" = ?, "registrationEndsAt" = ?, "startsAt" = ?, "endsAt" = ?, "schedules" = ?, "resultsAt" = ?, "resultsUntil" = ?,
       "scoring" = ?, "questionDisplayMode" = ?,
       "allowPairs" = ?, "shuffleOptions" = ?, "showFeedback" = ?, "showSolutions" = ?, "showTotalScore" = ?,
       "showScoreOnSubmit" = ?, "showFeedbackOnSubmit" = ?, "showSolutionsOnSubmit" = ?,
       "updatedAt" = ? WHERE "id" = ?`).bind(
-      payload.title, JSON.stringify(payload.categories), payload.durationMinutes,
+      payload.title, Number(payload.isTest), JSON.stringify(payload.categories), payload.durationMinutes,
       payload.registrationStartsAt?.toISOString() ?? null,
       payload.registrationEndsAt?.toISOString() ?? null,
       payload.startsAt?.toISOString() ?? null, payload.endsAt?.toISOString() ?? null,
@@ -5096,8 +5127,8 @@ app.get("/api/published-contests", requireAuth, async (req, res) => {
   // mas ve las practicas de nadie.
   const visibility =
     req.user?.role === "maestro"
-      ? { OR: [{ isPractice: false }, { createdById: req.user.id }] }
-      : { isPractice: false };
+      ? { OR: [{ isPractice: false, isTest: false }, { createdById: req.user.id }] }
+      : { isPractice: false, isTest: false };
 
   const contests = await prisma.contest.findMany({
     where: {
@@ -5229,7 +5260,7 @@ app.get("/api/groups/students.xlsx", async (req, res) => {
   const contestId = typeof req.query.contestId === "string" ? req.query.contestId : "";
   const contest = contestId
     ? await prisma.contest.findFirst({
-        where: { id: contestId, isPractice: false, trashedAt: null },
+        where: { id: contestId, isPractice: false, isTest: false, trashedAt: null },
       })
     : null;
 
@@ -5418,7 +5449,7 @@ app.get("/api/groups/contests", async (req, res) => {
       FROM "ContestGroup" g
       JOIN "Contest" c ON c."id" = g."contestId"
       LEFT JOIN "Team" t ON t."groupId" = g."id"
-      WHERE c."trashedAt" IS NULL${ownerId ? ' AND g."createdById" = ?' : ""}
+      WHERE c."trashedAt" IS NULL AND c."isTest" = 0${ownerId ? ' AND g."createdById" = ?' : ""}
       GROUP BY g."contestId"`,
     )
     .bind(...(ownerId ? [ownerId] : []))
@@ -8038,6 +8069,92 @@ app.post("/api/play/join", async (req, res) => {
   });
 });
 
+app.post("/api/play/test-join", async (req, res) => {
+  const readField = (value: unknown) =>
+    typeof value === "string" ? value.trim() : "";
+  const firstName = readField(req.body?.firstName);
+  const lastName = readField(req.body?.lastName);
+
+  if (!firstName || !lastName) {
+    res
+      .status(400)
+      .json({ message: "Tus nombres y apellidos son obligatorios." });
+    return;
+  }
+
+  const contest = await prisma.contest.findFirst({
+    where: {
+      id: readField(req.body?.contestId),
+      isTest: true,
+      trashedAt: null,
+      stoppedAt: null,
+      publishedAt: { not: null },
+    },
+  });
+
+  if (!contest) {
+    res.status(404).json({ message: "Prueba no encontrada." });
+    return;
+  }
+
+  if (contestHasEnded(computeContestState(contest).state)) {
+    res.status(409).json({ message: "La prueba ya terminó." });
+    return;
+  }
+
+  let grade: string;
+
+  try {
+    grade = parseGrade(req.body?.grade, contestCategories(contest));
+  } catch (error) {
+    res.status(400).json({
+      message: error instanceof Error ? error.message : "Curso inválido.",
+    });
+    return;
+  }
+
+  const autoKey = `test:${contest.id}:${grade}`;
+  let group = await prisma.contestGroup.findUnique({ where: { autoKey } });
+
+  if (!group) {
+    try {
+      group = await prisma.contestGroup.create({
+        data: {
+          contestId: contest.id,
+          name: SCHOOL_GRADES.find((item) => item.value === grade)?.label ?? grade,
+          grade,
+          autoKey,
+          accessCode: await generateUniqueAccessCode(),
+          recoveryCode: generateCode(10),
+        },
+      });
+    } catch {
+      group = await prisma.contestGroup.findUnique({ where: { autoKey } });
+    }
+  }
+
+  if (!group) {
+    res.status(500).json({ message: "No pudimos preparar tu ingreso." });
+    return;
+  }
+
+  const personalCode = await generateUniquePersonalCode();
+
+  await prisma.team.create({
+    data: {
+      groupId: group.id,
+      participationMode: "individual",
+      grade,
+      memberOneFirstName: formatName(firstName),
+      memberOneLastName: formatName(lastName),
+      personalCode,
+      attempt: { create: { status: "pending" } },
+    },
+  });
+
+  res.status(201).json({ personalCode });
+});
+
 app.get("/api/play/team/:personalCode", async (req, res) => {
   const personalCode = String(req.params.personalCode ?? "")
     .trim()
@@ -8368,6 +8485,7 @@ async function releaseDueResults(contestId?: string) {
     where: {
       ...(contestId ? { id: contestId } : {}),
       isPractice: false,
+      isTest: false,
       publishedAt: { not: null },
       suspendedAt: null,
       stoppedAt: null,
@@ -8489,7 +8607,7 @@ async function findAnswerTeamBySession(
         a."id" AS "attemptId", a."status" AS "attemptStatus", a."mode" AS "attemptMode", a."endsAt" AS "attemptEndsAt",
         c."id" AS "contestId", c."updatedAt", c."categories", c."publishedAt", c."suspendedAt",
         c."consolidatedAt", c."resultsPublishedAt", c."registrationStartsAt", c."registrationEndsAt",
-        c."startsAt", c."endsAt", c."isPractice", c."stoppedAt", c."trashedAt"
+        c."startsAt", c."endsAt", c."isPractice", c."isTest", c."stoppedAt", c."trashedAt"
       FROM "Team" t
       JOIN "ContestGroup" g ON g."id" = t."groupId"
       JOIN "Contest" c ON c."id" = g."contestId"
@@ -8528,6 +8646,7 @@ async function findAnswerTeamBySession(
         startsAt: sqlDate(row.startsAt),
         endsAt: sqlDate(row.endsAt),
         isPractice: Boolean(row.isPractice),
+        isTest: Boolean(row.isTest),
       },
     },
   };
@@ -8930,7 +9049,7 @@ const playAttemptHandler: express.RequestHandler = async (req, res) => {
   }
 
   const finished = attempt.status === "finished";
-  const resultsPublished = Boolean(contest.resultsPublishedAt);
+  const resultsPublished = contest.isTest || Boolean(contest.resultsPublishedAt);
   // Lo marcado «al entregar» se ve apenas entrega; lo demás, con los resultados.
   const visible = {
     score:

@@ -30,6 +30,7 @@ type PublicContest = {
   schedules?: Record<string, { startsAt: string; endsAt: string }>;
   durationMinutes: number;
   participants: number;
+  isTest?: boolean;
   registrationStartsAt: string | null;
   registrationEndsAt: string | null;
   startsAt: string | null;
@@ -71,6 +72,13 @@ const PHASE_LABEL: Record<Phase, string> = {
 function phaseOf(contest: PublicContest, now: number): Phase | null {
   const time = (value: string | null) =>
     value ? new Date(value).getTime() : 0;
+
+  if (contest.isTest) {
+    if (contest.state === "abierta") return "abierta";
+    return contest.state === "programada" || contest.state === "preparacion"
+      ? "programada"
+      : null;
+  }
 
   switch (contest.state) {
     case "abierta":
@@ -155,6 +163,9 @@ function countdownTarget(contest: PublicContest, phase: Phase) {
     case "preparacion":
       return { date: contest.startsAt, label: "para la rendición" };
     case "programada":
+      if (contest.isTest) {
+        return { date: contest.startsAt, label: "para la prueba" };
+      }
       return {
         date: contest.registrationStartsAt ?? contest.startsAt,
         label: "para la inscripción",
@@ -404,14 +415,6 @@ function ContestCardsSkeleton({ count }: { count: number }) {
   );
 }
 
-function participantsText(count: number, phase: Phase) {
-  const ended = phase === "resultados" || phase === "terminado";
-  if (count === 1) {
-    return ended ? "1 estudiante participó" : "1 estudiante inscrito";
-  }
-  return `${count} estudiantes ${ended ? "participaron" : "inscritos"}`;
-}
-
 function ContestCard({
   contest,
   phase,
@@ -447,12 +450,6 @@ function ContestCard({
       text: `${contest.durationMinutes} minutos para resolverlo`,
     });
   }
-  if (contest.participants > 0) {
-    facts.push({
-      icon: UsersIcon,
-      text: participantsText(contest.participants, phase),
-    });
-  }
   if (phase === "resultados" && contest.resultsUntil) {
     facts.push({
       icon: TrophyIcon,
@@ -463,10 +460,7 @@ function ContestCard({
   return (
     <article
       style={{ animationDelay: `${delay}ms` }}
-      className={cn(
-        enter,
-        "group flex flex-col gap-4 py-2",
-      )}
+      className={cn(enter, "group flex flex-col gap-4 py-2")}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-2">
@@ -485,7 +479,9 @@ function ContestCard({
             ) : (
               <CalendarClockIcon className="size-4" />
             )}
-            {PHASE_LABEL[phase]}
+            {contest.isTest
+              ? `Prueba · ${PHASE_LABEL[phase]}`
+              : PHASE_LABEL[phase]}
           </span>
           <h3 className="font-heading text-xl font-semibold break-words">
             {contest.title}
@@ -531,8 +527,7 @@ function ContestCard({
               phase === "abierta" &&
               now >= start &&
               (Number.isNaN(end) || now < end);
-            const waiting =
-              phase === "abierta" && !running && now < start;
+            const waiting = phase === "abierta" && !running && now < start;
             const done = phase === "abierta" && !running && !waiting;
             return (
               <li
@@ -606,7 +601,13 @@ function ContestCard({
       )}
 
       <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">
-        {staff ? (
+        {contest.isTest ? (
+          phase === "abierta" && (
+            <Button asChild>
+              <a href={`/prueba?id=${contest.id}`}>Hacer la prueba</a>
+            </Button>
+          )
+        ) : staff ? (
           phase !== "programada" && (
             <Button
               asChild
@@ -677,7 +678,7 @@ function ContestCard({
         {(phase === "preparacion" || phase === "programada") && (
           <span className="flex items-center gap-2 text-sm text-muted-foreground">
             <ClockIcon className="size-4" />
-            {phase === "preparacion"
+            {phase === "preparacion" || contest.isTest
               ? `Empieza el ${formatDateTime(contest.startsAt)}`
               : `La inscripción abre el ${formatDateTime(
                   contest.registrationStartsAt ?? contest.startsAt,

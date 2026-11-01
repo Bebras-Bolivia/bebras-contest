@@ -1088,7 +1088,7 @@ export function AttemptPage({
         ))
       ) : (
         <div ref={questionTop} className="flex scroll-mt-24 flex-col gap-4">
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-8 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
             {attempt.tasks.map((task, index) => {
               const answered = answerHasResponse(
                 task.answerType,
@@ -1102,7 +1102,7 @@ export function AttemptPage({
                   aria-current={isCurrent ? "true" : undefined}
                   onClick={() => goToTask(index)}
                   className={cn(
-                    "flex size-9 items-center justify-center rounded-md border text-sm font-medium transition",
+                    "flex h-10 items-center justify-center rounded-md border text-base font-medium transition sm:size-9 sm:text-sm",
                     isCurrent
                       ? "border-primary bg-primary text-primary-foreground"
                       : answered
@@ -1140,23 +1140,28 @@ export function AttemptPage({
             <Button
               type="button"
               variant="outline"
-              size="icon"
+              size="lg"
               aria-label="Tarea anterior"
               title="Tarea anterior"
               disabled={currentIndex === 0}
               onClick={() => goToTask(currentIndex - 1)}
             >
-              <ChevronLeftIcon />
+              <ChevronLeftIcon data-icon="inline-start" />
+              Anterior
             </Button>
-            <span className="text-sm text-muted-foreground">
-              Tarea {currentIndex + 1} de {attempt.tasks.length}
+            <span className="text-sm text-muted-foreground tabular-nums">
+              {currentIndex + 1} de {attempt.tasks.length}
             </span>
             {currentIndex >= attempt.tasks.length - 1 ? (
               <SubmitAttemptDialog
                 submitting={submitting}
                 onSubmit={() => void handleSubmit()}
               >
-                <Button type="button" disabled={submitting || suspended}>
+                <Button
+                  type="button"
+                  size="lg"
+                  disabled={submitting || suspended}
+                >
                   {submitting ? (
                     <LoaderCircleIcon
                       data-icon="inline-start"
@@ -1172,12 +1177,13 @@ export function AttemptPage({
               <Button
                 type="button"
                 variant="outline"
-                size="icon"
+                size="lg"
                 aria-label="Tarea siguiente"
                 title="Tarea siguiente"
                 onClick={() => goToTask(currentIndex + 1)}
               >
-                <ChevronRightIcon />
+                Siguiente
+                <ChevronRightIcon data-icon="inline-end" />
               </Button>
             )}
           </div>
@@ -1234,7 +1240,7 @@ function TaskSection({
     // Con todas las tareas a la vez, una línea fina separa una de la otra.
     <section className="flex flex-col gap-5 border-b pb-8 last:border-b-0 last:pb-0">
       <div className="flex flex-col gap-2">
-        <span className="text-xs font-medium text-muted-foreground">
+        <span className="text-sm font-medium text-muted-foreground">
           Tarea {task.position}
         </span>
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
