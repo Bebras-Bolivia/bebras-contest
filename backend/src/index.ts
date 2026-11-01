@@ -2116,6 +2116,7 @@ app.get("/api/public-contests", async (_req, res) => {
       id: true,
       title: true,
       categories: true,
+      schedules: true,
       durationMinutes: true,
       registrationStartsAt: true,
       registrationEndsAt: true,
@@ -2154,6 +2155,17 @@ app.get("/api/public-contests", async (_req, res) => {
         id: contest.id,
         title: contest.title,
         categories: contestCategories(contest),
+        schedules: Object.fromEntries(
+          Object.entries(parseCategorySchedules(contest.schedules)).map(
+            ([category, window]) => [
+              category,
+              {
+                startsAt: window.startsAt.toISOString(),
+                endsAt: window.endsAt.toISOString(),
+              },
+            ],
+          ),
+        ),
         durationMinutes: contest.durationMinutes,
         registrationStartsAt:
           contest.registrationStartsAt?.toISOString() ?? null,
@@ -2175,55 +2187,81 @@ function publicName(first: string, last: string | null) {
 
 const PUBLIC_RANKING_SIZE = 10;
 
-/** Colegio, lugar y castor del departamento de cada maestro, por su id. */
-async function teacherOrigins(ids: Array<number | null>) {
-  const teacherIds = [
-    ...new Set(ids.filter((id): id is number => id !== null)),
+type OriginGroup = { createdById: number | null; schoolId?: string | null };
+
+/** Colegio, lugar y castor del departamento de cada grupo: el colegio del curso o el de quien lo creó. */
+async function groupOrigins(groups: OriginGroup[]) {
+  const ownerIds = [
+    ...new Set(
+      groups
+        .map((group) => group.createdById)
+        .filter((id): id is number => id !== null),
+    ),
   ];
-  const teachers = await prisma.user.findMany({
-    where: { id: { in: teacherIds }, role: "maestro" },
-    select: {
-      id: true,
-      schoolName: true,
-      schoolCodUe: true,
-      department: true,
-      city: true,
-    },
-  });
+  const schoolIds = [
+    ...new Set(
+      groups
+        .map((group) => group.schoolId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const [owners, extraSchools] = await Promise.all([
+    prisma.user.findMany({
+      where: { id: { in: ownerIds } },
+      select: {
+        id: true,
+        schoolName: true,
+        schoolCodUe: true,
+        department: true,
+        city: true,
+      },
+    }),
+    prisma.teacherSchool.findMany({
+      where: { id: { in: schoolIds } },
+      select: { id: true, schoolName: true, schoolCodUe: true },
+    }),
+  ]);
   const places = await prisma.school.findMany({
     where: {
       codUe: {
-        in: teachers
-          .map((teacher) => teacher.schoolCodUe)
+        in: [...owners, ...extraSchools]
+          .map((item) => item.schoolCodUe)
           .filter((code): code is string => Boolean(code)),
       },
     },
     select: { codUe: true, dep: true, sec: true },
   });
   const placeOf = new Map(places.map((place) => [place.codUe, place]));
-  return new Map(
-    teachers.map((teacher) => {
-      const place = teacher.schoolCodUe
-        ? placeOf.get(teacher.schoolCodUe)
-        : teacher.department
-          ? { dep: teacher.department, sec: teacher.city ?? "" }
-          : undefined;
-      const department = place ? DEPARTMENTS[place.dep] : undefined;
-      const town = place ? townName(place.sec) : null;
-      return [
-        teacher.id,
-        {
-          school: teacher.schoolName ? titleCase(teacher.schoolName) : null,
-          department: department?.slug ?? null,
-          place: department
-            ? town && normalizeHeader(town) !== normalizeHeader(department.name)
-              ? `${town}, ${department.name}`
-              : department.name
-            : null,
-        },
-      ];
-    }),
+  const originOf = (source: {
+    schoolName: string | null;
+    schoolCodUe: string | null;
+    department?: string | null;
+    city?: string | null;
+  }) => {
+    const place = source.schoolCodUe
+      ? placeOf.get(source.schoolCodUe)
+      : source.department
+        ? { dep: source.department, sec: source.city ?? "" }
+        : undefined;
+    const department = place ? DEPARTMENTS[place.dep] : undefined;
+    const town = place ? townName(place.sec) : null;
+    return {
+      school: source.schoolName ? titleCase(source.schoolName) : null,
+      department: department?.slug ?? null,
+      place: department
+        ? town && normalizeHeader(town) !== normalizeHeader(department.name)
+          ? `${town}, ${department.name}`
+          : department.name
+        : null,
+    };
+  };
+  const ownerOrigin = new Map(owners.map((owner) => [owner.id, originOf(owner)]));
+  const schoolOrigin = new Map(
+    extraSchools.map((school) => [school.id, originOf(school)]),
   );
+  return (group: OriginGroup) =>
+    (group.schoolId ? schoolOrigin.get(group.schoolId) : undefined) ??
+    (group.createdById !== null ? ownerOrigin.get(group.createdById) : undefined);
 }
 
 app.get("/api/public-ranking", async (_req, res) => {
@@ -2265,14 +2303,14 @@ app.get("/api/public-ranking", async (_req, res) => {
         attempt: {
           include: {
             team: {
-              include: { group: { select: { createdById: true } } },
+              include: { group: { select: { createdById: true, schoolId: true } } },
             },
           },
         },
       },
     });
-    const schoolOf = await teacherOrigins(
-      results.map((result) => result.attempt.team.group.createdById),
+    const originOf = await groupOrigins(
+      results.map((result) => result.attempt.team.group),
     );
 
     const byCategory = categories
@@ -2293,9 +2331,7 @@ app.get("/api/public-ranking", async (_req, res) => {
               team.participationMode === "pareja" && team.memberTwoFirstName
                 ? publicName(team.memberTwoFirstName, team.memberTwoLastName)
                 : null;
-            const createdById = team.group.createdById;
-            const origin =
-              createdById !== null ? schoolOf.get(createdById) : undefined;
+            const origin = originOf(team.group);
             return {
               rank: result.rankPosition!,
               name: two ? `${one} y ${two}` : one,
@@ -2372,14 +2408,18 @@ async function certificatesExport() {
       attempt: {
         include: {
           team: {
-            include: { group: { select: { createdById: true, contestId: true } } },
+            include: {
+              group: {
+                select: { createdById: true, schoolId: true, contestId: true },
+              },
+            },
           },
         },
       },
     },
   });
-  const schoolOf = await teacherOrigins(
-    results.map((result) => result.attempt.team.group.createdById),
+  const originOf = await groupOrigins(
+    results.map((result) => result.attempt.team.group),
   );
 
   const categoryOf = (result: (typeof results)[number]) => {
@@ -2403,8 +2443,7 @@ async function certificatesExport() {
     const category = categoryOf(result);
     if (!contest || !category) continue;
     const team = result.attempt.team;
-    const createdById = team.group.createdById;
-    const origin = createdById !== null ? schoolOf.get(createdById) : undefined;
+    const origin = originOf(team.group);
     const participants = [
       fullName(team.memberOneFirstName, team.memberOneLastName),
     ];

@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 
 import { Expand } from "@/components/reveal";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { API_BASE_URL } from "@/lib/api-client";
@@ -19,7 +18,7 @@ import { getToken, getUser, isApproved } from "@/lib/auth";
 import type { ContestState } from "@/lib/contest-schema";
 import { rememberCount, rememberedCount } from "@/lib/remembered-count";
 import { enter } from "@/lib/surface";
-import { categoryStyle } from "@/components/category-logo";
+import { CategoryLogo, categoryColor } from "@/components/category-logo";
 import { cn } from "@/lib/utils";
 
 const COUNT_KEY = "portada:desafios";
@@ -28,6 +27,7 @@ type PublicContest = {
   id: string;
   title: string;
   categories: string[];
+  schedules?: Record<string, { startsAt: string; endsAt: string }>;
   durationMinutes: number;
   participants: number;
   registrationStartsAt: string | null;
@@ -346,7 +346,7 @@ export function LiveContests() {
           {visible.length > 0 ? (
             <div
               className={cn(
-                "grid gap-4",
+                "grid gap-x-10 gap-y-8",
                 visible.length > 1 && "md:grid-cols-2",
               )}
             >
@@ -465,10 +465,7 @@ function ContestCard({
       style={{ animationDelay: `${delay}ms` }}
       className={cn(
         enter,
-        "group flex flex-col gap-4 border-2 bg-background px-5 py-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-hard)]",
-        highlighted
-          ? "border-primary bg-primary/5"
-          : "border-border/20 hover:border-foreground",
+        "group flex flex-col gap-4 py-2",
       )}
     >
       <div className="flex items-start justify-between gap-4">
@@ -522,22 +519,64 @@ function ContestCard({
       </div>
 
       {contest.categories.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {contest.categories.length === 6 ? (
-            <Badge variant="outline">Todas las categorías</Badge>
-          ) : (
-            contest.categories.map((category) => (
-              <Badge
+        <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {contest.categories.map((category, index) => {
+            const window = contest.schedules?.[category] ?? {
+              startsAt: contest.startsAt,
+              endsAt: contest.endsAt,
+            };
+            const start = window.startsAt ? Date.parse(window.startsAt) : NaN;
+            const end = window.endsAt ? Date.parse(window.endsAt) : NaN;
+            const running =
+              phase === "abierta" &&
+              now >= start &&
+              (Number.isNaN(end) || now < end);
+            const waiting =
+              phase === "abierta" && !running && now < start;
+            const done = phase === "abierta" && !running && !waiting;
+            return (
+              <li
                 key={category}
-                variant="outline"
-                data-category=""
-                style={categoryStyle(category)}
+                style={{
+                  animationDelay: `${delay + 120 + index * 50}ms`,
+                  borderColor: running ? categoryColor(category) : undefined,
+                }}
+                className={cn(
+                  enter,
+                  "flex min-w-0 items-center gap-2.5 border-2 border-border/20 bg-background px-2.5 py-2 transition-[opacity,filter,border-color] duration-300",
+                  (waiting || done) && "opacity-60 grayscale",
+                )}
               >
-                {category}
-              </Badge>
-            ))
-          )}
-        </div>
+                <CategoryLogo name={category} className="size-10" />
+                <span className="flex min-w-0 flex-col leading-tight">
+                  <span className="truncate text-sm font-semibold">
+                    {category}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    {running && (
+                      <span
+                        aria-hidden="true"
+                        className="size-2 shrink-0 animate-pulse rounded-full"
+                        style={{ backgroundColor: categoryColor(category) }}
+                      />
+                    )}
+                    <span className="truncate">
+                      {running
+                        ? "Rindiendo ahora"
+                        : waiting && window.startsAt
+                          ? `Desde ${formatShort(window.startsAt)}`
+                          : done
+                            ? "Ya rindió"
+                            : contest.schedules?.[category] && window.startsAt
+                              ? formatShort(window.startsAt)
+                              : ""}
+                    </span>
+                  </span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
       {facts.length > 0 && (
