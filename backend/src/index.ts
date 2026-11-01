@@ -2288,6 +2288,7 @@ app.get("/api/public-ranking", async (_req, res) => {
     where: {
       publishedAt: { not: null },
       isPractice: false,
+      isTest: false,
       trashedAt: null,
       resultsPublishedAt: { not: null },
     },
@@ -2386,6 +2387,7 @@ async function certificatesExport() {
   const contests = await prisma.contest.findMany({
     where: {
       isPractice: false,
+      isTest: false,
       trashedAt: null,
       publishedAt: { not: null },
       resultsPublishedAt: { not: null },
@@ -2413,6 +2415,7 @@ async function certificatesExport() {
           group: {
             contest: {
               isPractice: false,
+              isTest: false,
               trashedAt: null,
               publishedAt: { not: null },
               resultsPublishedAt: { not: null },
@@ -4596,11 +4599,18 @@ app.post("/api/contests/:id/consolidate", async (req, res) => {
 app.post("/api/contests/:id/results/publish", async (req, res) => {
   const contest = await prisma.contest.findUnique({
     where: { id: req.params.id },
-    select: { id: true, consolidatedAt: true },
+    select: { id: true, consolidatedAt: true, isTest: true },
   });
 
   if (!contest) {
     res.status(404).json({ message: "Contest not found" });
+    return;
+  }
+
+  if (contest.isTest) {
+    res.status(409).json({
+      message: "Un desafío de prueba no publica resultados ni sale en el ranking.",
+    });
     return;
   }
 
