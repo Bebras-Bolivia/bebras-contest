@@ -2179,10 +2179,11 @@ app.get("/api/public-contests", async (_req, res) => {
   );
 });
 
-/** «Ana Q.»: en lo público va el nombre con la inicial del apellido, nunca el nombre completo. */
+/** «Ana Quispe»: en lo público va el primer nombre y el primer apellido, nunca el nombre completo. */
 function publicName(first: string, last: string | null) {
-  const initial = last?.trim().charAt(0);
-  return initial ? `${first.trim()} ${initial.toUpperCase()}.` : first.trim();
+  const firstName = first.trim().split(/\s+/)[0] ?? "";
+  const lastName = last?.trim().split(/\s+/)[0] ?? "";
+  return [firstName, lastName].filter(Boolean).join(" ");
 }
 
 const PUBLIC_RANKING_SIZE = 10;
