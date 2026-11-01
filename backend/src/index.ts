@@ -5459,7 +5459,7 @@ app.get("/api/groups/contests", async (req, res) => {
       FROM "ContestGroup" g
       JOIN "Contest" c ON c."id" = g."contestId"
       LEFT JOIN "Team" t ON t."groupId" = g."id"
-      WHERE c."trashedAt" IS NULL AND c."isTest" = 0${ownerId ? ' AND g."createdById" = ?' : ""}
+      WHERE c."trashedAt" IS NULL AND c."isTest" = 0${req.user?.role === "admin" ? ' AND c."isPractice" = 0' : ""}${ownerId ? ' AND g."createdById" = ?' : ""}
       GROUP BY g."contestId"`,
     )
     .bind(...(ownerId ? [ownerId] : []))
