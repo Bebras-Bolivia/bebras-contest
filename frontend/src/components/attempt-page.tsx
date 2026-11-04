@@ -11,7 +11,6 @@ import {
 } from "react";
 import {
   ChevronLeftIcon,
-  ChevronRightIcon,
   ClockIcon,
   LoaderCircleIcon,
   SendIcon,
@@ -20,6 +19,7 @@ import { toast } from "sonner";
 
 import { TaskPlayContent } from "@/components/task-play-content";
 import { TaskCountry } from "@/components/task-country";
+import { NextButton, PreviousButton } from "@/components/step-buttons";
 import { ContestIntro } from "@/components/contest-intro";
 import { ContestFinish } from "@/components/contest-finish";
 import { UsageReview } from "@/components/usage-review";
@@ -760,6 +760,23 @@ export function AttemptPage({
     </Button>
   ) : null;
 
+  const previewBack = preview ? (
+    <div>
+      <Button asChild variant="outline" size="sm">
+        <a
+          href={`/desafios/editar?id=${previewContestId}${
+            previewCategory
+              ? `&categoria=${encodeURIComponent(previewCategory)}`
+              : ""
+          }`}
+        >
+          <ChevronLeftIcon data-icon="inline-start" />
+          Volver
+        </a>
+      </Button>
+    </div>
+  ) : null;
+
   if (loading) {
     return <QuestionSkeleton />;
   }
@@ -793,40 +810,40 @@ export function AttemptPage({
   if (attempt.status === "pending") {
     const shownCategory = previewCategory ?? attempt.category;
     const switching = preview && shownCategory !== attempt.category;
-    const previewTop = preview ? (
-      <div className="flex items-center gap-3">
-        {previewNotice}
-        {(attempt.categories?.length ?? 0) > 1 && (
-          <div
-            role="tablist"
-            aria-label="Categoría que vas a probar"
-            className="flex min-w-0 flex-1 gap-5 overflow-x-auto shadow-[inset_0_-1px_0_var(--border)]"
-          >
-            {attempt.categories!.map((item) => {
-              const selected = item === shownCategory;
-              return (
-                <button
-                  key={item}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  onClick={() => choosePreviewCategory(item)}
-                  className="relative shrink-0 py-2.5 text-sm whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground aria-selected:font-medium aria-selected:text-foreground"
-                >
-                  {item}
-                  {selected && (
-                    <span
-                      aria-hidden="true"
-                      className="absolute inset-x-0 bottom-0 h-0.5 bg-primary"
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    ) : null;
+    const previewTop =
+      preview && (attempt.categories?.length ?? 0) > 1 ? (
+        <div className="flex items-center gap-3">
+          {(attempt.categories?.length ?? 0) > 1 && (
+            <div
+              role="tablist"
+              aria-label="Categoría que vas a probar"
+              className="flex min-w-0 flex-1 gap-5 overflow-x-auto shadow-[inset_0_-1px_0_var(--border)]"
+            >
+              {attempt.categories!.map((item) => {
+                const selected = item === shownCategory;
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => choosePreviewCategory(item)}
+                    className="relative shrink-0 py-2.5 text-sm whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground aria-selected:font-medium aria-selected:text-foreground"
+                  >
+                    {item}
+                    {selected && (
+                      <span
+                        aria-hidden="true"
+                        className="absolute inset-x-0 bottom-0 h-0.5 bg-primary"
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : null;
 
     const notice = startsWithReducedTime ? (
       <Alert>
@@ -899,6 +916,7 @@ export function AttemptPage({
                 canStart={attempt.state === "abierta"}
                 starting={starting}
                 onStart={handleStart}
+                bottom={previewBack}
               />
             </div>
           )}
@@ -1147,18 +1165,10 @@ export function AttemptPage({
           )}
 
           <div className="flex items-center justify-between gap-4">
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              aria-label="Tarea anterior"
-              title="Tarea anterior"
+            <PreviousButton
               disabled={currentIndex === 0}
               onClick={() => goToTask(currentIndex - 1)}
-            >
-              <ChevronLeftIcon data-icon="inline-start" />
-              Anterior
-            </Button>
+            />
             <span className="text-sm text-muted-foreground tabular-nums">
               {currentIndex + 1} de {attempt.tasks.length}
             </span>
@@ -1184,17 +1194,7 @@ export function AttemptPage({
                 </Button>
               </SubmitAttemptDialog>
             ) : (
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                aria-label="Tarea siguiente"
-                title="Tarea siguiente"
-                onClick={() => goToTask(currentIndex + 1)}
-              >
-                Siguiente
-                <ChevronRightIcon data-icon="inline-end" />
-              </Button>
+              <NextButton onClick={() => goToTask(currentIndex + 1)} />
             )}
           </div>
         </div>

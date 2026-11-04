@@ -2,17 +2,13 @@
 
 import { QuestionSkeleton } from "@/components/page-skeletons";
 import { useEffect, useState } from "react";
-import {
-  ArrowLeftIcon,
-  ArrowRightIcon,
-  RotateCcwIcon,
-  XIcon,
-} from "lucide-react";
+import { RotateCcwIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { AnswerResult } from "@/components/answer-result";
 import { TaskPlayContent } from "@/components/task-play-content";
 import { TaskCountry } from "@/components/task-country";
+import { NextButton, PreviousButton } from "@/components/step-buttons";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -287,15 +283,11 @@ export function TeacherPracticeSolver() {
 
       <div className="flex flex-wrap items-center justify-end gap-3 border-t pt-5">
         {index > 0 && (
-          <Button
-            type="button"
-            variant="ghost"
+          <PreviousButton
+            size="default"
             className="mr-auto"
             onClick={() => go(index - 1)}
-          >
-            <ArrowLeftIcon data-icon="inline-start" />
-            Anterior
-          </Button>
+          />
         )}
         {result ? (
           <Button type="button" variant="outline" onClick={retry}>
@@ -317,10 +309,7 @@ export function TeacherPracticeSolver() {
             Terminar práctica
           </Button>
         ) : (
-          <Button type="button" onClick={() => go(index + 1)}>
-            Siguiente
-            <ArrowRightIcon data-icon="inline-end" />
-          </Button>
+          <NextButton size="default" onClick={() => go(index + 1)} />
         )}
       </div>
 

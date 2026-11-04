@@ -2,16 +2,13 @@
 
 import { QuestionSkeleton } from "@/components/page-skeletons";
 import { useEffect, useState } from "react";
-import {
-  ArrowRightIcon,
-  RotateCcwIcon,
-  XIcon,
-} from "lucide-react";
+import { RotateCcwIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { AnswerResult } from "@/components/answer-result";
 import { TaskPlayContent } from "@/components/task-play-content";
 import { TaskCountry } from "@/components/task-country";
+import { NextButton } from "@/components/step-buttons";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -197,7 +194,10 @@ export function PracticeSolver() {
       <section className="flex flex-col gap-5 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <h1 className="text-xl font-semibold">{task.title}</h1>
-          <TaskCountry country={task.country} className="sm:order-last sm:ml-auto" />
+          <TaskCountry
+            country={task.country}
+            className="sm:order-last sm:ml-auto"
+          />
           {level && (
             <span
               className={cn(
@@ -232,12 +232,13 @@ export function PracticeSolver() {
               <RotateCcwIcon data-icon="inline-start" />
               Intentar de nuevo
             </Button>
-            <Button asChild>
-              <a href={nextHref ?? backHref}>
-                {nextHref ? "Siguiente pregunta" : "Ver todas las preguntas"}
-                <ArrowRightIcon data-icon="inline-end" />
-              </a>
-            </Button>
+            <NextButton
+              size="default"
+              href={nextHref ?? backHref}
+              label={
+                nextHref ? "Siguiente pregunta" : "Ver todas las preguntas"
+              }
+            />
           </>
         ) : (
           <>

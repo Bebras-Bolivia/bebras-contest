@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ArrowLeftIcon,
   CheckIcon,
-  ChevronLeftIcon,
   ChevronRightIcon,
   LoaderCircleIcon,
   PrinterIcon,
@@ -17,6 +16,7 @@ import {
   readAssignments,
 } from "@/components/assignment-player";
 import { ImageHotspotPlayer } from "@/components/image-hotspot-player";
+import { NextButton, PreviousButton } from "@/components/step-buttons";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -361,24 +361,18 @@ export function PaperEntry() {
               </select>
             </label>
             <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
+              <PreviousButton
+                size="default"
+                description="Estudiante anterior"
                 disabled={!previous}
                 onClick={() => previous && goTo(previous.id)}
-              >
-                <ChevronLeftIcon data-icon="inline-start" />
-                Anterior
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
+              />
+              <NextButton
+                size="default"
+                description="Estudiante siguiente"
                 disabled={!next}
                 onClick={() => next && goTo(next.id)}
-              >
-                Siguiente
-                <ChevronRightIcon data-icon="inline-end" />
-              </Button>
+              />
             </div>
           </div>
 
