@@ -9969,10 +9969,10 @@ async function trialPrepare(
     };
   }
 
-  const contest = await trialContest("porPublicar", label);
+  const contest = await trialContest("terminado", label);
   await trialSeedGroup(contest, userId, "terminado", TRIAL_STUDENTS);
   return {
-    note: `Hay un desafío terminado con los resultados sin publicar: «${contest.title}».`,
+    note: `Hay un desafío terminado con resultados: «${contest.title}».`,
     path: `/desafios/resultados?id=${contest.id}`,
   };
 }
@@ -10216,13 +10216,17 @@ async function trialCheck(
         : null;
   } else if (taskCode === "A6") {
     const contest = await prisma.contest.findFirst({
-      where: { title: titleOf("porPublicar"), trashedAt: null },
-      select: { resultsPublishedAt: true },
+      where: { title: titleOf("terminado"), trashedAt: null },
+      select: { id: true },
     });
-    at =
-      contest?.resultsPublishedAt && contest.resultsPublishedAt > since
-        ? contest.resultsPublishedAt
-        : null;
+    const event = contest
+      ? await prisma.trialEvent.findFirst({
+          where: { kind: `results:${contest.id}`, createdAt: { gt: since } },
+          orderBy: { createdAt: "asc" },
+          select: { createdAt: true },
+        })
+      : null;
+    at = event?.createdAt ?? null;
   }
 
   return { done: Boolean(at), at: at?.toISOString() ?? null };
@@ -10519,6 +10523,17 @@ app.get("/api/admin/trial", async (_req, res) => {
 
 app.get("/api/contests/:id/results", async (req, res) => {
   await releaseDueResults(String(req.params.id));
+  if (req.user) {
+    const viewed = await prisma.contest.findUnique({
+      where: { id: String(req.params.id) },
+      select: { id: true, title: true },
+    });
+    if (viewed?.title.startsWith(TRIAL_PREFIX)) {
+      await prisma.trialEvent.create({
+        data: { userId: req.user.id, kind: `results:${viewed.id}` },
+      });
+    }
+  }
   const contest = await prisma.contest.findUnique({
     where: { id: req.params.id },
     include: {

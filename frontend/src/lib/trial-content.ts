@@ -11,7 +11,7 @@ export const TRIAL_TASK_TEXT: Record<string, string> = {
   A3: "Crea y publica un desafío con dos categorías, sus preguntas y sus fechas.",
   A4: "Prueba el desafío como lo vería un estudiante.",
   A5: "Amplía la rendición de un desafío que está en curso.",
-  A6: "Publica los resultados y revisa el ranking.",
+  A6: "Revisa los resultados y el ranking de un desafío terminado.",
   A7: "Publica una noticia en el sitio informativo desde el CMS.",
 };
 
