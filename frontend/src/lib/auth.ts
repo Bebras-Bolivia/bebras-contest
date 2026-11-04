@@ -1,4 +1,5 @@
 import { formatPersonName } from "./person-name";
+import { readTrialView } from "./trial-view";
 
 const TOKEN_KEY = "bebras_token";
 const USER_KEY = "bebras_user";
@@ -81,6 +82,27 @@ export function setUser(user: AuthUser) {
   notifySession();
 }
 
+let cachedView: { key: string; user: AuthUser } | null = null;
+
+function withTrialView(user: AuthUser | null) {
+  const view = readTrialView();
+  if (!view || user?.role !== "admin") return user;
+  const key = JSON.stringify(view);
+  if (cachedView?.key !== key) {
+    cachedView = {
+      key,
+      user: {
+        id: view.id,
+        email: view.email,
+        name: view.name || null,
+        role: "maestro",
+        status: "approved",
+      },
+    };
+  }
+  return cachedView.user;
+}
+
 export function getUser(): AuthUser | null {
   if (typeof window === "undefined") {
     return null;
@@ -90,7 +112,7 @@ export function getUser(): AuthUser | null {
     const raw = window.localStorage.getItem(USER_KEY);
     if (!token || !raw) return null;
     const key = JSON.stringify([token, raw]);
-    if (key === cachedKey) return cachedUser;
+    if (key === cachedKey) return withTrialView(cachedUser);
     const user: unknown = JSON.parse(raw);
     cachedUser = validUser(user)
       ? {
@@ -99,7 +121,7 @@ export function getUser(): AuthUser | null {
         }
       : null;
     cachedKey = key;
-    return cachedUser;
+    return withTrialView(cachedUser);
   } catch {
     return null;
   }
@@ -133,4 +155,3 @@ export function subscribeSession(listener: () => void) {
     window.removeEventListener("storage", onStorage);
   };
 }
-

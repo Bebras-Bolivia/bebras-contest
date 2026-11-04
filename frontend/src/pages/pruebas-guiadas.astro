@@ -1,0 +1,14 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { TrialAdminPage } from "../components/trial-admin";
+
+const title = "Pruebas guiadas";
+---
+
+<Layout title={title} backHref="/admin" requireAuth>
+  <main class="mx-auto flex w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+    <div class="flex w-full flex-col gap-6">
+      <TrialAdminPage client:only="react" />
+    </div>
+  </main>
+</Layout>

@@ -44,6 +44,26 @@ export { Prisma }
  */
 export type User = Prisma.UserModel
 /**
+ * Model TrialEvent
+ * 
+ */
+export type TrialEvent = Prisma.TrialEventModel
+/**
+ * Model TrialSession
+ * 
+ */
+export type TrialSession = Prisma.TrialSessionModel
+/**
+ * Model TrialRun
+ * 
+ */
+export type TrialRun = Prisma.TrialRunModel
+/**
+ * Model TrialSus
+ * 
+ */
+export type TrialSus = Prisma.TrialSusModel
+/**
  * Model TeacherSchool
  * 
  */
@@ -83,6 +103,11 @@ export type Team = Prisma.TeamModel
  * 
  */
 export type Attempt = Prisma.AttemptModel
+/**
+ * Model TestTrace
+ * 
+ */
+export type TestTrace = Prisma.TestTraceModel
 /**
  * Model AttemptAnswer
  * 

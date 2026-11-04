@@ -52,6 +52,10 @@ export const AnyNull = runtime.AnyNull
 
 export const ModelName = {
   User: 'User',
+  TrialEvent: 'TrialEvent',
+  TrialSession: 'TrialSession',
+  TrialRun: 'TrialRun',
+  TrialSus: 'TrialSus',
   TeacherSchool: 'TeacherSchool',
   School: 'School',
   TaskDraft: 'TaskDraft',
@@ -60,6 +64,7 @@ export const ModelName = {
   ContestGroup: 'ContestGroup',
   Team: 'Team',
   Attempt: 'Attempt',
+  TestTrace: 'TestTrace',
   AttemptAnswer: 'AttemptAnswer',
   Result: 'Result',
   SiteSetting: 'SiteSetting',
@@ -103,6 +108,53 @@ export const UserScalarFieldEnum = {
 } as const
 
 export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
+
+
+export const TrialEventScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  kind: 'kind',
+  createdAt: 'createdAt'
+} as const
+
+export type TrialEventScalarFieldEnum = (typeof TrialEventScalarFieldEnum)[keyof typeof TrialEventScalarFieldEnum]
+
+
+export const TrialSessionScalarFieldEnum = {
+  id: 'id',
+  role: 'role',
+  firstName: 'firstName',
+  lastName: 'lastName',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type TrialSessionScalarFieldEnum = (typeof TrialSessionScalarFieldEnum)[keyof typeof TrialSessionScalarFieldEnum]
+
+
+export const TrialRunScalarFieldEnum = {
+  id: 'id',
+  sessionId: 'sessionId',
+  taskCode: 'taskCode',
+  result: 'result',
+  seconds: 'seconds',
+  comment: 'comment',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type TrialRunScalarFieldEnum = (typeof TrialRunScalarFieldEnum)[keyof typeof TrialRunScalarFieldEnum]
+
+
+export const TrialSusScalarFieldEnum = {
+  sessionId: 'sessionId',
+  answers: 'answers',
+  score: 'score',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type TrialSusScalarFieldEnum = (typeof TrialSusScalarFieldEnum)[keyof typeof TrialSusScalarFieldEnum]
 
 
 export const TeacherSchoolScalarFieldEnum = {
@@ -198,6 +250,7 @@ export const ContestScalarFieldEnum = {
   resultsUntil: 'resultsUntil',
   isPractice: 'isPractice',
   isTest: 'isTest',
+  collectUsage: 'collectUsage',
   createdById: 'createdById',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -276,6 +329,18 @@ export const AttemptScalarFieldEnum = {
 } as const
 
 export type AttemptScalarFieldEnum = (typeof AttemptScalarFieldEnum)[keyof typeof AttemptScalarFieldEnum]
+
+
+export const TestTraceScalarFieldEnum = {
+  attemptId: 'attemptId',
+  device: 'device',
+  stars: 'stars',
+  comment: 'comment',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type TestTraceScalarFieldEnum = (typeof TestTraceScalarFieldEnum)[keyof typeof TestTraceScalarFieldEnum]
 
 
 export const AttemptAnswerScalarFieldEnum = {

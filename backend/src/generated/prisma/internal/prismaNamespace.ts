@@ -385,6 +385,10 @@ type FieldRefInputType<Model, FieldType> = Model extends never ? never : FieldRe
 
 export const ModelName = {
   User: 'User',
+  TrialEvent: 'TrialEvent',
+  TrialSession: 'TrialSession',
+  TrialRun: 'TrialRun',
+  TrialSus: 'TrialSus',
   TeacherSchool: 'TeacherSchool',
   School: 'School',
   TaskDraft: 'TaskDraft',
@@ -393,6 +397,7 @@ export const ModelName = {
   ContestGroup: 'ContestGroup',
   Team: 'Team',
   Attempt: 'Attempt',
+  TestTrace: 'TestTrace',
   AttemptAnswer: 'AttemptAnswer',
   Result: 'Result',
   SiteSetting: 'SiteSetting',
@@ -412,7 +417,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "teacherSchool" | "school" | "taskDraft" | "contest" | "contestTask" | "contestGroup" | "team" | "attempt" | "attemptAnswer" | "result" | "siteSetting" | "practiceResult"
+    modelProps: "user" | "trialEvent" | "trialSession" | "trialRun" | "trialSus" | "teacherSchool" | "school" | "taskDraft" | "contest" | "contestTask" | "contestGroup" | "team" | "attempt" | "testTrace" | "attemptAnswer" | "result" | "siteSetting" | "practiceResult"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -487,6 +492,302 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.UserCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.UserCountAggregateOutputType> | number
+        }
+      }
+    }
+    TrialEvent: {
+      payload: Prisma.$TrialEventPayload<ExtArgs>
+      fields: Prisma.TrialEventFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.TrialEventFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialEventPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.TrialEventFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialEventPayload>
+        }
+        findFirst: {
+          args: Prisma.TrialEventFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialEventPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.TrialEventFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialEventPayload>
+        }
+        findMany: {
+          args: Prisma.TrialEventFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialEventPayload>[]
+        }
+        create: {
+          args: Prisma.TrialEventCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialEventPayload>
+        }
+        createMany: {
+          args: Prisma.TrialEventCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.TrialEventCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialEventPayload>[]
+        }
+        delete: {
+          args: Prisma.TrialEventDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialEventPayload>
+        }
+        update: {
+          args: Prisma.TrialEventUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialEventPayload>
+        }
+        deleteMany: {
+          args: Prisma.TrialEventDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.TrialEventUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.TrialEventUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialEventPayload>[]
+        }
+        upsert: {
+          args: Prisma.TrialEventUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialEventPayload>
+        }
+        aggregate: {
+          args: Prisma.TrialEventAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateTrialEvent>
+        }
+        groupBy: {
+          args: Prisma.TrialEventGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TrialEventGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.TrialEventCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TrialEventCountAggregateOutputType> | number
+        }
+      }
+    }
+    TrialSession: {
+      payload: Prisma.$TrialSessionPayload<ExtArgs>
+      fields: Prisma.TrialSessionFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.TrialSessionFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSessionPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.TrialSessionFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSessionPayload>
+        }
+        findFirst: {
+          args: Prisma.TrialSessionFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSessionPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.TrialSessionFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSessionPayload>
+        }
+        findMany: {
+          args: Prisma.TrialSessionFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSessionPayload>[]
+        }
+        create: {
+          args: Prisma.TrialSessionCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSessionPayload>
+        }
+        createMany: {
+          args: Prisma.TrialSessionCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.TrialSessionCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSessionPayload>[]
+        }
+        delete: {
+          args: Prisma.TrialSessionDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSessionPayload>
+        }
+        update: {
+          args: Prisma.TrialSessionUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSessionPayload>
+        }
+        deleteMany: {
+          args: Prisma.TrialSessionDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.TrialSessionUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.TrialSessionUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSessionPayload>[]
+        }
+        upsert: {
+          args: Prisma.TrialSessionUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSessionPayload>
+        }
+        aggregate: {
+          args: Prisma.TrialSessionAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateTrialSession>
+        }
+        groupBy: {
+          args: Prisma.TrialSessionGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TrialSessionGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.TrialSessionCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TrialSessionCountAggregateOutputType> | number
+        }
+      }
+    }
+    TrialRun: {
+      payload: Prisma.$TrialRunPayload<ExtArgs>
+      fields: Prisma.TrialRunFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.TrialRunFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialRunPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.TrialRunFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialRunPayload>
+        }
+        findFirst: {
+          args: Prisma.TrialRunFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialRunPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.TrialRunFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialRunPayload>
+        }
+        findMany: {
+          args: Prisma.TrialRunFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialRunPayload>[]
+        }
+        create: {
+          args: Prisma.TrialRunCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialRunPayload>
+        }
+        createMany: {
+          args: Prisma.TrialRunCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.TrialRunCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialRunPayload>[]
+        }
+        delete: {
+          args: Prisma.TrialRunDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialRunPayload>
+        }
+        update: {
+          args: Prisma.TrialRunUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialRunPayload>
+        }
+        deleteMany: {
+          args: Prisma.TrialRunDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.TrialRunUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.TrialRunUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialRunPayload>[]
+        }
+        upsert: {
+          args: Prisma.TrialRunUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialRunPayload>
+        }
+        aggregate: {
+          args: Prisma.TrialRunAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateTrialRun>
+        }
+        groupBy: {
+          args: Prisma.TrialRunGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TrialRunGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.TrialRunCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TrialRunCountAggregateOutputType> | number
+        }
+      }
+    }
+    TrialSus: {
+      payload: Prisma.$TrialSusPayload<ExtArgs>
+      fields: Prisma.TrialSusFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.TrialSusFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSusPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.TrialSusFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSusPayload>
+        }
+        findFirst: {
+          args: Prisma.TrialSusFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSusPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.TrialSusFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSusPayload>
+        }
+        findMany: {
+          args: Prisma.TrialSusFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSusPayload>[]
+        }
+        create: {
+          args: Prisma.TrialSusCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSusPayload>
+        }
+        createMany: {
+          args: Prisma.TrialSusCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.TrialSusCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSusPayload>[]
+        }
+        delete: {
+          args: Prisma.TrialSusDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSusPayload>
+        }
+        update: {
+          args: Prisma.TrialSusUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSusPayload>
+        }
+        deleteMany: {
+          args: Prisma.TrialSusDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.TrialSusUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.TrialSusUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSusPayload>[]
+        }
+        upsert: {
+          args: Prisma.TrialSusUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TrialSusPayload>
+        }
+        aggregate: {
+          args: Prisma.TrialSusAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateTrialSus>
+        }
+        groupBy: {
+          args: Prisma.TrialSusGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TrialSusGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.TrialSusCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TrialSusCountAggregateOutputType> | number
         }
       }
     }
@@ -1082,6 +1383,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    TestTrace: {
+      payload: Prisma.$TestTracePayload<ExtArgs>
+      fields: Prisma.TestTraceFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.TestTraceFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TestTracePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.TestTraceFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TestTracePayload>
+        }
+        findFirst: {
+          args: Prisma.TestTraceFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TestTracePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.TestTraceFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TestTracePayload>
+        }
+        findMany: {
+          args: Prisma.TestTraceFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TestTracePayload>[]
+        }
+        create: {
+          args: Prisma.TestTraceCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TestTracePayload>
+        }
+        createMany: {
+          args: Prisma.TestTraceCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.TestTraceCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TestTracePayload>[]
+        }
+        delete: {
+          args: Prisma.TestTraceDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TestTracePayload>
+        }
+        update: {
+          args: Prisma.TestTraceUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TestTracePayload>
+        }
+        deleteMany: {
+          args: Prisma.TestTraceDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.TestTraceUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.TestTraceUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TestTracePayload>[]
+        }
+        upsert: {
+          args: Prisma.TestTraceUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TestTracePayload>
+        }
+        aggregate: {
+          args: Prisma.TestTraceAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateTestTrace>
+        }
+        groupBy: {
+          args: Prisma.TestTraceGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TestTraceGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.TestTraceCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TestTraceCountAggregateOutputType> | number
+        }
+      }
+    }
     AttemptAnswer: {
       payload: Prisma.$AttemptAnswerPayload<ExtArgs>
       fields: Prisma.AttemptAnswerFieldRefs
@@ -1440,6 +1815,53 @@ export const UserScalarFieldEnum = {
 export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
 
 
+export const TrialEventScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  kind: 'kind',
+  createdAt: 'createdAt'
+} as const
+
+export type TrialEventScalarFieldEnum = (typeof TrialEventScalarFieldEnum)[keyof typeof TrialEventScalarFieldEnum]
+
+
+export const TrialSessionScalarFieldEnum = {
+  id: 'id',
+  role: 'role',
+  firstName: 'firstName',
+  lastName: 'lastName',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type TrialSessionScalarFieldEnum = (typeof TrialSessionScalarFieldEnum)[keyof typeof TrialSessionScalarFieldEnum]
+
+
+export const TrialRunScalarFieldEnum = {
+  id: 'id',
+  sessionId: 'sessionId',
+  taskCode: 'taskCode',
+  result: 'result',
+  seconds: 'seconds',
+  comment: 'comment',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type TrialRunScalarFieldEnum = (typeof TrialRunScalarFieldEnum)[keyof typeof TrialRunScalarFieldEnum]
+
+
+export const TrialSusScalarFieldEnum = {
+  sessionId: 'sessionId',
+  answers: 'answers',
+  score: 'score',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type TrialSusScalarFieldEnum = (typeof TrialSusScalarFieldEnum)[keyof typeof TrialSusScalarFieldEnum]
+
+
 export const TeacherSchoolScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -1533,6 +1955,7 @@ export const ContestScalarFieldEnum = {
   resultsUntil: 'resultsUntil',
   isPractice: 'isPractice',
   isTest: 'isTest',
+  collectUsage: 'collectUsage',
   createdById: 'createdById',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -1611,6 +2034,18 @@ export const AttemptScalarFieldEnum = {
 } as const
 
 export type AttemptScalarFieldEnum = (typeof AttemptScalarFieldEnum)[keyof typeof AttemptScalarFieldEnum]
+
+
+export const TestTraceScalarFieldEnum = {
+  attemptId: 'attemptId',
+  device: 'device',
+  stars: 'stars',
+  comment: 'comment',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type TestTraceScalarFieldEnum = (typeof TestTraceScalarFieldEnum)[keyof typeof TestTraceScalarFieldEnum]
 
 
 export const AttemptAnswerScalarFieldEnum = {
@@ -1819,6 +2254,10 @@ export type PrismaClientOptions = ({
 }
 export type GlobalOmitConfig = {
   user?: Prisma.UserOmit
+  trialEvent?: Prisma.TrialEventOmit
+  trialSession?: Prisma.TrialSessionOmit
+  trialRun?: Prisma.TrialRunOmit
+  trialSus?: Prisma.TrialSusOmit
   teacherSchool?: Prisma.TeacherSchoolOmit
   school?: Prisma.SchoolOmit
   taskDraft?: Prisma.TaskDraftOmit
@@ -1827,6 +2266,7 @@ export type GlobalOmitConfig = {
   contestGroup?: Prisma.ContestGroupOmit
   team?: Prisma.TeamOmit
   attempt?: Prisma.AttemptOmit
+  testTrace?: Prisma.TestTraceOmit
   attemptAnswer?: Prisma.AttemptAnswerOmit
   result?: Prisma.ResultOmit
   siteSetting?: Prisma.SiteSettingOmit

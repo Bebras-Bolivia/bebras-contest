@@ -339,6 +339,7 @@ export type UserWhereInput = {
   schools?: Prisma.TeacherSchoolListRelationFilter
   contests?: Prisma.ContestListRelationFilter
   groups?: Prisma.ContestGroupListRelationFilter
+  trialEvents?: Prisma.TrialEventListRelationFilter
 }
 
 export type UserOrderByWithRelationInput = {
@@ -365,6 +366,7 @@ export type UserOrderByWithRelationInput = {
   schools?: Prisma.TeacherSchoolOrderByRelationAggregateInput
   contests?: Prisma.ContestOrderByRelationAggregateInput
   groups?: Prisma.ContestGroupOrderByRelationAggregateInput
+  trialEvents?: Prisma.TrialEventOrderByRelationAggregateInput
 }
 
 export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -394,6 +396,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   schools?: Prisma.TeacherSchoolListRelationFilter
   contests?: Prisma.ContestListRelationFilter
   groups?: Prisma.ContestGroupListRelationFilter
+  trialEvents?: Prisma.TrialEventListRelationFilter
 }, "id" | "email" | "firebaseUid">
 
 export type UserOrderByWithAggregationInput = {
@@ -473,6 +476,7 @@ export type UserCreateInput = {
   schools?: Prisma.TeacherSchoolCreateNestedManyWithoutUserInput
   contests?: Prisma.ContestCreateNestedManyWithoutCreatedByInput
   groups?: Prisma.ContestGroupCreateNestedManyWithoutCreatedByInput
+  trialEvents?: Prisma.TrialEventCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateInput = {
@@ -499,6 +503,7 @@ export type UserUncheckedCreateInput = {
   schools?: Prisma.TeacherSchoolUncheckedCreateNestedManyWithoutUserInput
   contests?: Prisma.ContestUncheckedCreateNestedManyWithoutCreatedByInput
   groups?: Prisma.ContestGroupUncheckedCreateNestedManyWithoutCreatedByInput
+  trialEvents?: Prisma.TrialEventUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserUpdateInput = {
@@ -524,6 +529,7 @@ export type UserUpdateInput = {
   schools?: Prisma.TeacherSchoolUpdateManyWithoutUserNestedInput
   contests?: Prisma.ContestUpdateManyWithoutCreatedByNestedInput
   groups?: Prisma.ContestGroupUpdateManyWithoutCreatedByNestedInput
+  trialEvents?: Prisma.TrialEventUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateInput = {
@@ -550,6 +556,7 @@ export type UserUncheckedUpdateInput = {
   schools?: Prisma.TeacherSchoolUncheckedUpdateManyWithoutUserNestedInput
   contests?: Prisma.ContestUncheckedUpdateManyWithoutCreatedByNestedInput
   groups?: Prisma.ContestGroupUncheckedUpdateManyWithoutCreatedByNestedInput
+  trialEvents?: Prisma.TrialEventUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateManyInput = {
@@ -727,6 +734,20 @@ export type IntFieldUpdateOperationsInput = {
   divide?: number
 }
 
+export type UserCreateNestedOneWithoutTrialEventsInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutTrialEventsInput, Prisma.UserUncheckedCreateWithoutTrialEventsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutTrialEventsInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutTrialEventsNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutTrialEventsInput, Prisma.UserUncheckedCreateWithoutTrialEventsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutTrialEventsInput
+  upsert?: Prisma.UserUpsertWithoutTrialEventsInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutTrialEventsInput, Prisma.UserUpdateWithoutTrialEventsInput>, Prisma.UserUncheckedUpdateWithoutTrialEventsInput>
+}
+
 export type UserCreateNestedOneWithoutSchoolsInput = {
   create?: Prisma.XOR<Prisma.UserCreateWithoutSchoolsInput, Prisma.UserUncheckedCreateWithoutSchoolsInput>
   connectOrCreate?: Prisma.UserCreateOrConnectWithoutSchoolsInput
@@ -773,6 +794,124 @@ export type UserUpdateOneWithoutGroupsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutGroupsInput, Prisma.UserUpdateWithoutGroupsInput>, Prisma.UserUncheckedUpdateWithoutGroupsInput>
 }
 
+export type UserCreateWithoutTrialEventsInput = {
+  email: string
+  firebaseUid?: string | null
+  name?: string | null
+  firstName?: string | null
+  lastName?: string | null
+  passwordHash?: string
+  role?: string
+  status?: string
+  schoolCodUe?: string | null
+  schoolName?: string | null
+  institutionType?: string | null
+  department?: string | null
+  city?: string | null
+  phone?: string | null
+  letterFilename?: string | null
+  idFrontFilename?: string | null
+  idBackFilename?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  schools?: Prisma.TeacherSchoolCreateNestedManyWithoutUserInput
+  contests?: Prisma.ContestCreateNestedManyWithoutCreatedByInput
+  groups?: Prisma.ContestGroupCreateNestedManyWithoutCreatedByInput
+}
+
+export type UserUncheckedCreateWithoutTrialEventsInput = {
+  id?: number
+  email: string
+  firebaseUid?: string | null
+  name?: string | null
+  firstName?: string | null
+  lastName?: string | null
+  passwordHash?: string
+  role?: string
+  status?: string
+  schoolCodUe?: string | null
+  schoolName?: string | null
+  institutionType?: string | null
+  department?: string | null
+  city?: string | null
+  phone?: string | null
+  letterFilename?: string | null
+  idFrontFilename?: string | null
+  idBackFilename?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  schools?: Prisma.TeacherSchoolUncheckedCreateNestedManyWithoutUserInput
+  contests?: Prisma.ContestUncheckedCreateNestedManyWithoutCreatedByInput
+  groups?: Prisma.ContestGroupUncheckedCreateNestedManyWithoutCreatedByInput
+}
+
+export type UserCreateOrConnectWithoutTrialEventsInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutTrialEventsInput, Prisma.UserUncheckedCreateWithoutTrialEventsInput>
+}
+
+export type UserUpsertWithoutTrialEventsInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutTrialEventsInput, Prisma.UserUncheckedUpdateWithoutTrialEventsInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutTrialEventsInput, Prisma.UserUncheckedCreateWithoutTrialEventsInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutTrialEventsInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutTrialEventsInput, Prisma.UserUncheckedUpdateWithoutTrialEventsInput>
+}
+
+export type UserUpdateWithoutTrialEventsInput = {
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  firebaseUid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  name?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  firstName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.StringFieldUpdateOperationsInput | string
+  role?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.StringFieldUpdateOperationsInput | string
+  schoolCodUe?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  schoolName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  institutionType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  department?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  city?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  letterFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  idFrontFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  idBackFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  schools?: Prisma.TeacherSchoolUpdateManyWithoutUserNestedInput
+  contests?: Prisma.ContestUpdateManyWithoutCreatedByNestedInput
+  groups?: Prisma.ContestGroupUpdateManyWithoutCreatedByNestedInput
+}
+
+export type UserUncheckedUpdateWithoutTrialEventsInput = {
+  id?: Prisma.IntFieldUpdateOperationsInput | number
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  firebaseUid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  name?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  firstName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.StringFieldUpdateOperationsInput | string
+  role?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.StringFieldUpdateOperationsInput | string
+  schoolCodUe?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  schoolName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  institutionType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  department?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  city?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  letterFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  idFrontFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  idBackFilename?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  schools?: Prisma.TeacherSchoolUncheckedUpdateManyWithoutUserNestedInput
+  contests?: Prisma.ContestUncheckedUpdateManyWithoutCreatedByNestedInput
+  groups?: Prisma.ContestGroupUncheckedUpdateManyWithoutCreatedByNestedInput
+}
+
 export type UserCreateWithoutSchoolsInput = {
   email: string
   firebaseUid?: string | null
@@ -795,6 +934,7 @@ export type UserCreateWithoutSchoolsInput = {
   updatedAt?: Date | string
   contests?: Prisma.ContestCreateNestedManyWithoutCreatedByInput
   groups?: Prisma.ContestGroupCreateNestedManyWithoutCreatedByInput
+  trialEvents?: Prisma.TrialEventCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutSchoolsInput = {
@@ -820,6 +960,7 @@ export type UserUncheckedCreateWithoutSchoolsInput = {
   updatedAt?: Date | string
   contests?: Prisma.ContestUncheckedCreateNestedManyWithoutCreatedByInput
   groups?: Prisma.ContestGroupUncheckedCreateNestedManyWithoutCreatedByInput
+  trialEvents?: Prisma.TrialEventUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutSchoolsInput = {
@@ -860,6 +1001,7 @@ export type UserUpdateWithoutSchoolsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   contests?: Prisma.ContestUpdateManyWithoutCreatedByNestedInput
   groups?: Prisma.ContestGroupUpdateManyWithoutCreatedByNestedInput
+  trialEvents?: Prisma.TrialEventUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutSchoolsInput = {
@@ -885,6 +1027,7 @@ export type UserUncheckedUpdateWithoutSchoolsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   contests?: Prisma.ContestUncheckedUpdateManyWithoutCreatedByNestedInput
   groups?: Prisma.ContestGroupUncheckedUpdateManyWithoutCreatedByNestedInput
+  trialEvents?: Prisma.TrialEventUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutContestsInput = {
@@ -909,6 +1052,7 @@ export type UserCreateWithoutContestsInput = {
   updatedAt?: Date | string
   schools?: Prisma.TeacherSchoolCreateNestedManyWithoutUserInput
   groups?: Prisma.ContestGroupCreateNestedManyWithoutCreatedByInput
+  trialEvents?: Prisma.TrialEventCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutContestsInput = {
@@ -934,6 +1078,7 @@ export type UserUncheckedCreateWithoutContestsInput = {
   updatedAt?: Date | string
   schools?: Prisma.TeacherSchoolUncheckedCreateNestedManyWithoutUserInput
   groups?: Prisma.ContestGroupUncheckedCreateNestedManyWithoutCreatedByInput
+  trialEvents?: Prisma.TrialEventUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutContestsInput = {
@@ -974,6 +1119,7 @@ export type UserUpdateWithoutContestsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   schools?: Prisma.TeacherSchoolUpdateManyWithoutUserNestedInput
   groups?: Prisma.ContestGroupUpdateManyWithoutCreatedByNestedInput
+  trialEvents?: Prisma.TrialEventUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutContestsInput = {
@@ -999,6 +1145,7 @@ export type UserUncheckedUpdateWithoutContestsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   schools?: Prisma.TeacherSchoolUncheckedUpdateManyWithoutUserNestedInput
   groups?: Prisma.ContestGroupUncheckedUpdateManyWithoutCreatedByNestedInput
+  trialEvents?: Prisma.TrialEventUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutGroupsInput = {
@@ -1023,6 +1170,7 @@ export type UserCreateWithoutGroupsInput = {
   updatedAt?: Date | string
   schools?: Prisma.TeacherSchoolCreateNestedManyWithoutUserInput
   contests?: Prisma.ContestCreateNestedManyWithoutCreatedByInput
+  trialEvents?: Prisma.TrialEventCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutGroupsInput = {
@@ -1048,6 +1196,7 @@ export type UserUncheckedCreateWithoutGroupsInput = {
   updatedAt?: Date | string
   schools?: Prisma.TeacherSchoolUncheckedCreateNestedManyWithoutUserInput
   contests?: Prisma.ContestUncheckedCreateNestedManyWithoutCreatedByInput
+  trialEvents?: Prisma.TrialEventUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutGroupsInput = {
@@ -1088,6 +1237,7 @@ export type UserUpdateWithoutGroupsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   schools?: Prisma.TeacherSchoolUpdateManyWithoutUserNestedInput
   contests?: Prisma.ContestUpdateManyWithoutCreatedByNestedInput
+  trialEvents?: Prisma.TrialEventUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutGroupsInput = {
@@ -1113,6 +1263,7 @@ export type UserUncheckedUpdateWithoutGroupsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   schools?: Prisma.TeacherSchoolUncheckedUpdateManyWithoutUserNestedInput
   contests?: Prisma.ContestUncheckedUpdateManyWithoutCreatedByNestedInput
+  trialEvents?: Prisma.TrialEventUncheckedUpdateManyWithoutUserNestedInput
 }
 
 
@@ -1124,12 +1275,14 @@ export type UserCountOutputType = {
   schools: number
   contests: number
   groups: number
+  trialEvents: number
 }
 
 export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   schools?: boolean | UserCountOutputTypeCountSchoolsArgs
   contests?: boolean | UserCountOutputTypeCountContestsArgs
   groups?: boolean | UserCountOutputTypeCountGroupsArgs
+  trialEvents?: boolean | UserCountOutputTypeCountTrialEventsArgs
 }
 
 /**
@@ -1163,6 +1316,13 @@ export type UserCountOutputTypeCountGroupsArgs<ExtArgs extends runtime.Types.Ext
   where?: Prisma.ContestGroupWhereInput
 }
 
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountTrialEventsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.TrialEventWhereInput
+}
+
 
 export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -1188,6 +1348,7 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   schools?: boolean | Prisma.User$schoolsArgs<ExtArgs>
   contests?: boolean | Prisma.User$contestsArgs<ExtArgs>
   groups?: boolean | Prisma.User$groupsArgs<ExtArgs>
+  trialEvents?: boolean | Prisma.User$trialEventsArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["user"]>
 
@@ -1265,6 +1426,7 @@ export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   schools?: boolean | Prisma.User$schoolsArgs<ExtArgs>
   contests?: boolean | Prisma.User$contestsArgs<ExtArgs>
   groups?: boolean | Prisma.User$groupsArgs<ExtArgs>
+  trialEvents?: boolean | Prisma.User$trialEventsArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type UserIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
@@ -1276,6 +1438,7 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     schools: Prisma.$TeacherSchoolPayload<ExtArgs>[]
     contests: Prisma.$ContestPayload<ExtArgs>[]
     groups: Prisma.$ContestGroupPayload<ExtArgs>[]
+    trialEvents: Prisma.$TrialEventPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: number
@@ -1695,6 +1858,7 @@ export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Typ
   schools<T extends Prisma.User$schoolsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$schoolsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TeacherSchoolPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   contests<T extends Prisma.User$contestsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$contestsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ContestPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   groups<T extends Prisma.User$groupsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$groupsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ContestGroupPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  trialEvents<T extends Prisma.User$trialEventsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$trialEventsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TrialEventPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -2204,6 +2368,30 @@ export type User$groupsArgs<ExtArgs extends runtime.Types.Extensions.InternalArg
   take?: number
   skip?: number
   distinct?: Prisma.ContestGroupScalarFieldEnum | Prisma.ContestGroupScalarFieldEnum[]
+}
+
+/**
+ * User.trialEvents
+ */
+export type User$trialEventsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the TrialEvent
+   */
+  select?: Prisma.TrialEventSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the TrialEvent
+   */
+  omit?: Prisma.TrialEventOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TrialEventInclude<ExtArgs> | null
+  where?: Prisma.TrialEventWhereInput
+  orderBy?: Prisma.TrialEventOrderByWithRelationInput | Prisma.TrialEventOrderByWithRelationInput[]
+  cursor?: Prisma.TrialEventWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.TrialEventScalarFieldEnum | Prisma.TrialEventScalarFieldEnum[]
 }
 
 /**

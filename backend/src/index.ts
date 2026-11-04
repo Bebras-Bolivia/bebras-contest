@@ -1027,6 +1027,7 @@ function deserializeContest(contest: {
   resultsAt: Date | null;
   resultsUntil: Date | null;
   isTest?: boolean;
+  collectUsage?: boolean;
   createdAt: Date;
   updatedAt: Date;
   tasks?: Array<{
@@ -1102,6 +1103,7 @@ function deserializeContest(contest: {
     resultsAt: contest.resultsAt?.toISOString() ?? null,
     resultsUntil: contest.resultsUntil?.toISOString() ?? null,
     isTest: Boolean(contest.isTest),
+    collectUsage: Boolean(contest.collectUsage),
     state,
     isOpen,
     createdAt: contest.createdAt.toISOString(),
@@ -1162,6 +1164,7 @@ function parseContestPayload(body: Record<string, unknown>) {
     title,
     categories,
     isTest,
+    collectUsage: isTest && body.collectUsage === true,
     durationMinutes,
     scoring: parseContestScoring(body.scoring),
     questionDisplayMode,
@@ -1325,7 +1328,7 @@ app.use((req, res, next) => {
   res.header("Vary", "Origin");
   res.header(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Play-Session",
+    "Content-Type, Authorization, X-Play-Session, X-Trial-As",
   );
   res.header(
     "Access-Control-Allow-Methods",
@@ -2118,7 +2121,13 @@ app.get("/api/schools", async (req, res) => {
 app.get("/api/public-contests", async (_req, res) => {
   await releaseDueResults();
   const contests = await prisma.contest.findMany({
-    where: { publishedAt: { not: null }, isPractice: false, trashedAt: null, stoppedAt: null },
+    where: {
+      publishedAt: { not: null },
+      isPractice: false,
+      trashedAt: null,
+      stoppedAt: null,
+      title: { not: { startsWith: TRIAL_PREFIX } },
+    },
     orderBy: { startsAt: "asc" },
     select: {
       id: true,
@@ -4020,6 +4029,7 @@ app.post("/api/contests", async (req, res) => {
     data: {
       title: payload.title,
       isTest: payload.isTest,
+      collectUsage: payload.collectUsage,
       categories: JSON.stringify(payload.categories),
       durationMinutes: payload.durationMinutes,
       registrationStartsAt: payload.registrationStartsAt,
@@ -4174,13 +4184,13 @@ app.put("/api/contests/:id", async (req, res) => {
   await db().batch([
     db().prepare('DELETE FROM "ContestTask" WHERE "contestId" = ?').bind(contestId),
     db().prepare(`UPDATE "Contest" SET
-      "title" = ?, "isTest" = ?, "categories" = ?, "durationMinutes" = ?,
+      "title" = ?, "isTest" = ?, "collectUsage" = ?, "categories" = ?, "durationMinutes" = ?,
       "registrationStartsAt" = ?, "registrationEndsAt" = ?, "startsAt" = ?, "endsAt" = ?, "schedules" = ?, "resultsAt" = ?, "resultsUntil" = ?,
       "scoring" = ?, "questionDisplayMode" = ?,
       "allowPairs" = ?, "shuffleOptions" = ?, "showFeedback" = ?, "showSolutions" = ?, "showTotalScore" = ?,
       "showScoreOnSubmit" = ?, "showFeedbackOnSubmit" = ?, "showSolutionsOnSubmit" = ?,
       "updatedAt" = ? WHERE "id" = ?`).bind(
-      payload.title, Number(payload.isTest), JSON.stringify(payload.categories), payload.durationMinutes,
+      payload.title, Number(payload.isTest), Number(payload.collectUsage), JSON.stringify(payload.categories), payload.durationMinutes,
       payload.registrationStartsAt?.toISOString() ?? null,
       payload.registrationEndsAt?.toISOString() ?? null,
       payload.startsAt?.toISOString() ?? null, payload.endsAt?.toISOString() ?? null,
@@ -5140,12 +5150,17 @@ app.get("/api/published-contests", requireAuth, async (req, res) => {
       ? { OR: [{ isPractice: false, isTest: false }, { createdById: req.user.id }] }
       : { isPractice: false, isTest: false };
 
+  const hideTrial =
+    req.user?.role !== "admin" && !req.user?.email.startsWith("ensayo.");
   const contests = await prisma.contest.findMany({
     where: {
       trashedAt: null,
       ...(req.user?.role === "admin" ? {} : { publishedAt: { not: null } }),
       AND: [
         visibility,
+        ...(hideTrial
+          ? [{ NOT: { title: { startsWith: TRIAL_PREFIX } } }]
+          : []),
       ],
     },
     orderBy: { updatedAt: "desc" },
@@ -5266,6 +5281,7 @@ app.get("/api/groups", async (req, res) => {
 });
 
 app.get("/api/groups/students.xlsx", async (req, res) => {
+  await trialTouch(req, "codes");
   const { ownerId } = groupListFilters(req);
   const contestId = typeof req.query.contestId === "string" ? req.query.contestId : "";
   const contest = contestId
@@ -5500,6 +5516,7 @@ app.get("/api/groups/contests", async (req, res) => {
 });
 
 app.get("/api/groups/:id", async (req, res) => {
+  await trialTouch(req, `group:${req.params.id}`);
   const group = await prisma.contestGroup.findUnique({
     where: { id: req.params.id },
     include: {
@@ -5818,6 +5835,7 @@ function excelFileName(text: string) {
 }
 
 app.get("/api/groups/:id/results.xlsx", async (req, res) => {
+  await trialTouch(req, "results-excel");
   const results = await loadGroupResults(req.params.id, req.user);
 
   if (!results) {
@@ -9154,6 +9172,16 @@ const playAttemptHandler: express.RequestHandler = async (req, res) => {
     playTasksJsonCache.set(sharedTasksKey, tasksJson);
   }
 
+  const usageRow =
+    contest.isTest && contest.collectUsage
+      ? await db()
+          .prepare(
+            'SELECT "stars", "comment" FROM "TestTrace" WHERE "attemptId" = ?',
+          )
+          .bind(attempt.id)
+          .first<{ stars: number | null; comment: string | null }>()
+      : null;
+
   const body = {
     contestTitle: contest.title,
     attemptId: attempt.id,
@@ -9188,6 +9216,10 @@ const playAttemptHandler: express.RequestHandler = async (req, res) => {
     finishedAt: attempt.finishedAt?.toISOString() ?? null,
     suspendedAt: contest.suspendedAt?.toISOString() ?? null,
     resultsPublished,
+    collectUsage: Boolean(contest.isTest && contest.collectUsage),
+    usageReviewed: Boolean(
+      usageRow && (usageRow.stars !== null || usageRow.comment),
+    ),
     showFeedback: visible.feedback,
     showSolutions: visible.solutions,
     showTotalScore: visible.score,
@@ -9380,6 +9412,1070 @@ app.post("/api/play/submit", async (req, res) => {
 
   await finalizeAttempt(team.attempt.id);
   res.json({ ok: true });
+});
+
+async function usageAttemptId(req: express.Request) {
+  const token = readSessionToken(req);
+  if (!token) {
+    return null;
+  }
+  const team = await findLightTeamBySession(token);
+  const contest = team?.group.contest;
+  return team?.attempt && contest?.isTest && contest.collectUsage
+    ? team.attempt.id
+    : null;
+}
+
+function usageDevice(value: unknown) {
+  const source =
+    value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const size = (raw: unknown) => {
+    const number = Math.round(Number(raw));
+    return Number.isFinite(number) && number > 0 && number < 20000 ? number : 0;
+  };
+  return {
+    kind: source.kind === "mobile" ? "mobile" : "desktop",
+    width: size(source.width),
+    height: size(source.height),
+  };
+}
+
+app.post("/api/play/review", async (req, res) => {
+  const attemptId = await usageAttemptId(req);
+
+  if (!attemptId) {
+    res.status(204).send();
+    return;
+  }
+
+  const rawStars = Math.round(Number(req.body?.stars));
+  const stars = rawStars >= 1 && rawStars <= 5 ? rawStars : null;
+  const comment =
+    typeof req.body?.comment === "string"
+      ? req.body.comment.trim().slice(0, 500)
+      : "";
+
+  if (stars === null && !comment) {
+    res
+      .status(400)
+      .json({ message: "Elige las estrellas o escribe un comentario." });
+    return;
+  }
+
+  const now = currentDate().toISOString();
+  await db()
+    .prepare(
+      `INSERT INTO "TestTrace" ("attemptId", "device", "stars", "comment", "createdAt", "updatedAt")
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT ("attemptId") DO UPDATE SET
+        "device" = excluded."device",
+        "stars" = excluded."stars",
+        "comment" = excluded."comment",
+        "updatedAt" = excluded."updatedAt"`,
+    )
+    .bind(
+      attemptId,
+      JSON.stringify(usageDevice(req.body?.device)),
+      stars,
+      comment || null,
+      now,
+      now,
+    )
+    .run();
+
+  res.status(204).send();
+});
+
+app.put("/api/contests/:id/usage-setting", async (req, res) => {
+  const contest = await prisma.contest.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, isTest: true, trashedAt: true },
+  });
+
+  if (!contest || contest.trashedAt) {
+    res.status(404).json({ message: "Desafío no encontrado." });
+    return;
+  }
+
+  if (!contest.isTest) {
+    res.status(409).json({
+      message: "Solo un desafío de prueba puede recoger uso y opiniones.",
+    });
+    return;
+  }
+
+  const enabled = req.body?.enabled === true;
+  await db()
+    .prepare('UPDATE "Contest" SET "collectUsage" = ? WHERE "id" = ?')
+    .bind(Number(enabled), contest.id)
+    .run();
+
+  res.json({ collectUsage: enabled });
+});
+
+app.get("/api/contests/:id/usage", async (req, res) => {
+  const contest = await prisma.contest.findUnique({
+    where: { id: req.params.id },
+    select: {
+      id: true,
+      title: true,
+      isTest: true,
+      collectUsage: true,
+      categories: true,
+      trashedAt: true,
+    },
+  });
+
+  if (!contest || contest.trashedAt) {
+    res.status(404).json({ message: "Desafío no encontrado." });
+    return;
+  }
+
+  if (!contest.isTest) {
+    res.status(409).json({
+      message: "Solo un desafío de prueba recoge uso y opiniones.",
+    });
+    return;
+  }
+
+  const { results } = await db()
+    .prepare(
+      `SELECT t."grade", t."memberOneFirstName", t."memberOneLastName",
+        a."status", a."startedAt", a."endsAt", a."finishedAt",
+        r."totalScore", r."correctCount", r."answeredCount",
+        x."device", x."stars", x."comment"
+      FROM "Team" t
+      JOIN "ContestGroup" g ON g."id" = t."groupId"
+      LEFT JOIN "Attempt" a ON a."teamId" = t."id"
+      LEFT JOIN "Result" r ON r."attemptId" = a."id"
+      LEFT JOIN "TestTrace" x ON x."attemptId" = a."id"
+      WHERE g."contestId" = ?
+      ORDER BY t."createdAt", t."id"`,
+    )
+    .bind(contest.id)
+    .all<Record<string, unknown>>();
+
+  const categories = contestCategories(contest);
+  const rows = results.map((row, index) => {
+    const startedAt = sqlDate(row.startedAt);
+    const endsAt = sqlDate(row.endsAt);
+    const finishedAt = sqlDate(row.finishedAt);
+    const grade = (row.grade as string | null) ?? null;
+    let device: { kind: string; width: number; height: number } | null = null;
+    try {
+      device = row.device ? JSON.parse(String(row.device)) : null;
+    } catch {
+      device = null;
+    }
+    return {
+      code: `E${String(index + 1).padStart(2, "0")}`,
+      name: `${row.memberOneFirstName} ${row.memberOneLastName}`.trim(),
+      grade: SCHOOL_GRADES.find((item) => item.value === grade)?.label ?? grade,
+      category: teamCategory(grade, categories),
+      status: String(row.status ?? "pending"),
+      seconds:
+        startedAt && finishedAt
+          ? Math.round((finishedAt.getTime() - startedAt.getTime()) / 1000)
+          : null,
+      closedBy: finishedAt
+        ? endsAt && finishedAt.getTime() >= endsAt.getTime()
+          ? "timeout"
+          : "student"
+        : null,
+      totalScore: (row.totalScore as number | null) ?? null,
+      correctCount: (row.correctCount as number | null) ?? null,
+      answeredCount: (row.answeredCount as number | null) ?? null,
+      device: device && device.width ? device : null,
+      stars: (row.stars as number | null) ?? null,
+      comment: (row.comment as string | null) ?? null,
+    };
+  });
+  const rated = rows.filter((row) => row.stars !== null);
+
+  res.json({
+    contestTitle: contest.title,
+    collectUsage: contest.collectUsage,
+    rows,
+    summary: {
+      students: rows.length,
+      finished: rows.filter((row) => row.status === "finished").length,
+      reviewed: rows.filter((row) => row.stars !== null || row.comment).length,
+      averageStars: rated.length
+        ? Math.round(
+            (rated.reduce((sum, row) => sum + (row.stars ?? 0), 0) /
+              rated.length) *
+              10,
+          ) / 10
+        : null,
+    },
+  });
+});
+
+const TRIAL_TASKS: Record<"maestro" | "admin", string[]> = {
+  maestro: ["M1", "M2", "M3", "M4", "M5", "M6", "M7"],
+  admin: ["A1", "A2", "A3", "A4", "A5", "A6", "A7"],
+};
+const TRIAL_CRITICAL = ["M2", "M4", "A3", "A6"];
+const TRIAL_RESULTS = ["alone", "help", "failed"];
+
+function trialSusScore(answers: number[]) {
+  const sum = answers.reduce(
+    (total, value, index) => total + (index % 2 === 0 ? value - 1 : 5 - value),
+    0,
+  );
+  return sum * 2.5;
+}
+
+const TRIAL_PREFIX = "[Ensayo]";
+const TRIAL_CATEGORY = "Titi";
+const TRIAL_GRADE = SCHOOL_GRADES.find((grade) => grade.value === "P5")!;
+const TRIAL_TITLES = {
+  inscripcion: `${TRIAL_PREFIX} Inscripción abierta`,
+  curso: `${TRIAL_PREFIX} En curso`,
+  terminado: `${TRIAL_PREFIX} Terminado`,
+  porPublicar: `${TRIAL_PREFIX} Resultados por publicar`,
+};
+const TRIAL_SCENARIO_TASKS = ["M1", "M2", "M3", "M4", "M5", "M6", "A1", "A4", "A5", "A6"];
+const TRIAL_REGISTRATION_MARK = "trialRegistrationReopened";
+const TRIAL_ACCOUNT_KIND = "m1-account";
+const TRIAL_DAY = 24 * 3_600_000;
+const TRIAL_ROSTER: Array<[string, string]> = [
+  ["Pedro", "Vargas"],
+  ["Lucia", "Rojas"],
+  ["Diego", "Ticona"],
+  ["Elena", "Huanca"],
+  ["Mateo", "Salazar"],
+];
+const TRIAL_STUDENTS: Array<[string, string]> = [
+  ["Maria", "Flores"],
+  ["Ana", "Quispe"],
+  ["Carlos", "Choque"],
+  ["Rosa", "Mendoza"],
+  ["Jose", "Condori"],
+  ["Luis", "Mamani"],
+];
+
+type TrialKind = keyof typeof TRIAL_TITLES;
+type TrialSessionRow = { id: string; firstName: string; lastName: string };
+
+function trialLabel(session: TrialSessionRow) {
+  return `${session.firstName} ${session.lastName} #${session.id.slice(-4)}`;
+}
+
+async function trialContest(kind: TrialKind, label: string) {
+  const now = currentDate();
+  const title = `${TRIAL_TITLES[kind]} · ${label}`;
+  const found = await prisma.contest.findFirst({
+    where: { title, trashedAt: null },
+    orderBy: { createdAt: "desc" },
+  });
+  const usable =
+    found &&
+    (kind === "inscripcion"
+      ? Boolean(
+          found.registrationEndsAt &&
+            found.registrationEndsAt.getTime() > now.getTime() + TRIAL_DAY,
+        )
+      : kind === "curso"
+        ? Boolean(
+            found.endsAt && found.endsAt.getTime() > now.getTime() + TRIAL_DAY,
+          )
+        : kind === "terminado" || !found.resultsPublishedAt);
+  if (found && usable) {
+    return found;
+  }
+
+  const drafts = await prisma.taskDraft.findMany({
+    where: { isPractice: false, forTeachers: false, answerType: "multiple_choice" },
+    select: { id: true, difficulties: true },
+    orderBy: { id: "asc" },
+  });
+  const ageRange = CATEGORY_AGE_RANGE[TRIAL_CATEGORY];
+  const taskInputs = drafts
+    .filter((draft) =>
+      isDifficultyKey(
+        parseJsonValue<Record<string, unknown>>(draft.difficulties, {})[ageRange],
+      ),
+    )
+    .slice(0, 5)
+    .map((draft) => ({ taskId: draft.id, category: TRIAL_CATEGORY }));
+  const scoring = parseContestScoring(undefined);
+  const writes = await buildContestTaskWrites(taskInputs, [TRIAL_CATEGORY], scoring);
+  const at = (days: number) => new Date(now.getTime() + days * TRIAL_DAY);
+  const windows =
+    kind === "inscripcion"
+      ? { registrationStartsAt: at(-1), registrationEndsAt: at(14), startsAt: at(15), endsAt: at(16), durationMinutes: 45 }
+      : kind === "curso"
+        ? { registrationStartsAt: at(-10), registrationEndsAt: at(-2), startsAt: at(-1), endsAt: at(14), durationMinutes: 240 }
+        : { registrationStartsAt: at(-10), registrationEndsAt: at(-5), startsAt: at(-4), endsAt: at(-3), durationMinutes: 45 };
+  const ended = kind === "terminado" || kind === "porPublicar";
+
+  return prisma.contest.create({
+    data: {
+      title,
+      categories: JSON.stringify([TRIAL_CATEGORY]),
+      scoring: JSON.stringify(scoring),
+      publishedAt: now,
+      showTotalScore: true,
+      showScoreOnSubmit: true,
+      showFeedback: true,
+      showSolutions: true,
+      consolidatedAt: ended ? now : null,
+      resultsReleasedAt: ended ? now : null,
+      resultsPublishedAt: kind === "terminado" ? now : null,
+      ...windows,
+      tasks: { create: writes },
+    },
+  });
+}
+
+async function trialSeedGroup(
+  contest: { id: string },
+  ownerId: number,
+  mode: "inscripcion" | "curso" | "terminado",
+  names: Array<[string, string]>,
+) {
+  const group = await ensureCourseGroup(contest.id, TRIAL_GRADE, ownerId, null);
+  if ((await prisma.team.count({ where: { groupId: group.id } })) > 0) {
+    return group;
+  }
+
+  const tasks = await prisma.contestTask.findMany({
+    where: { contestId: contest.id, category: TRIAL_CATEGORY },
+    orderBy: { position: "asc" },
+  });
+  const now = currentDate();
+  const minutes = (value: number) => value * 60_000;
+  const answersFor = (studentIndex: number, count: number, answeredAt: Date) =>
+    tasks.slice(0, count).map((task, taskIndex) => {
+      const correct = (studentIndex + taskIndex) % 3 !== 0;
+      return {
+        taskDraftId: task.taskDraftId,
+        responsePayload: "{}",
+        isCorrect: correct,
+        score: correct ? task.maxScore : task.minScore,
+        answeredAt,
+      };
+    });
+  const toFinish: string[] = [];
+
+  for (let index = 0; index < names.length; index += 1) {
+    const [first, last] = names[index];
+    let attempt: Record<string, unknown> = { status: "pending" };
+    let finishNow = false;
+
+    if (mode === "curso") {
+      if (index < 3) {
+        const startedAt = new Date(now.getTime() - minutes(20));
+        attempt = {
+          status: "in_progress",
+          startedAt,
+          endsAt: new Date(now.getTime() + minutes(220)),
+          answers: { create: answersFor(index, 2, startedAt) },
+        };
+      } else if (index < 5) {
+        const startedAt = new Date(now.getTime() - minutes(60));
+        attempt = {
+          status: "in_progress",
+          startedAt,
+          endsAt: new Date(now.getTime() + minutes(180)),
+          answers: { create: answersFor(index, tasks.length, startedAt) },
+        };
+        finishNow = true;
+      }
+    } else if (mode === "terminado") {
+      const startedAt = new Date(now.getTime() - 3.5 * TRIAL_DAY + minutes(index * 5));
+      attempt = {
+        status: "in_progress",
+        startedAt,
+        endsAt: new Date(startedAt.getTime() + minutes(45)),
+        answers: { create: answersFor(index, tasks.length, startedAt) },
+      };
+    }
+
+    const team = await prisma.team.create({
+      data: {
+        groupId: group.id,
+        participationMode: "individual",
+        grade: TRIAL_GRADE.value,
+        memberOneFirstName: first,
+        memberOneLastName: last,
+        personalCode: await generateUniquePersonalCode(),
+        attempt: { create: attempt as never },
+      },
+      include: { attempt: true },
+    });
+    if (finishNow && team.attempt) {
+      toFinish.push(team.attempt.id);
+    }
+  }
+
+  for (const attemptId of toFinish) {
+    await finalizeAttempt(attemptId);
+  }
+  if (mode === "terminado") {
+    await consolidateContest(contest.id);
+  }
+  return group;
+}
+
+async function trialOpenRegistration() {
+  if (await teacherRegistrationOpen()) {
+    return;
+  }
+  await prisma.siteSetting.upsert({
+    where: { key: TRIAL_REGISTRATION_MARK },
+    create: { key: TRIAL_REGISTRATION_MARK, value: "1" },
+    update: { value: "1" },
+  });
+  await prisma.siteSetting.deleteMany({
+    where: { key: TEACHER_REGISTRATION_KEY },
+  });
+}
+
+async function trialDropCreatedAccounts() {
+  await prisma.user.deleteMany({
+    where: {
+      role: "maestro",
+      status: "pending",
+      trialEvents: { some: { kind: TRIAL_ACCOUNT_KIND } },
+    },
+  });
+}
+
+async function trialRestoreRegistration() {
+  const mark = await prisma.siteSetting.findUnique({
+    where: { key: TRIAL_REGISTRATION_MARK },
+  });
+  if (!mark) {
+    return;
+  }
+  await prisma.siteSetting.upsert({
+    where: { key: TEACHER_REGISTRATION_KEY },
+    create: { key: TEACHER_REGISTRATION_KEY, value: "closed" },
+    update: { value: "closed" },
+  });
+  await prisma.siteSetting.delete({ where: { key: TRIAL_REGISTRATION_MARK } });
+}
+
+async function trialPrepare(
+  userId: number,
+  session: TrialSessionRow,
+  taskCode: string,
+) {
+  const label = trialLabel(session);
+
+  if (taskCode === "M1") {
+    await trialOpenRegistration();
+    return {
+      note: "El registro de maestros está abierto mientras dure esta tarea. Cuando termine, se vuelve a cerrar. La cuenta que cree se borra sola cuando borres la prueba o los escenarios de ensayo.",
+    };
+  }
+
+  if (taskCode === "M2") {
+    const contest = await trialContest("inscripcion", label);
+    await ensureCourseGroup(contest.id, TRIAL_GRADE, userId, null);
+    return {
+      note: `Preparamos el desafío «${contest.title}». Tienes una planilla de ejemplo para subir.`,
+      planilla: true,
+    };
+  }
+
+  if (taskCode === "M3" || taskCode === "M4") {
+    const contest = await trialContest("inscripcion", label);
+    const group = await trialSeedGroup(contest, userId, "inscripcion", [
+      ["Mria", "Flres"],
+      ...TRIAL_STUDENTS.slice(1),
+    ]);
+    if (taskCode === "M3") {
+      await trialEnsureTypo(group.id);
+    }
+    return {
+      note:
+        taskCode === "M3"
+          ? `Hay estudiantes inscritos en «${contest.title}». Uno tiene el nombre mal escrito.`
+          : `Hay estudiantes inscritos en «${contest.title}».`,
+    };
+  }
+
+  if (taskCode === "M5") {
+    const contest = await trialContest("curso", label);
+    await trialSeedGroup(contest, userId, "curso", TRIAL_STUDENTS);
+    return {
+      note: `Hay un desafío en curso: «${contest.title}», con estudiantes rindiendo.`,
+    };
+  }
+
+  if (taskCode === "M6") {
+    const contest = await trialContest("terminado", label);
+    await trialSeedGroup(contest, userId, "terminado", TRIAL_STUDENTS);
+    return {
+      note: `Hay un desafío terminado con resultados: «${contest.title}».`,
+    };
+  }
+
+  if (taskCode === "A1") {
+    const email = trialPendingEmail(session);
+    const found = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    if (!found) {
+      await prisma.user.create({
+        data: {
+          email,
+          firstName: "Docente",
+          lastName: `Ensayo ${session.firstName}`,
+          role: "maestro",
+          status: "pending",
+          schoolName: "Unidad Educativa de Ensayo",
+          department: "Cochabamba",
+          city: "Cochabamba",
+        },
+      });
+    }
+    return { note: "Hay una solicitud de maestro pendiente de aprobar." };
+  }
+
+  if (taskCode === "A4") {
+    const contest = await trialContest("inscripcion", label);
+    return { note: `Puedes probar el desafío «${contest.title}».` };
+  }
+
+  if (taskCode === "A5") {
+    const contest = await trialContest("curso", label);
+    return { note: `Hay un desafío en curso: «${contest.title}».` };
+  }
+
+  const contest = await trialContest("porPublicar", label);
+  await trialSeedGroup(contest, userId, "terminado", TRIAL_STUDENTS);
+  return {
+    note: `Hay un desafío terminado con los resultados sin publicar: «${contest.title}».`,
+  };
+}
+
+async function trialLoadSession(req: express.Request, res: express.Response) {
+  const session = await prisma.trialSession.findUnique({
+    where: { id: String(req.params.id) },
+  });
+  if (!session) {
+    res.status(404).json({ message: "Prueba no encontrada." });
+    return null;
+  }
+  return session;
+}
+
+function trialSessionRole(session: { role: string }) {
+  return session.role === "admin" ? "admin" : "maestro";
+}
+
+function trialTeacherEmail(session: TrialSessionRow) {
+  return `ensayo.${session.id.slice(-8).toLowerCase()}@prueba.bo`;
+}
+
+async function trialTeacher(session: TrialSessionRow) {
+  const email = trialTeacherEmail(session);
+  const found = await prisma.user.findUnique({ where: { email } });
+  if (found) {
+    return found;
+  }
+  return prisma.user.create({
+    data: {
+      email,
+      firstName: session.firstName,
+      lastName: session.lastName,
+      name: `${session.firstName} ${session.lastName}`,
+      role: "maestro",
+      status: "approved",
+      schoolName: "Unidad Educativa de Ensayo",
+      department: "Cochabamba",
+      city: "Cochabamba",
+    },
+  });
+}
+
+function trialPendingEmail(session: TrialSessionRow) {
+  return `ensayo.p${session.id.slice(-8).toLowerCase()}@prueba.bo`;
+}
+
+async function trialEnsureTypo(groupId: string) {
+  const same = await prisma.team.findFirst({
+    where: { groupId, memberOneLastName: { in: ["Flres", "Flores"] } },
+    select: { id: true },
+  });
+  if (same) {
+    return;
+  }
+  await prisma.team.create({
+    data: {
+      groupId,
+      participationMode: "individual",
+      grade: TRIAL_GRADE.value,
+      memberOneFirstName: "Mria",
+      memberOneLastName: "Flres",
+      personalCode: await generateUniquePersonalCode(),
+      attempt: { create: { status: "pending" } },
+    },
+  });
+}
+
+async function trialTouch(req: express.Request, kind: string) {
+  const user = req.user;
+  if (!user || !user.email.startsWith("ensayo.")) {
+    return;
+  }
+  await prisma.trialEvent.create({ data: { userId: user.id, kind } });
+}
+
+async function trialCheck(
+  session: TrialSessionRow & { role: string },
+  taskCode: string,
+  since: Date,
+) {
+  const label = trialLabel(session);
+  const owner =
+    trialSessionRole(session) === "maestro" ? await trialTeacher(session) : null;
+  const titleOf = (kind: TrialKind) => `${TRIAL_TITLES[kind]} · ${label}`;
+  const groupOf = async (kind: TrialKind) => {
+    if (!owner) {
+      return null;
+    }
+    const contest = await prisma.contest.findFirst({
+      where: { title: titleOf(kind), trashedAt: null },
+      select: { id: true },
+    });
+    if (!contest) {
+      return null;
+    }
+    return prisma.contestGroup.findFirst({
+      where: {
+        contestId: contest.id,
+        createdById: owner.id,
+        grade: TRIAL_GRADE.value,
+      },
+      select: { id: true },
+    });
+  };
+  const eventAt = async (kind: string) => {
+    if (!owner) {
+      return null;
+    }
+    const event = await prisma.trialEvent.findFirst({
+      where: { userId: owner.id, kind, createdAt: { gt: since } },
+      orderBy: { createdAt: "asc" },
+      select: { createdAt: true },
+    });
+    return event?.createdAt ?? null;
+  };
+
+  let at: Date | null = null;
+
+  if (taskCode === "M1") {
+    const teacher = await prisma.user.findFirst({
+      where: {
+        role: "maestro",
+        createdAt: { gt: since },
+        NOT: { email: { startsWith: "ensayo." } },
+      },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, createdAt: true },
+    });
+    if (teacher) {
+      const flagged = await prisma.trialEvent.findFirst({
+        where: { userId: teacher.id, kind: TRIAL_ACCOUNT_KIND },
+        select: { id: true },
+      });
+      if (!flagged) {
+        await prisma.trialEvent.create({
+          data: { userId: teacher.id, kind: TRIAL_ACCOUNT_KIND },
+        });
+      }
+    }
+    at = teacher?.createdAt ?? null;
+  } else if (taskCode === "M2") {
+    const group = await groupOf("inscripcion");
+    const team = group
+      ? await prisma.team.findFirst({
+          where: { groupId: group.id, createdAt: { gt: since } },
+          orderBy: { createdAt: "asc" },
+          select: { createdAt: true },
+        })
+      : null;
+    at = team?.createdAt ?? null;
+  } else if (taskCode === "M3") {
+    const group = await groupOf("inscripcion");
+    const team = group
+      ? await prisma.team.findFirst({
+          where: {
+            groupId: group.id,
+            memberOneLastName: "Flores",
+            memberOneFirstName: { in: ["Maria", "María"] },
+            updatedAt: { gt: since },
+          },
+          select: { updatedAt: true },
+        })
+      : null;
+    at = team?.updatedAt ?? null;
+  } else if (taskCode === "M4") {
+    at = await eventAt("codes");
+  } else if (taskCode === "M5") {
+    const group = await groupOf("curso");
+    at = group ? await eventAt(`group:${group.id}`) : null;
+  } else if (taskCode === "M6") {
+    at = await eventAt("results-excel");
+  } else if (taskCode === "M7") {
+    const practice = owner
+      ? await prisma.contest.findFirst({
+          where: {
+            isPractice: true,
+            createdById: owner.id,
+            createdAt: { gt: since },
+          },
+          select: { createdAt: true },
+        })
+      : null;
+    at = practice?.createdAt ?? null;
+  } else if (taskCode === "A1") {
+    const teacher = await prisma.user.findUnique({
+      where: { email: trialPendingEmail(session) },
+      select: { status: true, updatedAt: true },
+    });
+    at =
+      teacher && teacher.status !== "pending" && teacher.updatedAt > since
+        ? teacher.updatedAt
+        : null;
+  } else if (taskCode === "A2") {
+    const draft = await prisma.taskDraft.findFirst({
+      where: { createdAt: { gt: since }, answerType: "multiple_choice" },
+      select: { createdAt: true },
+    });
+    at = draft?.createdAt ?? null;
+  } else if (taskCode === "A3") {
+    const made = await prisma.contest.findMany({
+      where: {
+        createdAt: { gt: since },
+        publishedAt: { not: null },
+        isPractice: false,
+        isTest: false,
+        NOT: { title: { startsWith: TRIAL_PREFIX } },
+      },
+      select: { createdAt: true, categories: true },
+    });
+    at =
+      made.find((contest) => contestCategories(contest).length >= 2)
+        ?.createdAt ?? null;
+  } else if (taskCode === "A5") {
+    const contest = await prisma.contest.findFirst({
+      where: { title: titleOf("curso"), trashedAt: null },
+      select: { createdAt: true, endsAt: true, updatedAt: true },
+    });
+    at =
+      contest?.endsAt &&
+      contest.endsAt.getTime() - contest.createdAt.getTime() >
+        14 * TRIAL_DAY + 60_000
+        ? contest.updatedAt
+        : null;
+  } else if (taskCode === "A6") {
+    const contest = await prisma.contest.findFirst({
+      where: { title: titleOf("porPublicar"), trashedAt: null },
+      select: { resultsPublishedAt: true },
+    });
+    at =
+      contest?.resultsPublishedAt && contest.resultsPublishedAt > since
+        ? contest.resultsPublishedAt
+        : null;
+  }
+
+  return { done: Boolean(at), at: at?.toISOString() ?? null };
+}
+
+app.post("/api/admin/trial/sessions", async (req, res) => {
+  const role =
+    req.body?.role === "admin" || req.body?.role === "maestro"
+      ? (req.body.role as "admin" | "maestro")
+      : null;
+  const clean = (value: unknown) =>
+    formatName(typeof value === "string" ? value : "");
+  const firstName = clean(req.body?.firstName);
+  const lastName = clean(req.body?.lastName);
+
+  if (!role) {
+    res.status(400).json({ message: "Elige qué prueba es." });
+    return;
+  }
+
+  if (
+    firstName.length < 2 ||
+    lastName.length < 2 ||
+    firstName.length > 40 ||
+    lastName.length > 40
+  ) {
+    res.status(400).json({ message: "Escribe el nombre y el apellido." });
+    return;
+  }
+
+  const session = await prisma.trialSession.create({
+    data: { role, firstName, lastName },
+  });
+  if (role === "maestro") {
+    await trialTeacher(session);
+  }
+  res.status(201).json({ id: session.id });
+});
+
+app.get("/api/admin/trial/sessions/:id", async (req, res) => {
+  const session = await trialLoadSession(req, res);
+  if (!session) {
+    return;
+  }
+
+  const [runs, sus] = await Promise.all([
+    prisma.trialRun.findMany({
+      where: { sessionId: session.id },
+      select: { taskCode: true, result: true, seconds: true, comment: true },
+    }),
+    prisma.trialSus.findUnique({
+      where: { sessionId: session.id },
+      select: { sessionId: true },
+    }),
+  ]);
+  const role = trialSessionRole(session);
+  const teacher = role === "maestro" ? await trialTeacher(session) : null;
+
+  res.json({
+    role,
+    tasks: TRIAL_TASKS[role],
+    runs,
+    susDone: Boolean(sus),
+    person: { firstName: session.firstName, lastName: session.lastName },
+    teacher: teacher
+      ? { id: teacher.id, email: teacher.email, name: teacher.name ?? "" }
+      : null,
+  });
+});
+
+app.put("/api/admin/trial/sessions/:id/runs/:taskCode", async (req, res) => {
+  const session = await trialLoadSession(req, res);
+  if (!session) {
+    return;
+  }
+
+  const taskCode = String(req.params.taskCode).toUpperCase();
+  const result = String(req.body?.result ?? "");
+
+  if (!TRIAL_TASKS[trialSessionRole(session)].includes(taskCode)) {
+    res.status(404).json({ message: "Esa tarea no es de esta prueba." });
+    return;
+  }
+
+  if (!TRIAL_RESULTS.includes(result)) {
+    res.status(400).json({ message: "Elige cómo le fue con la tarea." });
+    return;
+  }
+
+  const seconds = Math.min(
+    Math.max(Math.round(Number(req.body?.seconds) || 0), 0),
+    86400,
+  );
+  const comment =
+    typeof req.body?.comment === "string"
+      ? req.body.comment.trim().slice(0, 500) || null
+      : null;
+
+  await prisma.trialRun.upsert({
+    where: { sessionId_taskCode: { sessionId: session.id, taskCode } },
+    create: { sessionId: session.id, taskCode, result, seconds, comment },
+    update: { result, seconds, comment },
+  });
+
+  if (taskCode === "M1") {
+    await trialRestoreRegistration();
+  }
+
+  res.status(204).send();
+});
+
+app.put("/api/admin/trial/sessions/:id/sus", async (req, res) => {
+  const session = await trialLoadSession(req, res);
+  if (!session) {
+    return;
+  }
+
+  const answers = req.body?.answers;
+
+  if (
+    !Array.isArray(answers) ||
+    answers.length !== 10 ||
+    !answers.every(
+      (value) => Number.isInteger(value) && value >= 1 && value <= 5,
+    )
+  ) {
+    res.status(400).json({ message: "Responde las 10 frases." });
+    return;
+  }
+
+  const score = trialSusScore(answers as number[]);
+  await prisma.trialSus.upsert({
+    where: { sessionId: session.id },
+    create: { sessionId: session.id, answers: JSON.stringify(answers), score },
+    update: { answers: JSON.stringify(answers), score },
+  });
+
+  res.status(204).send();
+});
+
+app.post("/api/admin/trial/sessions/:id/prepare/:taskCode", async (req, res) => {
+  const session = await trialLoadSession(req, res);
+  if (!session) {
+    return;
+  }
+
+  const taskCode = String(req.params.taskCode).toUpperCase();
+
+  if (!TRIAL_TASKS[trialSessionRole(session)].includes(taskCode)) {
+    res.status(404).json({ message: "Esa tarea no es de esta prueba." });
+    return;
+  }
+
+  if (!TRIAL_SCENARIO_TASKS.includes(taskCode)) {
+    res.json({ note: null });
+    return;
+  }
+
+  const owner =
+    trialSessionRole(session) === "maestro"
+      ? (await trialTeacher(session)).id
+      : req.user!.id;
+  res.json(await trialPrepare(owner, session, taskCode));
+});
+
+app.delete("/api/admin/trial/sessions/:id", async (req, res) => {
+  const session = await trialLoadSession(req, res);
+  if (!session) {
+    return;
+  }
+
+  await prisma.trialSession.delete({ where: { id: session.id } });
+  await prisma.user.deleteMany({
+    where: { email: trialTeacherEmail(session) },
+  });
+  await trialDropCreatedAccounts();
+  await trialRestoreRegistration();
+  res.status(204).send();
+});
+
+app.get("/api/admin/trial/sessions/:id/check/:taskCode", async (req, res) => {
+  const session = await trialLoadSession(req, res);
+  if (!session) {
+    return;
+  }
+
+  const taskCode = String(req.params.taskCode).toUpperCase();
+  const since = new Date(Number(req.query.since));
+
+  if (Number.isNaN(since.getTime())) {
+    res.status(400).json({ message: "Falta la hora de inicio." });
+    return;
+  }
+
+  if (!TRIAL_TASKS[trialSessionRole(session)].includes(taskCode)) {
+    res.status(404).json({ message: "Esa tarea no es de esta prueba." });
+    return;
+  }
+
+  res.json(await trialCheck(session, taskCode, since));
+});
+
+app.get("/api/admin/trial/planilla.xlsx", async (_req, res) => {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Estudiantes");
+  sheet.columns = [{ width: 24 }, { width: 24 }, { width: 22 }];
+  sheet.addRow(["Nombres", "Apellidos", "Curso"]).font = { bold: true };
+  for (const [first, last] of TRIAL_ROSTER) {
+    sheet.addRow([first, last, TRIAL_GRADE.label]);
+  }
+  await sendWorkbook(res, workbook, "planilla-de-ejemplo.xlsx");
+});
+
+app.delete("/api/admin/trial-scenarios", async (_req, res) => {
+  const contestWhere = { title: { startsWith: TRIAL_PREFIX } };
+  const userWhere = {
+    email: { startsWith: "ensayo.", endsWith: "@prueba.bo" },
+  };
+  const contests = await prisma.contest.count({ where: contestWhere });
+  const users = await prisma.user.count({ where: userWhere });
+  await prisma.contest.deleteMany({ where: contestWhere });
+  await prisma.user.deleteMany({ where: userWhere });
+  await trialDropCreatedAccounts();
+  await trialRestoreRegistration();
+  res.json({ contests, users });
+});
+
+app.get("/api/admin/trial", async (_req, res) => {
+  const sessions = await prisma.trialSession.findMany({
+    select: {
+      id: true,
+      role: true,
+      firstName: true,
+      lastName: true,
+      runs: {
+        select: { taskCode: true, result: true, seconds: true, comment: true },
+      },
+      sus: { select: { score: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const counters = { maestro: 0, admin: 0 };
+  const participants = sessions.map((session) => {
+    const role = trialSessionRole(session);
+    counters[role] += 1;
+    const tasks = Object.fromEntries(
+      session.runs.map((run) => [
+        run.taskCode,
+        { result: run.result, seconds: run.seconds, comment: run.comment },
+      ]),
+    );
+    return {
+      id: session.id,
+      code: `${role === "admin" ? "A" : "M"}${String(counters[role]).padStart(2, "0")}`,
+      name: `${session.firstName} ${session.lastName}`,
+      role,
+      tasks,
+      sus: session.sus?.score ?? null,
+      criticalDone: TRIAL_CRITICAL.filter((code) => TRIAL_TASKS[role].includes(code)).every(
+        (code) => tasks[code] && tasks[code].result !== "failed",
+      ),
+    };
+  });
+
+  const summary = Object.fromEntries(
+    (["maestro", "admin"] as const).map((role) => {
+      const members = participants.filter((item) => item.role === role);
+      const runs = members.flatMap((item) => Object.values(item.tasks));
+      const scores = members.flatMap((item) =>
+        item.sus === null ? [] : [item.sus],
+      );
+      return [
+        role,
+        {
+          participants: members.length,
+          alone: runs.filter((run) => run.result === "alone").length,
+          help: runs.filter((run) => run.result === "help").length,
+          failed: runs.filter((run) => run.result === "failed").length,
+          averageSus: scores.length
+            ? Math.round(
+                (scores.reduce((sum, value) => sum + value, 0) /
+                  scores.length) *
+                  10,
+              ) / 10
+            : null,
+        },
+      ];
+    }),
+  );
+
+  res.json({ participants, summary });
 });
 
 app.get("/api/contests/:id/results", async (req, res) => {

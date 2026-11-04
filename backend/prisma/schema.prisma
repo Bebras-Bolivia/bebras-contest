@@ -33,6 +33,51 @@ model User {
   schools         TeacherSchool[]
   contests        Contest[]
   groups          ContestGroup[]
+  trialEvents     TrialEvent[]
+}
+
+model TrialEvent {
+  id        String   @id @default(cuid())
+  userId    Int
+  kind      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind])
+}
+
+model TrialSession {
+  id        String     @id @default(cuid())
+  role      String
+  firstName String
+  lastName  String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  runs      TrialRun[]
+  sus       TrialSus?
+}
+
+model TrialRun {
+  id        String       @id @default(cuid())
+  sessionId String
+  taskCode  String
+  result    String
+  seconds   Int          @default(0)
+  comment   String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  session   TrialSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, taskCode])
+}
+
+model TrialSus {
+  sessionId String       @id
+  answers   String
+  score     Float
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  session   TrialSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model TeacherSchool {
@@ -137,6 +182,7 @@ model Contest {
   // Un desafío de prueba no tiene inscripción ni resultados: se entra con el
   // nombre y el curso y solo cuenta su fecha de rendición.
   isTest               Boolean        @default(false)
+  collectUsage         Boolean        @default(false)
   createdById          Int?
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
@@ -232,6 +278,17 @@ model Attempt {
   team       Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
   answers    AttemptAnswer[]
   result     Result?
+  trace      TestTrace?
+}
+
+model TestTrace {
+  attemptId  String   @id
+  device     String   @default("{}")
+  stars      Int?
+  comment    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  attempt    Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
 }
 
 model AttemptAnswer {

@@ -9,6 +9,10 @@
  * 🟢 You can import this file directly.
  */
 export type * from './models/User'
+export type * from './models/TrialEvent'
+export type * from './models/TrialSession'
+export type * from './models/TrialRun'
+export type * from './models/TrialSus'
 export type * from './models/TeacherSchool'
 export type * from './models/School'
 export type * from './models/TaskDraft'
@@ -17,6 +21,7 @@ export type * from './models/ContestTask'
 export type * from './models/ContestGroup'
 export type * from './models/Team'
 export type * from './models/Attempt'
+export type * from './models/TestTrace'
 export type * from './models/AttemptAnswer'
 export type * from './models/Result'
 export type * from './models/SiteSetting'

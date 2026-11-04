@@ -4,6 +4,7 @@ import { ClientRouter } from "astro:transitions";
 import { AppToaster } from "../components/app-toaster";
 import AuthGuard from "../components/AuthGuard.astro";
 import SiteHeader from "../components/SiteHeader.astro";
+import { TrialViewBanner } from "../components/trial-view-banner";
 import SiteFooter from "../components/SiteFooter.astro";
 import { isRegistrationRestrictedPath } from "../lib/registration-only";
 
@@ -77,6 +78,7 @@ const pageFade = {
     }
     <div class="flex min-h-screen flex-col">
       <SiteHeader heading={heading} hidden={deferChrome} />
+      <TrialViewBanner client:only="react" />
       <div
         class="flex-1"
         data-page-content

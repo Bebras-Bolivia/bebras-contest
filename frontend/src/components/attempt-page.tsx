@@ -22,6 +22,7 @@ import { TaskPlayContent } from "@/components/task-play-content";
 import { TaskCountry } from "@/components/task-country";
 import { ContestIntro } from "@/components/contest-intro";
 import { ContestFinish } from "@/components/contest-finish";
+import { UsageReview } from "@/components/usage-review";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -994,7 +995,16 @@ export function AttemptPage({
         outOfTime={outOfTime}
         visible={visible}
         top={finishTop}
-        bottom={preview ? undefined : homeLink}
+        bottom={
+          preview ? undefined : (
+            <>
+              {attempt.collectUsage && (
+                <UsageReview reviewed={Boolean(attempt.usageReviewed)} />
+              )}
+              {homeLink}
+            </>
+          )
+        }
         onResultsDue={preview ? undefined : () => void load()}
       />
     );

@@ -53,6 +53,7 @@ import {
 type Form = {
   title: string;
   isTest: boolean;
+  collectUsage: boolean;
   categories: string[];
   durationMinutes: number;
   registrationStartsAt: string;
@@ -106,6 +107,7 @@ function formFromContest(contest: StoredContest): Form {
   return {
     title: contest.title,
     isTest: contest.isTest,
+    collectUsage: contest.collectUsage,
     categories: contest.categories,
     durationMinutes: contest.durationMinutes,
     registrationStartsAt: localValue(contest.registrationStartsAt),
@@ -137,6 +139,7 @@ function toPayload(form: Form): ContestDraftInput {
   return {
     title: form.title.trim(),
     isTest: form.isTest,
+    collectUsage: form.isTest && form.collectUsage,
     categories: form.categories,
     durationMinutes: form.durationMinutes,
     registrationStartsAt: iso(form.registrationStartsAt),
@@ -1274,6 +1277,25 @@ export function ContestEditor() {
               </span>
             </span>
           </label>
+          {form.isTest && (
+            <label className="flex items-start gap-3 text-sm">
+              <Checkbox
+                className="mt-0.5"
+                checked={form.collectUsage}
+                disabled={locked}
+                onCheckedChange={(checked) =>
+                  update({ collectUsage: checked === true })
+                }
+              />
+              <span className="flex flex-col gap-0.5">
+                Recoger uso y opiniones
+                <span className="text-muted-foreground">
+                  Al entregar, el estudiante deja una reseña corta y se guarda
+                  desde qué dispositivo rindió.
+                </span>
+              </span>
+            </label>
+          )}
         </FormSection>
 
         {!form.isTest && (
@@ -1497,6 +1519,14 @@ export function ContestEditor() {
         )}
         {locked ? (
           <>
+            {form.isTest && (
+              <Button asChild variant="outline">
+                <a href={`/desafios/uso?id=${contestId}`}>
+                  <BarChart3Icon data-icon="inline-start" />
+                  Uso y opiniones
+                </a>
+              </Button>
+            )}
             {!form.isTest && (
               <Button asChild variant="outline">
                 <a href={`/desafios/resultados?id=${contestId}`}>

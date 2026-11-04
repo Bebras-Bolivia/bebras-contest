@@ -206,6 +206,7 @@ export type StoredContest = {
   resultsUntil: string | null;
   /** Una prueba no tiene inscripción ni resultados: solo su fecha de rendición. */
   isTest: boolean;
+  collectUsage: boolean;
   initialScores: Record<string, number>;
   scoring: ContestScoring;
   questionDisplayMode: QuestionDisplayMode;
@@ -235,6 +236,7 @@ export type StoredContest = {
 export type ContestDraftInput = {
   title: string;
   isTest?: boolean;
+  collectUsage?: boolean;
   categories: string[];
   durationMinutes: number;
   registrationStartsAt: string;

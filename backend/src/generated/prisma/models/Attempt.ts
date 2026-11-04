@@ -217,6 +217,7 @@ export type AttemptWhereInput = {
   team?: Prisma.XOR<Prisma.TeamScalarRelationFilter, Prisma.TeamWhereInput>
   answers?: Prisma.AttemptAnswerListRelationFilter
   result?: Prisma.XOR<Prisma.ResultNullableScalarRelationFilter, Prisma.ResultWhereInput> | null
+  trace?: Prisma.XOR<Prisma.TestTraceNullableScalarRelationFilter, Prisma.TestTraceWhereInput> | null
 }
 
 export type AttemptOrderByWithRelationInput = {
@@ -232,6 +233,7 @@ export type AttemptOrderByWithRelationInput = {
   team?: Prisma.TeamOrderByWithRelationInput
   answers?: Prisma.AttemptAnswerOrderByRelationAggregateInput
   result?: Prisma.ResultOrderByWithRelationInput
+  trace?: Prisma.TestTraceOrderByWithRelationInput
 }
 
 export type AttemptWhereUniqueInput = Prisma.AtLeast<{
@@ -250,6 +252,7 @@ export type AttemptWhereUniqueInput = Prisma.AtLeast<{
   team?: Prisma.XOR<Prisma.TeamScalarRelationFilter, Prisma.TeamWhereInput>
   answers?: Prisma.AttemptAnswerListRelationFilter
   result?: Prisma.XOR<Prisma.ResultNullableScalarRelationFilter, Prisma.ResultWhereInput> | null
+  trace?: Prisma.XOR<Prisma.TestTraceNullableScalarRelationFilter, Prisma.TestTraceWhereInput> | null
 }, "id" | "teamId">
 
 export type AttemptOrderByWithAggregationInput = {
@@ -294,6 +297,7 @@ export type AttemptCreateInput = {
   team: Prisma.TeamCreateNestedOneWithoutAttemptInput
   answers?: Prisma.AttemptAnswerCreateNestedManyWithoutAttemptInput
   result?: Prisma.ResultCreateNestedOneWithoutAttemptInput
+  trace?: Prisma.TestTraceCreateNestedOneWithoutAttemptInput
 }
 
 export type AttemptUncheckedCreateInput = {
@@ -308,6 +312,7 @@ export type AttemptUncheckedCreateInput = {
   updatedAt?: Date | string
   answers?: Prisma.AttemptAnswerUncheckedCreateNestedManyWithoutAttemptInput
   result?: Prisma.ResultUncheckedCreateNestedOneWithoutAttemptInput
+  trace?: Prisma.TestTraceUncheckedCreateNestedOneWithoutAttemptInput
 }
 
 export type AttemptUpdateInput = {
@@ -322,6 +327,7 @@ export type AttemptUpdateInput = {
   team?: Prisma.TeamUpdateOneRequiredWithoutAttemptNestedInput
   answers?: Prisma.AttemptAnswerUpdateManyWithoutAttemptNestedInput
   result?: Prisma.ResultUpdateOneWithoutAttemptNestedInput
+  trace?: Prisma.TestTraceUpdateOneWithoutAttemptNestedInput
 }
 
 export type AttemptUncheckedUpdateInput = {
@@ -336,6 +342,7 @@ export type AttemptUncheckedUpdateInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   answers?: Prisma.AttemptAnswerUncheckedUpdateManyWithoutAttemptNestedInput
   result?: Prisma.ResultUncheckedUpdateOneWithoutAttemptNestedInput
+  trace?: Prisma.TestTraceUncheckedUpdateOneWithoutAttemptNestedInput
 }
 
 export type AttemptCreateManyInput = {
@@ -451,6 +458,20 @@ export type AttemptUncheckedUpdateOneWithoutTeamNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.AttemptUpdateToOneWithWhereWithoutTeamInput, Prisma.AttemptUpdateWithoutTeamInput>, Prisma.AttemptUncheckedUpdateWithoutTeamInput>
 }
 
+export type AttemptCreateNestedOneWithoutTraceInput = {
+  create?: Prisma.XOR<Prisma.AttemptCreateWithoutTraceInput, Prisma.AttemptUncheckedCreateWithoutTraceInput>
+  connectOrCreate?: Prisma.AttemptCreateOrConnectWithoutTraceInput
+  connect?: Prisma.AttemptWhereUniqueInput
+}
+
+export type AttemptUpdateOneRequiredWithoutTraceNestedInput = {
+  create?: Prisma.XOR<Prisma.AttemptCreateWithoutTraceInput, Prisma.AttemptUncheckedCreateWithoutTraceInput>
+  connectOrCreate?: Prisma.AttemptCreateOrConnectWithoutTraceInput
+  upsert?: Prisma.AttemptUpsertWithoutTraceInput
+  connect?: Prisma.AttemptWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.AttemptUpdateToOneWithWhereWithoutTraceInput, Prisma.AttemptUpdateWithoutTraceInput>, Prisma.AttemptUncheckedUpdateWithoutTraceInput>
+}
+
 export type AttemptCreateNestedOneWithoutAnswersInput = {
   create?: Prisma.XOR<Prisma.AttemptCreateWithoutAnswersInput, Prisma.AttemptUncheckedCreateWithoutAnswersInput>
   connectOrCreate?: Prisma.AttemptCreateOrConnectWithoutAnswersInput
@@ -490,6 +511,7 @@ export type AttemptCreateWithoutTeamInput = {
   updatedAt?: Date | string
   answers?: Prisma.AttemptAnswerCreateNestedManyWithoutAttemptInput
   result?: Prisma.ResultCreateNestedOneWithoutAttemptInput
+  trace?: Prisma.TestTraceCreateNestedOneWithoutAttemptInput
 }
 
 export type AttemptUncheckedCreateWithoutTeamInput = {
@@ -503,6 +525,7 @@ export type AttemptUncheckedCreateWithoutTeamInput = {
   updatedAt?: Date | string
   answers?: Prisma.AttemptAnswerUncheckedCreateNestedManyWithoutAttemptInput
   result?: Prisma.ResultUncheckedCreateNestedOneWithoutAttemptInput
+  trace?: Prisma.TestTraceUncheckedCreateNestedOneWithoutAttemptInput
 }
 
 export type AttemptCreateOrConnectWithoutTeamInput = {
@@ -532,10 +555,84 @@ export type AttemptUpdateWithoutTeamInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   answers?: Prisma.AttemptAnswerUpdateManyWithoutAttemptNestedInput
   result?: Prisma.ResultUpdateOneWithoutAttemptNestedInput
+  trace?: Prisma.TestTraceUpdateOneWithoutAttemptNestedInput
 }
 
 export type AttemptUncheckedUpdateWithoutTeamInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  endsAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  finishedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  status?: Prisma.StringFieldUpdateOperationsInput | string
+  mode?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  answers?: Prisma.AttemptAnswerUncheckedUpdateManyWithoutAttemptNestedInput
+  result?: Prisma.ResultUncheckedUpdateOneWithoutAttemptNestedInput
+  trace?: Prisma.TestTraceUncheckedUpdateOneWithoutAttemptNestedInput
+}
+
+export type AttemptCreateWithoutTraceInput = {
+  id?: string
+  startedAt?: Date | string | null
+  endsAt?: Date | string | null
+  finishedAt?: Date | string | null
+  status?: string
+  mode?: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  team: Prisma.TeamCreateNestedOneWithoutAttemptInput
+  answers?: Prisma.AttemptAnswerCreateNestedManyWithoutAttemptInput
+  result?: Prisma.ResultCreateNestedOneWithoutAttemptInput
+}
+
+export type AttemptUncheckedCreateWithoutTraceInput = {
+  id?: string
+  teamId: string
+  startedAt?: Date | string | null
+  endsAt?: Date | string | null
+  finishedAt?: Date | string | null
+  status?: string
+  mode?: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  answers?: Prisma.AttemptAnswerUncheckedCreateNestedManyWithoutAttemptInput
+  result?: Prisma.ResultUncheckedCreateNestedOneWithoutAttemptInput
+}
+
+export type AttemptCreateOrConnectWithoutTraceInput = {
+  where: Prisma.AttemptWhereUniqueInput
+  create: Prisma.XOR<Prisma.AttemptCreateWithoutTraceInput, Prisma.AttemptUncheckedCreateWithoutTraceInput>
+}
+
+export type AttemptUpsertWithoutTraceInput = {
+  update: Prisma.XOR<Prisma.AttemptUpdateWithoutTraceInput, Prisma.AttemptUncheckedUpdateWithoutTraceInput>
+  create: Prisma.XOR<Prisma.AttemptCreateWithoutTraceInput, Prisma.AttemptUncheckedCreateWithoutTraceInput>
+  where?: Prisma.AttemptWhereInput
+}
+
+export type AttemptUpdateToOneWithWhereWithoutTraceInput = {
+  where?: Prisma.AttemptWhereInput
+  data: Prisma.XOR<Prisma.AttemptUpdateWithoutTraceInput, Prisma.AttemptUncheckedUpdateWithoutTraceInput>
+}
+
+export type AttemptUpdateWithoutTraceInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  endsAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  finishedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  status?: Prisma.StringFieldUpdateOperationsInput | string
+  mode?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  team?: Prisma.TeamUpdateOneRequiredWithoutAttemptNestedInput
+  answers?: Prisma.AttemptAnswerUpdateManyWithoutAttemptNestedInput
+  result?: Prisma.ResultUpdateOneWithoutAttemptNestedInput
+}
+
+export type AttemptUncheckedUpdateWithoutTraceInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  teamId?: Prisma.StringFieldUpdateOperationsInput | string
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endsAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   finishedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -558,6 +655,7 @@ export type AttemptCreateWithoutAnswersInput = {
   updatedAt?: Date | string
   team: Prisma.TeamCreateNestedOneWithoutAttemptInput
   result?: Prisma.ResultCreateNestedOneWithoutAttemptInput
+  trace?: Prisma.TestTraceCreateNestedOneWithoutAttemptInput
 }
 
 export type AttemptUncheckedCreateWithoutAnswersInput = {
@@ -571,6 +669,7 @@ export type AttemptUncheckedCreateWithoutAnswersInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   result?: Prisma.ResultUncheckedCreateNestedOneWithoutAttemptInput
+  trace?: Prisma.TestTraceUncheckedCreateNestedOneWithoutAttemptInput
 }
 
 export type AttemptCreateOrConnectWithoutAnswersInput = {
@@ -600,6 +699,7 @@ export type AttemptUpdateWithoutAnswersInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   team?: Prisma.TeamUpdateOneRequiredWithoutAttemptNestedInput
   result?: Prisma.ResultUpdateOneWithoutAttemptNestedInput
+  trace?: Prisma.TestTraceUpdateOneWithoutAttemptNestedInput
 }
 
 export type AttemptUncheckedUpdateWithoutAnswersInput = {
@@ -613,6 +713,7 @@ export type AttemptUncheckedUpdateWithoutAnswersInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   result?: Prisma.ResultUncheckedUpdateOneWithoutAttemptNestedInput
+  trace?: Prisma.TestTraceUncheckedUpdateOneWithoutAttemptNestedInput
 }
 
 export type AttemptCreateWithoutResultInput = {
@@ -626,6 +727,7 @@ export type AttemptCreateWithoutResultInput = {
   updatedAt?: Date | string
   team: Prisma.TeamCreateNestedOneWithoutAttemptInput
   answers?: Prisma.AttemptAnswerCreateNestedManyWithoutAttemptInput
+  trace?: Prisma.TestTraceCreateNestedOneWithoutAttemptInput
 }
 
 export type AttemptUncheckedCreateWithoutResultInput = {
@@ -639,6 +741,7 @@ export type AttemptUncheckedCreateWithoutResultInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   answers?: Prisma.AttemptAnswerUncheckedCreateNestedManyWithoutAttemptInput
+  trace?: Prisma.TestTraceUncheckedCreateNestedOneWithoutAttemptInput
 }
 
 export type AttemptCreateOrConnectWithoutResultInput = {
@@ -668,6 +771,7 @@ export type AttemptUpdateWithoutResultInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   team?: Prisma.TeamUpdateOneRequiredWithoutAttemptNestedInput
   answers?: Prisma.AttemptAnswerUpdateManyWithoutAttemptNestedInput
+  trace?: Prisma.TestTraceUpdateOneWithoutAttemptNestedInput
 }
 
 export type AttemptUncheckedUpdateWithoutResultInput = {
@@ -681,6 +785,7 @@ export type AttemptUncheckedUpdateWithoutResultInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   answers?: Prisma.AttemptAnswerUncheckedUpdateManyWithoutAttemptNestedInput
+  trace?: Prisma.TestTraceUncheckedUpdateOneWithoutAttemptNestedInput
 }
 
 
@@ -727,6 +832,7 @@ export type AttemptSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   team?: boolean | Prisma.TeamDefaultArgs<ExtArgs>
   answers?: boolean | Prisma.Attempt$answersArgs<ExtArgs>
   result?: boolean | Prisma.Attempt$resultArgs<ExtArgs>
+  trace?: boolean | Prisma.Attempt$traceArgs<ExtArgs>
   _count?: boolean | Prisma.AttemptCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["attempt"]>
 
@@ -773,6 +879,7 @@ export type AttemptInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs
   team?: boolean | Prisma.TeamDefaultArgs<ExtArgs>
   answers?: boolean | Prisma.Attempt$answersArgs<ExtArgs>
   result?: boolean | Prisma.Attempt$resultArgs<ExtArgs>
+  trace?: boolean | Prisma.Attempt$traceArgs<ExtArgs>
   _count?: boolean | Prisma.AttemptCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type AttemptIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -788,6 +895,7 @@ export type $AttemptPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     team: Prisma.$TeamPayload<ExtArgs>
     answers: Prisma.$AttemptAnswerPayload<ExtArgs>[]
     result: Prisma.$ResultPayload<ExtArgs> | null
+    trace: Prisma.$TestTracePayload<ExtArgs> | null
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1196,6 +1304,7 @@ export interface Prisma__AttemptClient<T, Null = never, ExtArgs extends runtime.
   team<T extends Prisma.TeamDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.TeamDefaultArgs<ExtArgs>>): Prisma.Prisma__TeamClient<runtime.Types.Result.GetResult<Prisma.$TeamPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   answers<T extends Prisma.Attempt$answersArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Attempt$answersArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AttemptAnswerPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   result<T extends Prisma.Attempt$resultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Attempt$resultArgs<ExtArgs>>): Prisma.Prisma__ResultClient<runtime.Types.Result.GetResult<Prisma.$ResultPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+  trace<T extends Prisma.Attempt$traceArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Attempt$traceArgs<ExtArgs>>): Prisma.Prisma__TestTraceClient<runtime.Types.Result.GetResult<Prisma.$TestTracePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1673,6 +1782,25 @@ export type Attempt$resultArgs<ExtArgs extends runtime.Types.Extensions.Internal
    */
   include?: Prisma.ResultInclude<ExtArgs> | null
   where?: Prisma.ResultWhereInput
+}
+
+/**
+ * Attempt.trace
+ */
+export type Attempt$traceArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the TestTrace
+   */
+  select?: Prisma.TestTraceSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the TestTrace
+   */
+  omit?: Prisma.TestTraceOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TestTraceInclude<ExtArgs> | null
+  where?: Prisma.TestTraceWhereInput
 }
 
 /**

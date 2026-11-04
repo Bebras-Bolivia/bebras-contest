@@ -82,6 +82,8 @@ export type AttemptState = {
   finishedAt: string | null;
   suspendedAt: string | null;
   resultsPublished: boolean;
+  collectUsage?: boolean;
+  usageReviewed?: boolean;
   showFeedback: boolean;
   showSolutions: boolean;
   showTotalScore: boolean;

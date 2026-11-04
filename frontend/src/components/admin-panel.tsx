@@ -65,6 +65,16 @@ export function AdminPanel() {
       <TeacherRegistrationSection />
       <InfoSiteSection />
       <CertificatesSection />
+      <section className="flex flex-col gap-4">
+        <h2 className="font-heading text-xl font-semibold">
+          Pruebas con usuarios
+        </h2>
+        <Button asChild variant="outline" className="w-fit">
+          <a href="/pruebas-guiadas">
+            Pruebas guiadas de maestros y organizadores
+          </a>
+        </Button>
+      </section>
       <SignOutButton />
     </div>
   );

@@ -613,6 +613,11 @@ export function RegisterForm() {
         );
       }
       setStep("verify");
+      if (new URLSearchParams(window.location.search).get("prueba") === "1") {
+        void verifyEmailWithEmulator(email.trim())
+          .then(() => verificationCheckRef.current?.())
+          .catch(() => undefined);
+      }
     } catch {
       toast.error("No se pudo conectar con el servidor.");
     } finally {

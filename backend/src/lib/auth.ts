@@ -118,6 +118,27 @@ export async function resolveAuthUser(
     };
   }
 
+  const actAs = Number(req.headers["x-trial-as"]);
+  if (profile.role === "admin" && Number.isInteger(actAs) && actAs > 0) {
+    const teacher = await prisma.user.findUnique({ where: { id: actAs } });
+    if (
+      teacher &&
+      teacher.role === "maestro" &&
+      teacher.status === "approved" &&
+      teacher.email.startsWith("ensayo.") &&
+      teacher.email.endsWith("@prueba.bo")
+    ) {
+      const user: AuthUser = {
+        id: teacher.id,
+        email: teacher.email,
+        role: teacher.role,
+        firebaseUid: identity.uid,
+      };
+      req.user = user;
+      return { user };
+    }
+  }
+
   const user: AuthUser = {
     id: profile.id,
     email: profile.email,
