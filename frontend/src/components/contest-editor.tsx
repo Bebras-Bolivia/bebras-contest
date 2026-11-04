@@ -852,6 +852,9 @@ export function ContestEditor() {
     }
   };
 
+  const lockedHint =
+    "Con el desafío en curso no se puede cambiar. Para modificarlo, detén el desafío y reprográmalo.";
+
   const shownProblems = !tried
     ? []
     : publishTried && contestState === "borrador"
@@ -1094,7 +1097,7 @@ export function ContestEditor() {
           </section>
         )}
 
-        <FormSection title="Fechas">
+        <FormSection title="Fechas" hint={locked ? lockedHint : undefined}>
           <div className="flex max-w-3xl min-w-0 flex-col gap-8">
             {!form.isTest && (
               <WindowField
@@ -1232,7 +1235,10 @@ export function ContestEditor() {
           </Reveal>
         </FormSection>
 
-        <FormSection title="Cómo se rinde">
+        <FormSection
+          title="Cómo se rinde"
+          hint={locked ? lockedHint : undefined}
+        >
           <div className="flex flex-col gap-2">
             <h3 className="text-sm font-semibold">Preguntas</h3>
             <div className="flex flex-wrap gap-1.5">
@@ -1313,7 +1319,10 @@ export function ContestEditor() {
         </FormSection>
 
         {!form.isTest && (
-          <FormSection title="Qué ve el estudiante">
+          <FormSection
+            title="Qué ve el estudiante"
+            hint={locked ? lockedHint : undefined}
+          >
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -1383,7 +1392,7 @@ export function ContestEditor() {
           </FormSection>
         )}
 
-        <FormSection title="Puntaje">
+        <FormSection title="Puntaje" hint={locked ? lockedHint : undefined}>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
               {DIFFICULTY_KEYS.map((key) => (
