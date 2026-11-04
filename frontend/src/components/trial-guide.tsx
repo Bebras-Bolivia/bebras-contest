@@ -22,7 +22,6 @@ import {
   TRIAL_AUTO,
   TRIAL_LIMIT_MINUTES,
   TRIAL_RESULT_LABEL,
-  TRIAL_TASK_HINT,
   TRIAL_TASK_TEXT,
   formatTrialSeconds,
 } from "@/lib/trial-content";
@@ -55,21 +54,8 @@ function viewPath(code: string) {
   return code === "M2" || code === "M3" ? "/grupos" : "/";
 }
 
-function otherHost() {
-  const { hostname } = window.location;
-  if (hostname === "localhost") return "127.0.0.1";
-  if (hostname === "127.0.0.1") return "localhost";
-  return null;
-}
-
 function registrationUrl(sessionId: string) {
-  const host = otherHost();
-  if (!host) return trialSessionUrl("/login?prueba=1", sessionId);
-  const { protocol, port } = window.location;
-  return trialSessionUrl(
-    `${protocol}//${host}${port ? `:${port}` : ""}/login?prueba=1`,
-    sessionId,
-  );
+  return trialSessionUrl("/login?prueba=1", sessionId);
 }
 
 export function TrialGuide() {
@@ -342,14 +328,6 @@ function GuideBody({
                   </span>
                 )}
               </div>
-
-              {isCurrent &&
-                TRIAL_TASK_HINT[code] &&
-                !(code === "M1" && otherHost()) && (
-                  <p className="pl-12 text-sm text-muted-foreground">
-                    {TRIAL_TASK_HINT[code]}
-                  </p>
-                )}
 
               {isCurrent && !startedAt && (
                 <div className="flex flex-col gap-2 pl-12">

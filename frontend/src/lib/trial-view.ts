@@ -1,5 +1,6 @@
 const VIEW_KEY = "bebras_trial_view";
 const SESSION_KEY = "bebras_trial_session";
+const SIGNUP_KEY = "bebras_trial_signup";
 
 export function readTrialSession(): string | null {
   if (typeof window === "undefined") return null;
@@ -49,6 +50,7 @@ export function leaveTrialView() {
   try {
     window.sessionStorage.removeItem(VIEW_KEY);
     window.sessionStorage.removeItem(SESSION_KEY);
+    clearTrialSignup();
   } catch {
     return;
   }
@@ -91,15 +93,25 @@ function captureTrialSession() {
   }
 }
 
-const SIGNUP_KEY = "bebras_trial_signup";
+export function trialSignupId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage.getItem(SIGNUP_KEY);
+  } catch {
+    return null;
+  }
+}
 
 export function isTrialSignup() {
-  if (typeof window === "undefined") return false;
-  try {
-    return window.sessionStorage.getItem(SIGNUP_KEY) === "1";
-  } catch {
-    return false;
-  }
+  return Boolean(trialSignupId());
+}
+
+function clearTrialSignup() {
+  window.sessionStorage.removeItem(SIGNUP_KEY);
+  window.sessionStorage.removeItem("bebras_token");
+  window.sessionStorage.removeItem("bebras_user");
+  window.sessionStorage.removeItem("bebras_google_profile");
+  window.sessionStorage.removeItem("bebras_google_redirect");
 }
 
 function captureTrialSignup() {
@@ -107,13 +119,9 @@ function captureTrialSignup() {
   const params = new URLSearchParams(window.location.search);
   if (params.get("prueba") !== "1") return;
   try {
-    window.sessionStorage.setItem(SIGNUP_KEY, "1");
-    const stored = JSON.parse(
-      window.localStorage.getItem("bebras_user") ?? "null",
-    );
-    if (stored && stored.role !== "admin") {
-      void import("@/lib/firebase-auth").then((auth) => auth.signOutFirebase());
-    }
+    clearTrialSignup();
+    window.sessionStorage.removeItem(VIEW_KEY);
+    window.sessionStorage.setItem(SIGNUP_KEY, window.crypto.randomUUID());
   } catch {
     return;
   }
@@ -135,6 +143,7 @@ function captureTrialView() {
   const email = params.get("vm_email");
   if (!Number.isInteger(id) || id <= 0 || !email) return;
   try {
+    clearTrialSignup();
     window.sessionStorage.setItem(
       VIEW_KEY,
       JSON.stringify({

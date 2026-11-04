@@ -14,10 +14,6 @@ export const TRIAL_TASK_TEXT: Record<string, string> = {
   A6: "Revisa los resultados y el ranking de un desafío terminado.",
 };
 
-export const TRIAL_TASK_HINT: Record<string, string> = {
-  M1: "Que haga el registro en una ventana privada (Ctrl+Mayús+N); en una ventana normal se cierra tu sesión de admin.",
-};
-
 export const TRIAL_LIMIT_MINUTES: Record<string, number> = {
   M1: 15,
   M2: 10,

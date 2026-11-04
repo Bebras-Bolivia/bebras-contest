@@ -1,11 +1,16 @@
 import { formatPersonName } from "./person-name";
-import { readTrialView, readTrialSession } from "./trial-view";
+import { isTrialSignup, readTrialView, readTrialSession } from "./trial-view";
 
 const TOKEN_KEY = "bebras_token";
 const USER_KEY = "bebras_user";
 const SESSION_EVENT = "bebras:session-change";
 let cachedKey: string | null = null;
 let cachedUser: AuthUser | null = null;
+const isolatedSignup = isTrialSignup();
+
+function sessionStorage() {
+  return isolatedSignup ? window.sessionStorage : window.localStorage;
+}
 
 export interface AuthUser {
   id: number;
@@ -24,7 +29,7 @@ export function getToken(): string | null {
     return null;
   }
   try {
-    return window.localStorage.getItem(TOKEN_KEY);
+    return sessionStorage().getItem(TOKEN_KEY);
   } catch {
     return null;
   }
@@ -51,8 +56,8 @@ function validUser(value: unknown): value is AuthUser {
 export function setSession(token: string, user: AuthUser) {
   if (!token?.trim() || !validUser(user)) throw new Error("Sesión inválida.");
   try {
-    window.localStorage.setItem(TOKEN_KEY, token);
-    window.localStorage.setItem(USER_KEY, JSON.stringify(user));
+    sessionStorage().setItem(TOKEN_KEY, token);
+    sessionStorage().setItem(USER_KEY, JSON.stringify(user));
   } catch (error) {
     clearToken();
     throw error;
@@ -68,8 +73,8 @@ export function setSession(token: string, user: AuthUser) {
 export function setToken(token: string) {
   if (typeof window === "undefined" || !token?.trim()) return;
   try {
-    if (window.localStorage.getItem(TOKEN_KEY) === token) return;
-    window.localStorage.setItem(TOKEN_KEY, token);
+    if (sessionStorage().getItem(TOKEN_KEY) === token) return;
+    sessionStorage().setItem(TOKEN_KEY, token);
   } catch {
     return;
   }
@@ -78,8 +83,8 @@ export function setToken(token: string) {
 
 export function setUser(user: AuthUser) {
   if (!getToken() || !validUser(user)) return;
-  if (readTrialSession()) return;
-  window.localStorage.setItem(USER_KEY, JSON.stringify(user));
+  if (readTrialSession() && !isTrialSignup()) return;
+  sessionStorage().setItem(USER_KEY, JSON.stringify(user));
   notifySession();
 }
 
@@ -110,7 +115,7 @@ export function getUser(): AuthUser | null {
   }
   try {
     const token = getToken();
-    const raw = window.localStorage.getItem(USER_KEY);
+    const raw = sessionStorage().getItem(USER_KEY);
     if (!token || !raw) return null;
     const key = JSON.stringify([token, raw]);
     if (key === cachedKey) return withTrialView(cachedUser);
@@ -131,8 +136,8 @@ export function getUser(): AuthUser | null {
 export function clearToken() {
   if (typeof window !== "undefined") {
     try {
-      window.localStorage.removeItem(TOKEN_KEY);
-      window.localStorage.removeItem(USER_KEY);
+      sessionStorage().removeItem(TOKEN_KEY);
+      sessionStorage().removeItem(USER_KEY);
     } finally {
       cachedKey = null;
       cachedUser = null;
@@ -144,7 +149,7 @@ export function clearToken() {
 export function subscribeSession(listener: () => void) {
   const onStorage = (event: StorageEvent) => {
     if (
-      event.storageArea === window.localStorage &&
+      event.storageArea === sessionStorage() &&
       (event.key === null || event.key === TOKEN_KEY || event.key === USER_KEY)
     )
       listener();

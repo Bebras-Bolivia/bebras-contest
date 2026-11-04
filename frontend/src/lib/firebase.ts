@@ -1,7 +1,15 @@
 import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
-import { connectAuthEmulator, getAuth, type Auth } from "firebase/auth";
+import {
+  browserPopupRedirectResolver,
+  browserSessionPersistence,
+  connectAuthEmulator,
+  getAuth,
+  initializeAuth,
+  type Auth,
+} from "firebase/auth";
 
 import { FIREBASE_AUTH_LANGUAGE } from "@/lib/email-verification";
+import { trialSignupId } from "@/lib/trial-view";
 
 // Astro sustituye estas variables al compilar. La configuracion Web de Firebase
 // es publica por diseno (las reglas de acceso viven en el proyecto Firebase y en
@@ -41,13 +49,22 @@ export function firebaseApp() {
       "Falta la configuración de Firebase (PUBLIC_FIREBASE_*) en este entorno.",
     );
   }
-  app ??= getApps().length ? getApp() : initializeApp(config);
+  const signup = trialSignupId();
+  const name = signup ? `bebras-trial-signup-${signup}` : "[DEFAULT]";
+  app ??= getApps().some((candidate) => candidate.name === name)
+    ? getApp(name)
+    : initializeApp(config, name);
   return app;
 }
 
 export function firebaseAuth() {
   if (!auth) {
-    auth = getAuth(firebaseApp());
+    auth = trialSignupId()
+      ? initializeAuth(firebaseApp(), {
+          persistence: browserSessionPersistence,
+          popupRedirectResolver: browserPopupRedirectResolver,
+        })
+      : getAuth(firebaseApp());
     if (authEmulatorHost) {
       connectAuthEmulator(auth, authEmulatorHost, { disableWarnings: true });
     }
