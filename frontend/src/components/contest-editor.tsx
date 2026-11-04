@@ -620,6 +620,15 @@ export function ContestEditor() {
     return list;
   }, [form]);
 
+  const restartPast = Boolean(
+    contestMeta?.stoppedAt &&
+    form &&
+    runWindows(form).some(
+      (window) =>
+        window.endsAt && new Date(window.endsAt).getTime() <= Date.now(),
+    ),
+  );
+
   const [shownDateProblems, setShownDateProblems] = useState<string[]>([]);
   if (dateProblems.length > 0 && shownDateProblems !== dateProblems) {
     setShownDateProblems(dateProblems);
@@ -1204,8 +1213,13 @@ export function ContestEditor() {
             />
             minutos, desde que toca «Empezar».
           </label>
-          <Reveal open={dateProblems.length > 0}>
+          <Reveal open={dateProblems.length > 0 || restartPast}>
             <ul className="flex flex-col gap-1 text-sm text-destructive">
+              {restartPast && (
+                <li>
+                  Las fechas ya pasaron: pon un cierre que esté en el futuro.
+                </li>
+              )}
               {shownDateProblems.map((problem) => (
                 <li
                   key={problem}
@@ -1506,7 +1520,7 @@ export function ContestEditor() {
           <ContestLifecycleActions
             placement="actions"
             contest={contestMeta}
-            beforeRestart={save}
+            beforeRestart={async () => !restartPast && (await save())}
             onChanged={(contest) => {
               const next = formFromContest(contest);
               setForm(next);

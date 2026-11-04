@@ -213,7 +213,7 @@ export function ContestLifecycleActions({
               onClick={() => void run("restart")}
             >
               <PlayIcon data-icon="inline-start" />
-              {busy === "restart" ? "Reprogramando…" : "Reprogramar desafío"}
+              {busy === "restart" ? "Reprogramando…" : "Reprogramar"}
             </Button>
           ) : (
             contest.publishedAt && (
