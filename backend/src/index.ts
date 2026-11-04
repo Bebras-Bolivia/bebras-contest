@@ -4260,6 +4260,11 @@ app.get("/api/contests/:id/preview", async (req, res) => {
   }
 
   const { contest, category, categoryTasks } = preview;
+  if (req.user && contest.title.startsWith(TRIAL_PREFIX)) {
+    await prisma.trialEvent.create({
+      data: { userId: req.user.id, kind: `preview:${contest.id}` },
+    });
+  }
   const tasks = categoryTasks.map((contestTask) =>
     renderSafeTask(
       contestTask,
@@ -9635,7 +9640,7 @@ const TRIAL_TITLES = {
   terminado: `${TRIAL_PREFIX} Terminado`,
   porPublicar: `${TRIAL_PREFIX} Resultados por publicar`,
 };
-const TRIAL_SCENARIO_TASKS = ["M1", "M2", "M3", "M4", "M5", "M6", "A1", "A4", "A5", "A6"];
+const TRIAL_SCENARIO_TASKS = ["M1", "M2", "M3", "M4", "M5", "M6", "A1", "A2", "A3", "A4", "A5", "A6"];
 const TRIAL_REGISTRATION_MARK = "trialRegistrationReopened";
 const TRIAL_ACCOUNT_KIND = "m1-account";
 const TRIAL_DAY = 24 * 3_600_000;
@@ -9934,23 +9939,41 @@ async function trialPrepare(
         },
       });
     }
-    return { note: "Hay una solicitud de maestro pendiente de aprobar." };
+    return {
+      note: "Hay una solicitud de maestro pendiente de aprobar.",
+      path: "/maestros",
+    };
+  }
+
+  if (taskCode === "A2") {
+    return { note: null, path: "/tareas/nueva" };
+  }
+
+  if (taskCode === "A3") {
+    return { note: null, path: "/desafios" };
   }
 
   if (taskCode === "A4") {
     const contest = await trialContest("inscripcion", label);
-    return { note: `Puedes probar el desafío «${contest.title}».` };
+    return {
+      note: `Puedes probar el desafío «${contest.title}».`,
+      path: `/desafios/probar?id=${contest.id}`,
+    };
   }
 
   if (taskCode === "A5") {
     const contest = await trialContest("curso", label);
-    return { note: `Hay un desafío en curso: «${contest.title}».` };
+    return {
+      note: `Hay un desafío en curso: «${contest.title}».`,
+      path: `/desafios/editar?id=${contest.id}`,
+    };
   }
 
   const contest = await trialContest("porPublicar", label);
   await trialSeedGroup(contest, userId, "terminado", TRIAL_STUDENTS);
   return {
     note: `Hay un desafío terminado con los resultados sin publicar: «${contest.title}».`,
+    path: `/desafios/resultados?id=${contest.id}`,
   };
 }
 
@@ -10164,6 +10187,22 @@ async function trialCheck(
     at =
       made.find((contest) => contestCategories(contest).length >= 2)
         ?.createdAt ?? null;
+  } else if (taskCode === "A4") {
+    const contest = await prisma.contest.findFirst({
+      where: { title: titleOf("inscripcion"), trashedAt: null },
+      select: { id: true },
+    });
+    const event = contest
+      ? await prisma.trialEvent.findFirst({
+          where: {
+            kind: `preview:${contest.id}`,
+            createdAt: { gt: since },
+          },
+          orderBy: { createdAt: "asc" },
+          select: { createdAt: true },
+        })
+      : null;
+    at = event?.createdAt ?? null;
   } else if (taskCode === "A5") {
     const contest = await prisma.contest.findFirst({
       where: { title: titleOf("curso"), trashedAt: null },

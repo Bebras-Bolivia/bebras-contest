@@ -355,12 +355,7 @@ export function LiveContests() {
       <Expand open={open}>
         <div className="p-2">
           {visible.length > 0 ? (
-            <div
-              className={cn(
-                "grid gap-x-10 gap-y-8",
-                visible.length > 1 && "md:grid-cols-2",
-              )}
-            >
+            <div className="grid gap-y-8">
               {visible.map(({ contest, phase }, index) => (
                 <ContestCard
                   key={contest.id}
@@ -386,13 +381,10 @@ export function LiveContests() {
 
 function ContestCardsSkeleton({ count }: { count: number }) {
   return (
-    <div aria-busy className={cn("grid gap-4", count > 1 && "md:grid-cols-2")}>
+    <div aria-busy className="grid gap-y-8">
       <span className="sr-only">Cargando desafíos...</span>
       {Array.from({ length: count }, (_, index) => (
-        <div
-          key={index}
-          className="flex flex-col gap-4 border-2 border-border/10 px-5 py-5"
-        >
+        <div key={index} className="flex flex-col gap-4 py-2">
           <div className="flex items-start justify-between gap-4">
             <div className="flex flex-1 flex-col gap-2.5">
               <Skeleton className="h-3.5 w-32 rounded-none" />
@@ -404,7 +396,7 @@ function ContestCardsSkeleton({ count }: { count: number }) {
             {Array.from({ length: 6 }, (_, tile) => (
               <div
                 key={tile}
-                className="flex items-center gap-2.5 border-2 border-border/10 px-2.5 py-2"
+                className="flex items-center gap-2.5 border-2 border-border/20 px-2.5 py-2"
               >
                 <Skeleton className="size-10 shrink-0 rounded-none" />
                 <Skeleton className="h-4 w-16 rounded-none" />

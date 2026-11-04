@@ -58,10 +58,11 @@ export function saveTrialSus(sessionId: string, answers: number[]) {
 }
 
 export function prepareTrialTask(sessionId: string, taskCode: string) {
-  return apiRequest<{ note: string | null; planilla?: boolean }>(
-    `${session(sessionId)}/prepare/${taskCode}`,
-    { method: "POST" },
-  );
+  return apiRequest<{
+    note: string | null;
+    planilla?: boolean;
+    path?: string;
+  }>(`${session(sessionId)}/prepare/${taskCode}`, { method: "POST" });
 }
 
 export function checkTrialTask(

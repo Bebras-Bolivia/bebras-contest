@@ -29,7 +29,10 @@ import {
 import { trialViewUrl } from "@/lib/trial-view";
 import { cn } from "@/lib/utils";
 
-type TrialNotes = Record<string, { note: string; planilla: boolean }>;
+type TrialNotes = Record<
+  string,
+  { note: string; planilla: boolean; path?: string }
+>;
 
 function readJson<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -57,6 +60,13 @@ function otherHost() {
   if (hostname === "localhost") return "127.0.0.1";
   if (hostname === "127.0.0.1") return "localhost";
   return null;
+}
+
+function cmsUrl() {
+  const { protocol, hostname } = window.location;
+  return hostname === "localhost" || hostname === "127.0.0.1"
+    ? `${protocol}//${hostname}:4100/admbb`
+    : null;
 }
 
 function registrationUrl() {
@@ -225,22 +235,30 @@ function GuideBody({
   const start = async (code: string) => {
     const teacher = state.teacher;
     const tab =
-      state.role === "maestro" && (code === "M1" || teacher)
+      state.role === "admin" || code === "M1" || teacher
         ? window.open("about:blank", "_blank")
         : null;
     setPreparing(code);
     try {
       const prepared = await prepareTrialTask(sessionId, code);
-      if (prepared.note) {
+      if (prepared.note || prepared.path || prepared.planilla) {
         const nextNotes = {
           ...notes,
-          [code]: { note: prepared.note, planilla: Boolean(prepared.planilla) },
+          [code]: {
+            note: prepared.note ?? "",
+            planilla: Boolean(prepared.planilla),
+            path: prepared.path,
+          },
         };
         setNotes(nextNotes);
         writeJson(notesKey, nextNotes);
       }
       if (tab && code === "M1") {
         tab.location.href = registrationUrl();
+      } else if (tab && state.role === "admin") {
+        const target = code === "A7" ? cmsUrl() : prepared.path;
+        if (target) tab.location.href = target;
+        else tab.close();
       } else if (tab && teacher) {
         tab.location.href = trialViewUrl(viewPath(code), teacher);
       }
@@ -384,6 +402,21 @@ function GuideBody({
                         </a>
                       </Button>
                     )}
+                    {state.role === "admin" &&
+                      (code === "A7" ? cmsUrl() : notes[code]?.path) && (
+                        <Button asChild variant="outline" size="sm">
+                          <a
+                            href={
+                              (code === "A7" ? cmsUrl() : notes[code]?.path) ??
+                              "#"
+                            }
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Abrir la pantalla
+                          </a>
+                        </Button>
+                      )}
                     {code !== "M1" && state.role === "maestro" && teacher && (
                       <Button asChild variant="outline" size="sm">
                         <a

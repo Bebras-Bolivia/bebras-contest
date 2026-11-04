@@ -129,19 +129,30 @@ export function RegisterForm() {
   const [verificationDeliveryFailed, setVerificationDeliveryFailed] =
     useState(false);
   const [verificationError, setVerificationError] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [sample] = useState(() =>
+    typeof window !== "undefined" &&
+    AUTH_EMULATOR_HOST &&
+    new URLSearchParams(window.location.search).get("prueba") === "1"
+      ? `m1.${Math.random().toString(36).slice(2, 8)}@prueba.bo`
+      : null,
+  );
+  const [firstName, setFirstName] = useState(sample ? "Prueba" : "");
+  const [lastName, setLastName] = useState(sample ? "Maestro" : "");
+  const [email, setEmail] = useState(sample ?? "");
+  const [password, setPassword] = useState(sample ? "bebras123" : "");
+  const [confirmPassword, setConfirmPassword] = useState(
+    sample ? "bebras123" : "",
+  );
   const [school, setSchool] = useState<SchoolValue>({
     codUe: null,
-    name: "",
+    name: sample ? "Unidad Educativa de Prueba" : "",
     institutionType: "school",
   });
-  const [schoolManual, setSchoolManual] = useState(false);
-  const [place, setPlace] = useState<LocationValue>(EMPTY_LOCATION);
-  const [phone, setPhone] = useState("");
+  const [schoolManual, setSchoolManual] = useState(Boolean(sample));
+  const [place, setPlace] = useState<LocationValue>(
+    sample ? { department: "COCHABAMBA", city: "Cochabamba" } : EMPTY_LOCATION,
+  );
+  const [phone, setPhone] = useState(sample ? "71234567" : "");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const confirmPasswordTouchedRef = useRef(false);
@@ -873,7 +884,7 @@ export function RegisterForm() {
         }
       />
       <div>
-        {!completing && (
+        {!completing && !sample && (
           <>
             <GoogleButton
               disabled={googleBusy || submitting}
