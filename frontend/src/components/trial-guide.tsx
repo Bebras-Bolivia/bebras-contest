@@ -387,14 +387,16 @@ function GuideBody({
 
               {isCurrent && startedAt && (
                 <div className="flex flex-col gap-4 pl-12">
-                  <p className="text-sm text-muted-foreground">
-                    Lleva {formatTrialSeconds(elapsed)} de{" "}
-                    {formatTrialSeconds(limit)}.{" "}
-                    {auto
-                      ? "Cuando lo haga, la app lo detecta sola."
-                      : "Esta tarea no se detecta sola: márcala tú."}
-                  </p>
-                  {notes[code]?.note && (
+                  {detected?.code !== code && (
+                    <p className="text-sm text-muted-foreground">
+                      Lleva {formatTrialSeconds(elapsed)} de{" "}
+                      {formatTrialSeconds(limit)}.{" "}
+                      {auto
+                        ? "Cuando lo haga, la app lo detecta sola."
+                        : "Esta tarea no se detecta sola: márcala tú."}
+                    </p>
+                  )}
+                  {detected?.code !== code && notes[code]?.note && (
                     <p className="text-sm">{notes[code].note}</p>
                   )}
                   <div className="flex flex-wrap gap-2">
@@ -447,9 +449,13 @@ function GuideBody({
                     )}
                   </div>
                   {detected?.code === code && (
-                    <p className="text-sm font-medium">
-                      Terminó en {formatTrialSeconds(detected.seconds)}. ¿Lo
-                      logró solo o con ayuda?
+                    <p className="flex items-center gap-2 text-sm font-medium">
+                      <CheckIcon
+                        className="size-4 shrink-0 text-difficulty-easy"
+                        aria-hidden="true"
+                      />
+                      Tarea terminada en {formatTrialSeconds(detected.seconds)}.
+                      ¿Lo logró solo o con ayuda?
                     </p>
                   )}
                   <Textarea
