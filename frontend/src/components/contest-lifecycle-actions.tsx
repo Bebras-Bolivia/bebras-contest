@@ -224,7 +224,7 @@ export function ContestLifecycleActions({
                 onClick={() => setConfirm("stop")}
               >
                 <SquareIcon data-icon="inline-start" />
-                Detener para reprogramar
+                Detener
               </Button>
             )
           )}
