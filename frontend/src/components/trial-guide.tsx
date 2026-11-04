@@ -71,9 +71,9 @@ function cmsUrl() {
 
 function registrationUrl() {
   const host = otherHost();
-  if (!host) return "/registro?prueba=1";
+  if (!host) return "/login?prueba=1";
   const { protocol, port } = window.location;
-  return `${protocol}//${host}${port ? `:${port}` : ""}/registro?prueba=1`;
+  return `${protocol}//${host}${port ? `:${port}` : ""}/login?prueba=1`;
 }
 
 export function TrialGuide() {

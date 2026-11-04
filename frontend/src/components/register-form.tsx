@@ -61,6 +61,7 @@ import {
 import { EMAIL_VERIFICATION_CHANNEL } from "@/lib/email-action";
 import { GoogleButton } from "@/components/google-button";
 import { AUTH_EMULATOR_HOST, isFirebaseConfigured } from "@/lib/firebase";
+import { isTrialSignup } from "@/lib/trial-view";
 import {
   GoogleRedirectStarted,
   consumeGoogleRedirect,
@@ -129,16 +130,10 @@ export function RegisterForm() {
   const [verificationDeliveryFailed, setVerificationDeliveryFailed] =
     useState(false);
   const [verificationError, setVerificationError] = useState("");
-  const [sample] = useState(() =>
-    typeof window !== "undefined" &&
-    AUTH_EMULATOR_HOST &&
-    new URLSearchParams(window.location.search).get("prueba") === "1"
-      ? `m1.${Math.random().toString(36).slice(2, 8)}@prueba.bo`
-      : null,
-  );
+  const [sample] = useState(() => Boolean(AUTH_EMULATOR_HOST) && isTrialSignup());
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState(sample ?? "");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [school, setSchool] = useState<SchoolValue>({
@@ -620,7 +615,7 @@ export function RegisterForm() {
         );
       }
       setStep("verify");
-      if (new URLSearchParams(window.location.search).get("prueba") === "1") {
+      if (sample) {
         void verifyEmailWithEmulator(email.trim())
           .then(() => verificationCheckRef.current?.())
           .catch(() => undefined);

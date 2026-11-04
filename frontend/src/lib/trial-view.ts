@@ -35,6 +35,43 @@ export function trialViewUrl(path: string, view: TrialView) {
   return `${path}?${params.toString()}`;
 }
 
+const SIGNUP_KEY = "bebras_trial_signup";
+
+export function isTrialSignup() {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.sessionStorage.getItem(SIGNUP_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function captureTrialSignup() {
+  if (typeof window === "undefined") return;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("prueba") !== "1") return;
+  try {
+    window.sessionStorage.setItem(SIGNUP_KEY, "1");
+    const stored = JSON.parse(
+      window.localStorage.getItem("bebras_user") ?? "null",
+    );
+    if (stored && stored.role !== "admin") {
+      void import("@/lib/firebase-auth").then((auth) => auth.signOutFirebase());
+    }
+  } catch {
+    return;
+  }
+  params.delete("prueba");
+  const query = params.toString();
+  window.history.replaceState(
+    null,
+    "",
+    window.location.pathname +
+      (query ? `?${query}` : "") +
+      window.location.hash,
+  );
+}
+
 function captureTrialView() {
   if (typeof window === "undefined") return;
   const params = new URLSearchParams(window.location.search);
@@ -60,4 +97,5 @@ function captureTrialView() {
   );
 }
 
+captureTrialSignup();
 captureTrialView();
