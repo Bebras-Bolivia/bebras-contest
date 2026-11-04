@@ -12,12 +12,10 @@ export const TRIAL_TASK_TEXT: Record<string, string> = {
   A4: "Prueba el desafío como lo vería un estudiante.",
   A5: "Amplía la rendición de un desafío que está en curso.",
   A6: "Revisa los resultados y el ranking de un desafío terminado.",
-  A7: "Publica una noticia en el sitio informativo desde el CMS.",
 };
 
 export const TRIAL_TASK_HINT: Record<string, string> = {
   M1: "Que haga el registro en una ventana privada (Ctrl+Mayús+N); en una ventana normal se cierra tu sesión de admin.",
-  A7: "Se hace en el CMS, que es otra aplicación: márcala tú.",
 };
 
 export const TRIAL_LIMIT_MINUTES: Record<string, number> = {
@@ -34,7 +32,6 @@ export const TRIAL_LIMIT_MINUTES: Record<string, number> = {
   A4: 5,
   A5: 5,
   A6: 5,
-  A7: 10,
 };
 
 export const TRIAL_AUTO = [

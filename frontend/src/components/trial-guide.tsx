@@ -62,13 +62,6 @@ function otherHost() {
   return null;
 }
 
-function cmsUrl() {
-  const { protocol, hostname } = window.location;
-  return hostname === "localhost" || hostname === "127.0.0.1"
-    ? `${protocol}//${hostname}:4100/admbb`
-    : null;
-}
-
 function registrationUrl() {
   const host = otherHost();
   if (!host) return "/login?prueba=1";
@@ -263,8 +256,7 @@ function GuideBody({
       if (tab && code === "M1") {
         tab.location.href = registrationUrl();
       } else if (tab && state.role === "admin") {
-        const target = code === "A7" ? cmsUrl() : prepared.path;
-        if (target) tab.location.href = target;
+        if (prepared.path) tab.location.href = prepared.path;
         else tab.close();
       } else if (tab && teacher) {
         tab.location.href = trialViewUrl(viewPath(code), teacher);
@@ -411,21 +403,17 @@ function GuideBody({
                         </a>
                       </Button>
                     )}
-                    {state.role === "admin" &&
-                      (code === "A7" ? cmsUrl() : notes[code]?.path) && (
-                        <Button asChild variant="outline" size="sm">
-                          <a
-                            href={
-                              (code === "A7" ? cmsUrl() : notes[code]?.path) ??
-                              "#"
-                            }
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Abrir la pantalla
-                          </a>
-                        </Button>
-                      )}
+                    {state.role === "admin" && notes[code]?.path && (
+                      <Button asChild variant="outline" size="sm">
+                        <a
+                          href={notes[code].path}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Abrir la pantalla
+                        </a>
+                      </Button>
+                    )}
                     {code !== "M1" && state.role === "maestro" && teacher && (
                       <Button asChild variant="outline" size="sm">
                         <a

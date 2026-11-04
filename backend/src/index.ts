@@ -9618,7 +9618,7 @@ app.get("/api/contests/:id/usage", async (req, res) => {
 
 const TRIAL_TASKS: Record<"maestro" | "admin", string[]> = {
   maestro: ["M1", "M2", "M3", "M4", "M5", "M6", "M7"],
-  admin: ["A1", "A2", "A3", "A4", "A5", "A6", "A7"],
+  admin: ["A1", "A2", "A3", "A4", "A5", "A6"],
 };
 const TRIAL_CRITICAL = ["M2", "M4", "A3", "A6"];
 const TRIAL_RESULTS = ["alone", "help", "failed"];
