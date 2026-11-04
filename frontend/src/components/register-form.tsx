@@ -136,23 +136,19 @@ export function RegisterForm() {
       ? `m1.${Math.random().toString(36).slice(2, 8)}@prueba.bo`
       : null,
   );
-  const [firstName, setFirstName] = useState(sample ? "Prueba" : "");
-  const [lastName, setLastName] = useState(sample ? "Maestro" : "");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState(sample ?? "");
-  const [password, setPassword] = useState(sample ? "bebras123" : "");
-  const [confirmPassword, setConfirmPassword] = useState(
-    sample ? "bebras123" : "",
-  );
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [school, setSchool] = useState<SchoolValue>({
     codUe: null,
-    name: sample ? "Unidad Educativa de Prueba" : "",
+    name: "",
     institutionType: "school",
   });
-  const [schoolManual, setSchoolManual] = useState(Boolean(sample));
-  const [place, setPlace] = useState<LocationValue>(
-    sample ? { department: "COCHABAMBA", city: "Cochabamba" } : EMPTY_LOCATION,
-  );
-  const [phone, setPhone] = useState(sample ? "71234567" : "");
+  const [schoolManual, setSchoolManual] = useState(false);
+  const [place, setPlace] = useState<LocationValue>(EMPTY_LOCATION);
+  const [phone, setPhone] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const confirmPasswordTouchedRef = useRef(false);
