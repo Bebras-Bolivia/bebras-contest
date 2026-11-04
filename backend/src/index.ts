@@ -9941,7 +9941,7 @@ async function trialPrepare(
     }
     return {
       note: "Hay una solicitud de maestro pendiente de aprobar.",
-      path: "/maestros",
+      path: `/maestros?solo=${encodeURIComponent(trialPendingEmail(session))}`,
     };
   }
 

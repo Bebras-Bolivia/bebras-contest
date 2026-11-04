@@ -198,6 +198,11 @@ export function MaestrosHome() {
   const [confirming, setConfirming] = useState<Confirmation | null>(null);
   const [editing, setEditing] = useState<Maestro | null>(null);
   const [tab, setTab] = useState<Tab>(() => readView()?.tab ?? "review");
+  const [only] = useState(() =>
+    typeof window === "undefined"
+      ? null
+      : new URLSearchParams(window.location.search).get("solo"),
+  );
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterValue>(
     () => readView()?.filter ?? "all",
@@ -231,7 +236,11 @@ export function MaestrosHome() {
     let active = true;
     void listMaestros()
       .then((loaded) => {
-        if (active) setMaestros(loaded);
+        if (active) {
+          setMaestros(
+            only ? loaded.filter((maestro) => maestro.email === only) : loaded,
+          );
+        }
       })
       .catch((error: unknown) => {
         toast.error(
@@ -246,7 +255,7 @@ export function MaestrosHome() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [only]);
 
   const requests = useMemo(() => requestsOf(maestros), [maestros]);
 

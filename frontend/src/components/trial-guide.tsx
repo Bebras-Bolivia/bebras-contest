@@ -136,7 +136,10 @@ function GuideBody({
   const [preparing, setPreparing] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [comment, setComment] = useState("");
-  const [help, setHelp] = useState(false);
+  const [detected, setDetected] = useState<{
+    code: string;
+    seconds: number;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [closing, setClosing] = useState(false);
   const [answers, setAnswers] = useState<number[]>(() =>
@@ -171,7 +174,7 @@ function GuideBody({
         ],
       }));
       setComment("");
-      setHelp(false);
+      setDetected(null);
       const next = { ...started };
       delete next[code];
       setStarted(next);
@@ -188,21 +191,19 @@ function GuideBody({
 
   const autoFinish = useEffectEvent(
     async (kind: "done" | "timeout", at: string | null) => {
-      if (!current || !startedAt || closing) return;
-      setClosing(true);
+      if (!current || !startedAt || closing || detected) return;
       if (kind === "timeout") {
+        setClosing(true);
         await finishWith(current, "failed", limit, "Se acabó el tiempo.");
         return;
       }
       const seconds = at
         ? Math.round((Date.parse(at) - startedAt) / 1000)
         : elapsed;
-      await finishWith(
-        current,
-        help ? "help" : "alone",
-        Math.min(Math.max(seconds, 1), limit),
-        comment,
-      );
+      setDetected({
+        code: current,
+        seconds: Math.min(Math.max(seconds, 1), limit),
+      });
     },
   );
 
@@ -212,7 +213,13 @@ function GuideBody({
   }, []);
 
   useEffect(() => {
-    if (!current || !startedAt || !TRIAL_AUTO.includes(current)) return;
+    if (
+      !current ||
+      !startedAt ||
+      !TRIAL_AUTO.includes(current) ||
+      detected?.code === current
+    )
+      return;
     let alive = true;
     const check = () =>
       void checkTrialTask(sessionId, current, startedAt)
@@ -226,7 +233,7 @@ function GuideBody({
       alive = false;
       clearInterval(timer);
     };
-  }, [sessionId, current, startedAt]);
+  }, [sessionId, current, startedAt, detected]);
 
   useEffect(() => {
     if (expired) void autoFinish("timeout", null);
@@ -439,14 +446,12 @@ function GuideBody({
                       </Button>
                     )}
                   </div>
-                  <label className="flex w-fit items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={help}
-                      onChange={(event) => setHelp(event.target.checked)}
-                    />
-                    Necesitó ayuda
-                  </label>
+                  {detected?.code === code && (
+                    <p className="text-sm font-medium">
+                      Terminó en {formatTrialSeconds(detected.seconds)}. ¿Lo
+                      logró solo o con ayuda?
+                    </p>
+                  )}
                   <Textarea
                     value={comment}
                     maxLength={500}
@@ -461,24 +466,41 @@ function GuideBody({
                       onClick={() =>
                         void finishWith(
                           code,
-                          help ? "help" : "alone",
-                          elapsed,
+                          "alone",
+                          detected?.code === code ? detected.seconds : elapsed,
                           comment,
                         )
                       }
                     >
-                      Lo logró
+                      Lo logró solo
                     </Button>
                     <Button
                       type="button"
                       variant="outline"
                       disabled={busy}
                       onClick={() =>
-                        void finishWith(code, "failed", elapsed, comment)
+                        void finishWith(
+                          code,
+                          "help",
+                          detected?.code === code ? detected.seconds : elapsed,
+                          comment,
+                        )
                       }
                     >
-                      No pudo
+                      Lo logró con ayuda
                     </Button>
+                    {detected?.code !== code && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() =>
+                          void finishWith(code, "failed", elapsed, comment)
+                        }
+                      >
+                        No pudo
+                      </Button>
+                    )}
                   </div>
                 </div>
               )}
