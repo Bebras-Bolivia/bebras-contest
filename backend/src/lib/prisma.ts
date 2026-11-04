@@ -2,11 +2,13 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { env } from "cloudflare:workers";
 import { PrismaD1 } from "@prisma/adapter-d1";
 import { PrismaClient } from "../generated/prisma/client";
+import { trialQueryArgs, type TrialScope } from "./trial-scope";
 
 type RequestContext = {
   client: PrismaClient;
   database: D1Database;
   queries: number;
+  trialScope: TrialScope;
 };
 
 /**
@@ -14,7 +16,9 @@ type RequestContext = {
  * como las cuenta Cloudflare contra su límite por invocación).
  */
 function countingDatabase(context: { queries: number }): D1Database {
-  const countStatement = (statement: D1PreparedStatement): D1PreparedStatement =>
+  const countStatement = (
+    statement: D1PreparedStatement,
+  ): D1PreparedStatement =>
     new Proxy(statement, {
       get(target, property) {
         const value = Reflect.get(target, property, target);
@@ -58,7 +62,7 @@ function countingDatabase(context: { queries: number }): D1Database {
 }
 
 function createContext(counting: boolean): RequestContext {
-  const context = { queries: 0 } as RequestContext;
+  const context = { queries: 0, trialScope: null } as RequestContext;
   context.database = counting ? countingDatabase(context) : env.DB;
   context.client = new PrismaClient({
     adapter: new PrismaD1(context.database),
@@ -91,10 +95,41 @@ export function queryCount() {
   return currentContext().queries;
 }
 
+export function setTrialScope(scope: TrialScope) {
+  currentContext().trialScope = scope;
+}
+
+export function trialScope() {
+  return currentContext().trialScope;
+}
+
 export const prisma = new Proxy({} as PrismaClient, {
   get(_target, property) {
     const client = currentContext().client;
     const value = Reflect.get(client, property, client);
+    if (
+      typeof property === "string" &&
+      value &&
+      typeof value === "object" &&
+      !property.startsWith("$")
+    ) {
+      return new Proxy(value, {
+        get(delegate, operation) {
+          const method = Reflect.get(delegate, operation, delegate);
+          if (typeof method !== "function") return method;
+          return (args: Record<string, unknown> = {}) =>
+            method.call(
+              delegate,
+              trialQueryArgs(
+                property,
+                String(operation),
+                args,
+                currentContext().trialScope,
+              ),
+            );
+        },
+      });
+    }
     return typeof value === "function" ? value.bind(client) : value;
   },
 });

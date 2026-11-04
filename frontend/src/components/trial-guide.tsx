@@ -26,7 +26,7 @@ import {
   TRIAL_TASK_TEXT,
   formatTrialSeconds,
 } from "@/lib/trial-content";
-import { trialViewUrl } from "@/lib/trial-view";
+import { trialSessionUrl, trialViewUrl } from "@/lib/trial-view";
 import { cn } from "@/lib/utils";
 
 type TrialNotes = Record<
@@ -52,7 +52,7 @@ function writeJson(key: string, value: unknown) {
 }
 
 function viewPath(code: string) {
-  return code === "M7" ? "/mis-practicas" : "/grupos";
+  return code === "M2" || code === "M3" ? "/grupos" : "/";
 }
 
 function otherHost() {
@@ -62,11 +62,14 @@ function otherHost() {
   return null;
 }
 
-function registrationUrl() {
+function registrationUrl(sessionId: string) {
   const host = otherHost();
-  if (!host) return "/login?prueba=1";
+  if (!host) return trialSessionUrl("/login?prueba=1", sessionId);
   const { protocol, port } = window.location;
-  return `${protocol}//${host}${port ? `:${port}` : ""}/login?prueba=1`;
+  return trialSessionUrl(
+    `${protocol}//${host}${port ? `:${port}` : ""}/login?prueba=1`,
+    sessionId,
+  );
 }
 
 export function TrialGuide() {
@@ -254,12 +257,11 @@ function GuideBody({
         writeJson(notesKey, nextNotes);
       }
       if (tab && code === "M1") {
-        tab.location.href = registrationUrl();
+        tab.location.href = registrationUrl(sessionId);
       } else if (tab && state.role === "admin") {
-        if (prepared.path) tab.location.href = prepared.path;
-        else tab.close();
+        tab.location.href = trialViewUrl("/", state.actor, sessionId);
       } else if (tab && teacher) {
-        tab.location.href = trialViewUrl(viewPath(code), teacher);
+        tab.location.href = trialViewUrl(viewPath(code), teacher, sessionId);
       }
     } catch (failure) {
       tab?.close();
@@ -395,7 +397,7 @@ function GuideBody({
                     {code === "M1" && (
                       <Button asChild variant="outline" size="sm">
                         <a
-                          href={registrationUrl()}
+                          href={registrationUrl(sessionId)}
                           target="_blank"
                           rel="noreferrer"
                         >
@@ -403,10 +405,10 @@ function GuideBody({
                         </a>
                       </Button>
                     )}
-                    {state.role === "admin" && notes[code]?.path && (
+                    {state.role === "admin" && (
                       <Button asChild variant="outline" size="sm">
                         <a
-                          href={notes[code].path}
+                          href={trialViewUrl("/", state.actor, sessionId)}
                           target="_blank"
                           rel="noreferrer"
                         >
@@ -417,7 +419,11 @@ function GuideBody({
                     {code !== "M1" && state.role === "maestro" && teacher && (
                       <Button asChild variant="outline" size="sm">
                         <a
-                          href={trialViewUrl(viewPath(code), teacher)}
+                          href={trialViewUrl(
+                            viewPath(code),
+                            teacher,
+                            sessionId,
+                          )}
                           target="_blank"
                           rel="noreferrer"
                         >

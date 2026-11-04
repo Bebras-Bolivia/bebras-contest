@@ -85,6 +85,7 @@ export type TransactionIsolationLevel = (typeof TransactionIsolationLevel)[keyof
 
 
 export const UserScalarFieldEnum = {
+  trialSessionId: 'trialSessionId',
   id: 'id',
   email: 'email',
   firebaseUid: 'firebaseUid',
@@ -191,6 +192,7 @@ export type SchoolScalarFieldEnum = (typeof SchoolScalarFieldEnum)[keyof typeof 
 
 
 export const TaskDraftScalarFieldEnum = {
+  trialSessionId: 'trialSessionId',
   id: 'id',
   title: 'title',
   country: 'country',
@@ -220,6 +222,7 @@ export type TaskDraftScalarFieldEnum = (typeof TaskDraftScalarFieldEnum)[keyof t
 
 
 export const ContestScalarFieldEnum = {
+  trialSessionId: 'trialSessionId',
   id: 'id',
   title: 'title',
   categories: 'categories',

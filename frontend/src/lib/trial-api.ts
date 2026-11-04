@@ -18,6 +18,7 @@ export type TrialState = {
   susDone: boolean;
   person: { firstName: string; lastName: string };
   teacher: { id: number; email: string; name: string } | null;
+  actor: { id: number; email: string; name: string; role: "maestro" | "admin" };
 };
 
 const session = (sessionId: string) => `/api/admin/trial/sessions/${sessionId}`;

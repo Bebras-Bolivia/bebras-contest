@@ -13,7 +13,7 @@ import ExcelJS from "exceljs";
 import { createAuthorizationLetter } from "./lib/documents-pdf";
 import { Readable } from "node:stream";
 import { extname } from "node:path";
-import { db, prisma, queryCount, withRequestPrisma } from "./lib/prisma";
+import { db, prisma, queryCount, withRequestPrisma, setTrialScope, trialScope } from "./lib/prisma";
 import type { Prisma } from "./generated/prisma/client";
 import { formatPersonName } from "./lib/person-name";
 import { favoriteContestId, purgeExpiredContests, registerContestLifecycle } from "./lib/contest-lifecycle";
@@ -1328,7 +1328,7 @@ app.use((req, res, next) => {
   res.header("Vary", "Origin");
   res.header(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Play-Session, X-Trial-As",
+    "Content-Type, Authorization, X-Play-Session, X-Trial-As, X-Trial-Session",
   );
   res.header(
     "Access-Control-Allow-Methods",
@@ -1355,6 +1355,70 @@ app.use((req, _res, next) => {
 });
 
 app.use(express.json({ limit: "10mb" }));
+
+app.use(async (req, res, next) => {
+  if (req.path.startsWith("/api/admin/trial")) {
+    if (req.headers["x-trial-session"]) {
+      res.status(403).json({ message: "Gestiona las pruebas desde la pestaña principal." });
+      return;
+    }
+    await requireAdmin(req, res, () => {
+      setTrialScope(false);
+      next();
+    });
+    return;
+  }
+  const sessionId = req.headers["x-trial-session"];
+  if (typeof sessionId !== "string" || !sessionId) {
+    if (req.headers["x-trial-as"]) {
+      res.status(403).json({ message: "Vuelve a abrir esta vista desde la guía de la prueba." });
+      return;
+    }
+    return next();
+  }
+  setTrialScope(false);
+  const session = await prisma.trialSession.findUnique({ where: { id: sessionId } });
+  if (!session) {
+    res.status(404).json({ message: "Esta prueba ya no existe." });
+    return;
+  }
+  if (req.headers.authorization) {
+    const authenticated = await authenticateFirebase(req, { allowUnverified: req.path === "/api/auth/register" });
+    if ("failure" in authenticated) {
+      res.status(authenticated.failure.status).json(authenticated.failure.body);
+      return;
+    }
+    const profile = await prisma.user.findUnique({ where: { firebaseUid: authenticated.identity.uid } });
+    if (profile?.role === "admin" && !profile.trialSessionId) {
+      const actor = session.role === "admin" ? await trialOrganizer(session) : await trialTeacher(session);
+      req.user = { id: actor.id, email: actor.email, role: actor.role, firebaseUid: authenticated.identity.uid };
+    } else if (profile?.trialSessionId !== sessionId &&
+      !(!profile && session.role === "maestro" && ["/api/auth/register", "/api/auth/session"].includes(req.path))) {
+      res.status(403).json({ message: "Esta cuenta no pertenece a la prueba." });
+      return;
+    }
+  }
+  setTrialScope(sessionId);
+  if (req.path.startsWith("/api/e2e") || (req.path.startsWith("/api/admin") && req.path !== "/api/admin/interactive-engines/latest")) {
+    res.status(403).json({ message: "Esta opción no está disponible en el entorno de ensayo." });
+    return;
+  }
+  const resource = req.path.match(/^\/api\/(tasks|contests|groups|teams|users)\/([^/]+)/);
+  if (resource && !["draft", "trash", "contests", "courses", "students.xlsx", "maestros", "schools"].includes(resource[2])) {
+    const id = decodeURIComponent(resource[2]);
+    const where = { id };
+    const exists = resource[1] === "tasks" ? await prisma.taskDraft.findUnique({ where, select: { id: true } })
+      : resource[1] === "contests" ? await prisma.contest.findUnique({ where, select: { id: true } })
+      : resource[1] === "groups" ? await prisma.contestGroup.findUnique({ where, select: { id: true } })
+      : resource[1] === "teams" ? await prisma.team.findUnique({ where, select: { id: true } })
+      : await prisma.user.findUnique({ where: { id: Number(id) || -1 }, select: { id: true } });
+    if (!exists) {
+      res.status(404).json({ message: "Este dato no pertenece al entorno de ensayo." });
+      return;
+    }
+  }
+  next();
+});
 
 app.put("/api/e2e/clock", (req, res) => {
   if (!isE2E()) {
@@ -2813,6 +2877,7 @@ async function refreshPracticeSnapshot(force = false) {
 
 /** Tras editar tareas: la práctica publicada no debe quedar atrasada. */
 async function refreshPracticeSnapshotQuietly() {
+  if (typeof trialScope() === "string") return;
   try {
     await refreshPracticeSnapshot();
   } catch (error) {
@@ -3871,12 +3936,12 @@ app.put("/api/tasks/:id", async (req, res) => {
   const running = existing.contestTasks.find(({ contest }) => {
     if (contest.isPractice) return false;
     const { state } = computeContestState(contest);
-    return ["inscripcion", "preparacion", "abierta", "suspendida"].includes(state);
+    return ["preparacion", "abierta", "suspendida"].includes(state);
   });
 
   if (running) {
     res.status(409).json({
-      message: `Esta tarea está en «${running.contest.title}», que ya comenzó. Detén el desafío antes de modificar sus preguntas.`,
+      message: `Esta tarea está en «${running.contest.title}», que ya comenzó. Sus preguntas están bloqueadas.`,
       code: "TASK_IN_RUNNING_CONTEST",
     });
     return;
@@ -4111,12 +4176,12 @@ app.put("/api/contests/:id", async (req, res) => {
   const { state: currentState } = computeContestState(existingContest);
 
   const alreadyRunning =
-    ["inscripcion", "preparacion", "abierta", "suspendida"].includes(currentState);
+    ["preparacion", "abierta", "suspendida"].includes(currentState);
 
   if (alreadyRunning || contestHasEnded(currentState)) {
     res.status(409).json({
       message: alreadyRunning
-        ? "El desafío ya comenzó. Solo puedes ampliar el cierre; para cambiar las fechas o preguntas, primero debes detenerlo."
+        ? "El desafío ya comenzó. Puedes ampliar el cierre y cambiar las fechas de resultados; el inicio, las preguntas y las demás opciones están bloqueados."
         : "El desafío ya terminó; no se puede modificar.",
     });
     return;
@@ -4944,7 +5009,7 @@ async function serializeMaestros(maestros: MaestroRecord[]) {
 
 app.get("/api/users/maestros", async (_req, res) => {
   const maestros = await prisma.user.findMany({
-    where: { role: "maestro" },
+    where: { role: "maestro", ...(trialScope() === null ? { trialSessionId: null } : {}) },
     orderBy: { createdAt: "desc" },
     select: MAESTRO_SELECT,
   });
@@ -5155,8 +5220,7 @@ app.get("/api/published-contests", requireAuth, async (req, res) => {
       ? { OR: [{ isPractice: false, isTest: false }, { createdById: req.user.id }] }
       : { isPractice: false, isTest: false };
 
-  const hideTrial =
-    req.user?.role !== "admin" && !req.user?.email.startsWith("ensayo.");
+  const hideTrial = trialScope() === null;
   const contests = await prisma.contest.findMany({
     where: {
       trashedAt: null,
@@ -5226,7 +5290,12 @@ async function groupCounts(filters: {
   ownerId: number | null;
 }) {
   const conditions = ['c."trashedAt" IS NULL'];
-  const params: Array<string | number> = [];
+  const params: Array<string | number | null> = [];
+  const scope = trialScope();
+  if (scope !== false) {
+    conditions.push('c."trialSessionId" IS ?');
+    params.push(scope);
+  }
   if (filters.contestId) {
     conditions.push('g."contestId" = ?');
     params.push(filters.contestId);
@@ -5472,6 +5541,7 @@ app.get("/api/groups/students.xlsx", async (req, res) => {
 
 app.get("/api/groups/contests", async (req, res) => {
   const { ownerId } = groupListFilters(req);
+  const scope = trialScope();
   const { results } = await db()
     .prepare(
       `SELECT g."contestId" AS "contestId", COUNT(DISTINCT g."id") AS "groups",
@@ -5480,10 +5550,10 @@ app.get("/api/groups/contests", async (req, res) => {
       FROM "ContestGroup" g
       JOIN "Contest" c ON c."id" = g."contestId"
       LEFT JOIN "Team" t ON t."groupId" = g."id"
-      WHERE c."trashedAt" IS NULL AND c."isTest" = 0${req.user?.role === "admin" ? ' AND c."isPractice" = 0' : ""}${ownerId ? ' AND g."createdById" = ?' : ""}
+      WHERE c."trashedAt" IS NULL AND c."isTest" = 0${scope !== false ? ' AND c."trialSessionId" IS ?' : ""}${req.user?.role === "admin" ? ' AND c."isPractice" = 0' : ""}${ownerId ? ' AND g."createdById" = ?' : ""}
       GROUP BY g."contestId"`,
     )
-    .bind(...(ownerId ? [ownerId] : []))
+    .bind(...(scope !== false ? [scope] : []), ...(ownerId ? [ownerId] : []))
     .all<{ contestId: string; groups: number; students: number }>();
 
   const ids = results.map((row) => row.contestId);
@@ -9640,8 +9710,7 @@ const TRIAL_TITLES = {
   terminado: `${TRIAL_PREFIX} Terminado`,
   porPublicar: `${TRIAL_PREFIX} Resultados por publicar`,
 };
-const TRIAL_SCENARIO_TASKS = ["M1", "M2", "M3", "M4", "M5", "M6", "A1", "A2", "A3", "A4", "A5", "A6"];
-const TRIAL_REGISTRATION_MARK = "trialRegistrationReopened";
+const TRIAL_SCENARIO_TASKS = ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "A1", "A2", "A3", "A4", "A5", "A6"];
 const TRIAL_ACCOUNT_KIND = "m1-account";
 const TRIAL_DAY = 24 * 3_600_000;
 const TRIAL_ROSTER: Array<[string, string]> = [
@@ -9667,7 +9736,31 @@ function trialLabel(session: TrialSessionRow) {
   return `${session.firstName} ${session.lastName} #${session.id.slice(-4)}`;
 }
 
-async function trialContest(kind: TrialKind, label: string) {
+async function trialQuestionBank(session: TrialSessionRow) {
+  const block = (content: string) => [{ id: randomUUID(), type: "text", content, image: null, widthPercent: 100 }];
+  for (let index = 1; index <= 5; index += 1) {
+    const id = `ensayo-${session.id}-${index}`;
+    if (await prisma.taskDraft.findUnique({ where: { id }, select: { id: true } })) continue;
+    const payload = parseTaskPayload({
+      title: `Pregunta de ensayo ${index}`,
+      categories: [TASK_CATEGORIES[0]],
+      difficulties: Object.fromEntries(TASK_AGE_RANGES.map((range) => [range, "easy"])),
+      bodyBlocks: block(`Un castor ordena ${index + 2} fichas numeradas de menor a mayor.`),
+      challengeBlocks: block("¿Qué número queda primero?"),
+      answers: ["1", String(index + 2)].map((text, position) => ({ id: position ? "B" : "A", blocks: block(text) })),
+      correctAnswerId: "A",
+    });
+    await prisma.taskDraft.create({ data: { id, ...payload, trialSessionId: session.id, forTeachers: true } });
+  }
+  return prisma.taskDraft.findMany({
+    where: { trialSessionId: session.id, id: { startsWith: `ensayo-${session.id}-` } },
+    select: { id: true, difficulties: true },
+    orderBy: { id: "asc" },
+  });
+}
+
+async function trialContest(kind: TrialKind, session: TrialSessionRow) {
+  const label = trialLabel(session);
   const now = currentDate();
   const title = `${TRIAL_TITLES[kind]} · ${label}`;
   const found = await prisma.contest.findFirst({
@@ -9690,11 +9783,7 @@ async function trialContest(kind: TrialKind, label: string) {
     return found;
   }
 
-  const drafts = await prisma.taskDraft.findMany({
-    where: { isPractice: false, forTeachers: false, answerType: "multiple_choice" },
-    select: { id: true, difficulties: true },
-    orderBy: { id: "asc" },
-  });
+  const drafts = await trialQuestionBank(session);
   const ageRange = CATEGORY_AGE_RANGE[TRIAL_CATEGORY];
   const taskInputs = drafts
     .filter((draft) =>
@@ -9718,6 +9807,7 @@ async function trialContest(kind: TrialKind, label: string) {
   return prisma.contest.create({
     data: {
       title,
+      trialSessionId: session.id,
       categories: JSON.stringify([TRIAL_CATEGORY]),
       scoring: JSON.stringify(scoring),
       publishedAt: now,
@@ -9824,43 +9914,24 @@ async function trialSeedGroup(
   return group;
 }
 
-async function trialOpenRegistration() {
-  if (await teacherRegistrationOpen()) {
-    return;
-  }
-  await prisma.siteSetting.upsert({
-    where: { key: TRIAL_REGISTRATION_MARK },
-    create: { key: TRIAL_REGISTRATION_MARK, value: "1" },
-    update: { value: "1" },
-  });
-  await prisma.siteSetting.deleteMany({
-    where: { key: TEACHER_REGISTRATION_KEY },
-  });
-}
-
-async function trialDropCreatedAccounts() {
+async function trialDropCreatedAccounts(sessionId?: string) {
   await prisma.user.deleteMany({
     where: {
       role: "maestro",
       status: "pending",
+      ...(sessionId ? { trialSessionId: sessionId } : {}),
       trialEvents: { some: { kind: TRIAL_ACCOUNT_KIND } },
     },
   });
 }
 
-async function trialRestoreRegistration() {
-  const mark = await prisma.siteSetting.findUnique({
-    where: { key: TRIAL_REGISTRATION_MARK },
-  });
-  if (!mark) {
-    return;
-  }
+async function trialCloseRegistration(sessionId: string) {
+  const key = `trial:${sessionId}:${TEACHER_REGISTRATION_KEY}`;
   await prisma.siteSetting.upsert({
-    where: { key: TEACHER_REGISTRATION_KEY },
-    create: { key: TEACHER_REGISTRATION_KEY, value: "closed" },
+    where: { key },
+    create: { key, value: "closed" },
     update: { value: "closed" },
   });
-  await prisma.siteSetting.delete({ where: { key: TRIAL_REGISTRATION_MARK } });
 }
 
 async function trialPrepare(
@@ -9868,17 +9939,19 @@ async function trialPrepare(
   session: TrialSessionRow,
   taskCode: string,
 ) {
-  const label = trialLabel(session);
-
   if (taskCode === "M1") {
-    await trialOpenRegistration();
+    await prisma.siteSetting.upsert({
+      where: { key: `trial:${session.id}:${TEACHER_REGISTRATION_KEY}` },
+      create: { key: `trial:${session.id}:${TEACHER_REGISTRATION_KEY}`, value: "open" },
+      update: { value: "open" },
+    });
     return {
-      note: "El registro de maestros está abierto mientras dure esta tarea. Cuando termine, se vuelve a cerrar. La cuenta que cree se borra sola cuando borres la prueba o los escenarios de ensayo.",
+      note: "El registro está abierto en este entorno de ensayo. La cuenta que cree pertenece únicamente a esta prueba.",
     };
   }
 
   if (taskCode === "M2") {
-    const contest = await trialContest("inscripcion", label);
+    const contest = await trialContest("inscripcion", session);
     await ensureCourseGroup(contest.id, TRIAL_GRADE, userId, null);
     return {
       note: `Preparamos el desafío «${contest.title}». Tienes una planilla de ejemplo para subir.`,
@@ -9887,7 +9960,7 @@ async function trialPrepare(
   }
 
   if (taskCode === "M3" || taskCode === "M4") {
-    const contest = await trialContest("inscripcion", label);
+    const contest = await trialContest("inscripcion", session);
     const group = await trialSeedGroup(contest, userId, "inscripcion", [
       ["Mria", "Flres"],
       ...TRIAL_STUDENTS.slice(1),
@@ -9904,7 +9977,7 @@ async function trialPrepare(
   }
 
   if (taskCode === "M5") {
-    const contest = await trialContest("curso", label);
+    const contest = await trialContest("curso", session);
     await trialSeedGroup(contest, userId, "curso", TRIAL_STUDENTS);
     return {
       note: `Hay un desafío en curso: «${contest.title}», con estudiantes rindiendo.`,
@@ -9912,11 +9985,16 @@ async function trialPrepare(
   }
 
   if (taskCode === "M6") {
-    const contest = await trialContest("terminado", label);
+    const contest = await trialContest("terminado", session);
     await trialSeedGroup(contest, userId, "terminado", TRIAL_STUDENTS);
     return {
       note: `Hay un desafío terminado con resultados: «${contest.title}».`,
     };
+  }
+
+  if (taskCode === "M7") {
+    await trialQuestionBank(session);
+    return { note: "Tienes preguntas de ensayo disponibles para armar la práctica." };
   }
 
   if (taskCode === "A1") {
@@ -9929,7 +10007,8 @@ async function trialPrepare(
       await prisma.user.create({
         data: {
           email,
-          firstName: "Docente",
+          trialSessionId: session.id,
+          firstName: "Maestro",
           lastName: `Ensayo ${session.firstName}`,
           role: "maestro",
           status: "pending",
@@ -9941,39 +10020,40 @@ async function trialPrepare(
     }
     return {
       note: "Hay una solicitud de maestro pendiente de aprobar.",
-      path: `/maestros?solo=${encodeURIComponent(trialPendingEmail(session))}`,
+      path: "/",
     };
   }
 
   if (taskCode === "A2") {
-    return { note: null, path: "/tareas/nueva" };
+    return { note: null, path: "/" };
   }
 
   if (taskCode === "A3") {
-    return { note: null, path: "/desafios" };
+    await trialQuestionBank(session);
+    return { note: "Tienes preguntas de ensayo disponibles para elegir.", path: "/" };
   }
 
   if (taskCode === "A4") {
-    const contest = await trialContest("inscripcion", label);
+    const contest = await trialContest("inscripcion", session);
     return {
       note: `Puedes probar el desafío «${contest.title}».`,
-      path: `/desafios/probar?id=${contest.id}`,
+      path: "/",
     };
   }
 
   if (taskCode === "A5") {
-    const contest = await trialContest("curso", label);
+    const contest = await trialContest("curso", session);
     return {
       note: `Hay un desafío en curso: «${contest.title}».`,
-      path: `/desafios/editar?id=${contest.id}`,
+      path: "/",
     };
   }
 
-  const contest = await trialContest("terminado", label);
+  const contest = await trialContest("terminado", session);
   await trialSeedGroup(contest, userId, "terminado", TRIAL_STUDENTS);
   return {
     note: `Hay un desafío terminado con resultados: «${contest.title}».`,
-    path: `/desafios/resultados?id=${contest.id}`,
+    path: "/",
   };
 }
 
@@ -10005,6 +10085,7 @@ async function trialTeacher(session: TrialSessionRow) {
   return prisma.user.create({
     data: {
       email,
+      trialSessionId: session.id,
       firstName: session.firstName,
       lastName: session.lastName,
       name: `${session.firstName} ${session.lastName}`,
@@ -10014,6 +10095,16 @@ async function trialTeacher(session: TrialSessionRow) {
       department: "Cochabamba",
       city: "Cochabamba",
     },
+  });
+}
+
+async function trialOrganizer(session: TrialSessionRow) {
+  const email = `ensayo.a${session.id.slice(-8).toLowerCase()}@prueba.bo`;
+  return prisma.user.upsert({
+    where: { email },
+    create: { email, trialSessionId: session.id, firstName: session.firstName, lastName: session.lastName,
+      name: `${session.firstName} ${session.lastName}`, role: "admin", status: "approved" },
+    update: {},
   });
 }
 
@@ -10057,7 +10148,7 @@ async function trialCheck(
 ) {
   const label = trialLabel(session);
   const owner =
-    trialSessionRole(session) === "maestro" ? await trialTeacher(session) : null;
+    trialSessionRole(session) === "maestro" ? await trialTeacher(session) : await trialOrganizer(session);
   const titleOf = (kind: TrialKind) => `${TRIAL_TITLES[kind]} · ${label}`;
   const groupOf = async (kind: TrialKind) => {
     if (!owner) {
@@ -10097,6 +10188,7 @@ async function trialCheck(
     const teacher = await prisma.user.findFirst({
       where: {
         role: "maestro",
+        trialSessionId: session.id,
         createdAt: { gt: since },
         NOT: { email: { startsWith: "ensayo." } },
       },
@@ -10164,12 +10256,12 @@ async function trialCheck(
       select: { status: true, updatedAt: true },
     });
     at =
-      teacher && teacher.status !== "pending" && teacher.updatedAt > since
+      teacher && teacher.status === "approved" && teacher.updatedAt > since
         ? teacher.updatedAt
         : null;
   } else if (taskCode === "A2") {
     const draft = await prisma.taskDraft.findFirst({
-      where: { createdAt: { gt: since }, answerType: "multiple_choice" },
+      where: { trialSessionId: session.id, createdAt: { gt: since }, answerType: "multiple_choice", NOT: { id: { startsWith: `ensayo-${session.id}-` } } },
       select: { createdAt: true },
     });
     at = draft?.createdAt ?? null;
@@ -10177,16 +10269,17 @@ async function trialCheck(
     const made = await prisma.contest.findMany({
       where: {
         createdAt: { gt: since },
+        trialSessionId: session.id,
         publishedAt: { not: null },
         isPractice: false,
         isTest: false,
         NOT: { title: { startsWith: TRIAL_PREFIX } },
       },
-      select: { createdAt: true, categories: true },
+      select: { publishedAt: true, categories: true },
     });
     at =
       made.find((contest) => contestCategories(contest).length >= 2)
-        ?.createdAt ?? null;
+        ?.publishedAt ?? null;
   } else if (taskCode === "A4") {
     const contest = await prisma.contest.findFirst({
       where: { title: titleOf("inscripcion"), trashedAt: null },
@@ -10262,6 +10355,8 @@ app.post("/api/admin/trial/sessions", async (req, res) => {
   });
   if (role === "maestro") {
     await trialTeacher(session);
+  } else {
+    await trialOrganizer(session);
   }
   res.status(201).json({ id: session.id });
 });
@@ -10284,6 +10379,7 @@ app.get("/api/admin/trial/sessions/:id", async (req, res) => {
   ]);
   const role = trialSessionRole(session);
   const teacher = role === "maestro" ? await trialTeacher(session) : null;
+  const actor = teacher ?? await trialOrganizer(session);
 
   res.json({
     role,
@@ -10294,6 +10390,7 @@ app.get("/api/admin/trial/sessions/:id", async (req, res) => {
     teacher: teacher
       ? { id: teacher.id, email: teacher.email, name: teacher.name ?? "" }
       : null,
+    actor: { id: actor.id, email: actor.email, name: actor.name ?? "", role: actor.role },
   });
 });
 
@@ -10332,7 +10429,7 @@ app.put("/api/admin/trial/sessions/:id/runs/:taskCode", async (req, res) => {
   });
 
   if (taskCode === "M1") {
-    await trialRestoreRegistration();
+    await trialCloseRegistration(session.id);
   }
 
   res.status(204).send();
@@ -10388,7 +10485,7 @@ app.post("/api/admin/trial/sessions/:id/prepare/:taskCode", async (req, res) => 
   const owner =
     trialSessionRole(session) === "maestro"
       ? (await trialTeacher(session)).id
-      : req.user!.id;
+      : (await trialOrganizer(session)).id;
   res.json(await trialPrepare(owner, session, taskCode));
 });
 
@@ -10398,12 +10495,8 @@ app.delete("/api/admin/trial/sessions/:id", async (req, res) => {
     return;
   }
 
+  await trialClearSessionData(session.id);
   await prisma.trialSession.delete({ where: { id: session.id } });
-  await prisma.user.deleteMany({
-    where: { email: trialTeacherEmail(session) },
-  });
-  await trialDropCreatedAccounts();
-  await trialRestoreRegistration();
   res.status(204).send();
 });
 
@@ -10441,18 +10534,27 @@ app.get("/api/admin/trial/planilla.xlsx", async (_req, res) => {
 });
 
 app.delete("/api/admin/trial-scenarios", async (_req, res) => {
+  const sessions = await prisma.trialSession.findMany({ select: { id: true } });
+  const contests = await prisma.contest.count({ where: { OR: [{ trialSessionId: { not: null } }, { title: { startsWith: TRIAL_PREFIX } }] } });
+  const users = await prisma.user.count({ where: { OR: [{ trialSessionId: { not: null } }, { email: { startsWith: "ensayo.", endsWith: "@prueba.bo" } }] } });
+  for (const session of sessions) await trialClearSessionData(session.id);
   const contestWhere = { title: { startsWith: TRIAL_PREFIX } };
   const userWhere = {
     email: { startsWith: "ensayo.", endsWith: "@prueba.bo" },
   };
-  const contests = await prisma.contest.count({ where: contestWhere });
-  const users = await prisma.user.count({ where: userWhere });
   await prisma.contest.deleteMany({ where: contestWhere });
   await prisma.user.deleteMany({ where: userWhere });
   await trialDropCreatedAccounts();
-  await trialRestoreRegistration();
   res.json({ contests, users });
 });
+
+async function trialClearSessionData(sessionId: string) {
+  await prisma.contest.deleteMany({ where: { trialSessionId: sessionId } });
+  await prisma.taskDraft.deleteMany({ where: { trialSessionId: sessionId } });
+  await trialDropCreatedAccounts(sessionId);
+  await prisma.user.deleteMany({ where: { trialSessionId: sessionId } });
+  await prisma.siteSetting.deleteMany({ where: { key: { startsWith: `trial:${sessionId}:` } } });
+}
 
 app.get("/api/admin/trial", async (_req, res) => {
   const sessions = await prisma.trialSession.findMany({

@@ -35,6 +35,7 @@ export type UserSumAggregateOutputType = {
 }
 
 export type UserMinAggregateOutputType = {
+  trialSessionId: string | null
   id: number | null
   email: string | null
   firebaseUid: string | null
@@ -58,6 +59,7 @@ export type UserMinAggregateOutputType = {
 }
 
 export type UserMaxAggregateOutputType = {
+  trialSessionId: string | null
   id: number | null
   email: string | null
   firebaseUid: string | null
@@ -81,6 +83,7 @@ export type UserMaxAggregateOutputType = {
 }
 
 export type UserCountAggregateOutputType = {
+  trialSessionId: number
   id: number
   email: number
   firebaseUid: number
@@ -114,6 +117,7 @@ export type UserSumAggregateInputType = {
 }
 
 export type UserMinAggregateInputType = {
+  trialSessionId?: true
   id?: true
   email?: true
   firebaseUid?: true
@@ -137,6 +141,7 @@ export type UserMinAggregateInputType = {
 }
 
 export type UserMaxAggregateInputType = {
+  trialSessionId?: true
   id?: true
   email?: true
   firebaseUid?: true
@@ -160,6 +165,7 @@ export type UserMaxAggregateInputType = {
 }
 
 export type UserCountAggregateInputType = {
+  trialSessionId?: true
   id?: true
   email?: true
   firebaseUid?: true
@@ -270,6 +276,7 @@ export type UserGroupByArgs<ExtArgs extends runtime.Types.Extensions.InternalArg
 }
 
 export type UserGroupByOutputType = {
+  trialSessionId: string | null
   id: number
   email: string
   firebaseUid: string | null
@@ -316,6 +323,7 @@ export type UserWhereInput = {
   AND?: Prisma.UserWhereInput | Prisma.UserWhereInput[]
   OR?: Prisma.UserWhereInput[]
   NOT?: Prisma.UserWhereInput | Prisma.UserWhereInput[]
+  trialSessionId?: Prisma.StringNullableFilter<"User"> | string | null
   id?: Prisma.IntFilter<"User"> | number
   email?: Prisma.StringFilter<"User"> | string
   firebaseUid?: Prisma.StringNullableFilter<"User"> | string | null
@@ -343,6 +351,7 @@ export type UserWhereInput = {
 }
 
 export type UserOrderByWithRelationInput = {
+  trialSessionId?: Prisma.SortOrderInput | Prisma.SortOrder
   id?: Prisma.SortOrder
   email?: Prisma.SortOrder
   firebaseUid?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -376,6 +385,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   AND?: Prisma.UserWhereInput | Prisma.UserWhereInput[]
   OR?: Prisma.UserWhereInput[]
   NOT?: Prisma.UserWhereInput | Prisma.UserWhereInput[]
+  trialSessionId?: Prisma.StringNullableFilter<"User"> | string | null
   name?: Prisma.StringNullableFilter<"User"> | string | null
   firstName?: Prisma.StringNullableFilter<"User"> | string | null
   lastName?: Prisma.StringNullableFilter<"User"> | string | null
@@ -400,6 +410,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
 }, "id" | "email" | "firebaseUid">
 
 export type UserOrderByWithAggregationInput = {
+  trialSessionId?: Prisma.SortOrderInput | Prisma.SortOrder
   id?: Prisma.SortOrder
   email?: Prisma.SortOrder
   firebaseUid?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -431,6 +442,7 @@ export type UserScalarWhereWithAggregatesInput = {
   AND?: Prisma.UserScalarWhereWithAggregatesInput | Prisma.UserScalarWhereWithAggregatesInput[]
   OR?: Prisma.UserScalarWhereWithAggregatesInput[]
   NOT?: Prisma.UserScalarWhereWithAggregatesInput | Prisma.UserScalarWhereWithAggregatesInput[]
+  trialSessionId?: Prisma.StringNullableWithAggregatesFilter<"User"> | string | null
   id?: Prisma.IntWithAggregatesFilter<"User"> | number
   email?: Prisma.StringWithAggregatesFilter<"User"> | string
   firebaseUid?: Prisma.StringNullableWithAggregatesFilter<"User"> | string | null
@@ -454,6 +466,7 @@ export type UserScalarWhereWithAggregatesInput = {
 }
 
 export type UserCreateInput = {
+  trialSessionId?: string | null
   email: string
   firebaseUid?: string | null
   name?: string | null
@@ -480,6 +493,7 @@ export type UserCreateInput = {
 }
 
 export type UserUncheckedCreateInput = {
+  trialSessionId?: string | null
   id?: number
   email: string
   firebaseUid?: string | null
@@ -507,6 +521,7 @@ export type UserUncheckedCreateInput = {
 }
 
 export type UserUpdateInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   firebaseUid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   name?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -533,6 +548,7 @@ export type UserUpdateInput = {
 }
 
 export type UserUncheckedUpdateInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.IntFieldUpdateOperationsInput | number
   email?: Prisma.StringFieldUpdateOperationsInput | string
   firebaseUid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -560,6 +576,7 @@ export type UserUncheckedUpdateInput = {
 }
 
 export type UserCreateManyInput = {
+  trialSessionId?: string | null
   id?: number
   email: string
   firebaseUid?: string | null
@@ -583,6 +600,7 @@ export type UserCreateManyInput = {
 }
 
 export type UserUpdateManyMutationInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   firebaseUid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   name?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -605,6 +623,7 @@ export type UserUpdateManyMutationInput = {
 }
 
 export type UserUncheckedUpdateManyInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.IntFieldUpdateOperationsInput | number
   email?: Prisma.StringFieldUpdateOperationsInput | string
   firebaseUid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -628,6 +647,7 @@ export type UserUncheckedUpdateManyInput = {
 }
 
 export type UserCountOrderByAggregateInput = {
+  trialSessionId?: Prisma.SortOrder
   id?: Prisma.SortOrder
   email?: Prisma.SortOrder
   firebaseUid?: Prisma.SortOrder
@@ -655,6 +675,7 @@ export type UserAvgOrderByAggregateInput = {
 }
 
 export type UserMaxOrderByAggregateInput = {
+  trialSessionId?: Prisma.SortOrder
   id?: Prisma.SortOrder
   email?: Prisma.SortOrder
   firebaseUid?: Prisma.SortOrder
@@ -678,6 +699,7 @@ export type UserMaxOrderByAggregateInput = {
 }
 
 export type UserMinOrderByAggregateInput = {
+  trialSessionId?: Prisma.SortOrder
   id?: Prisma.SortOrder
   email?: Prisma.SortOrder
   firebaseUid?: Prisma.SortOrder
@@ -714,12 +736,12 @@ export type UserNullableScalarRelationFilter = {
   isNot?: Prisma.UserWhereInput | null
 }
 
-export type StringFieldUpdateOperationsInput = {
-  set?: string
-}
-
 export type NullableStringFieldUpdateOperationsInput = {
   set?: string | null
+}
+
+export type StringFieldUpdateOperationsInput = {
+  set?: string
 }
 
 export type DateTimeFieldUpdateOperationsInput = {
@@ -795,6 +817,7 @@ export type UserUpdateOneWithoutGroupsNestedInput = {
 }
 
 export type UserCreateWithoutTrialEventsInput = {
+  trialSessionId?: string | null
   email: string
   firebaseUid?: string | null
   name?: string | null
@@ -820,6 +843,7 @@ export type UserCreateWithoutTrialEventsInput = {
 }
 
 export type UserUncheckedCreateWithoutTrialEventsInput = {
+  trialSessionId?: string | null
   id?: number
   email: string
   firebaseUid?: string | null
@@ -862,6 +886,7 @@ export type UserUpdateToOneWithWhereWithoutTrialEventsInput = {
 }
 
 export type UserUpdateWithoutTrialEventsInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   firebaseUid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   name?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -887,6 +912,7 @@ export type UserUpdateWithoutTrialEventsInput = {
 }
 
 export type UserUncheckedUpdateWithoutTrialEventsInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.IntFieldUpdateOperationsInput | number
   email?: Prisma.StringFieldUpdateOperationsInput | string
   firebaseUid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -913,6 +939,7 @@ export type UserUncheckedUpdateWithoutTrialEventsInput = {
 }
 
 export type UserCreateWithoutSchoolsInput = {
+  trialSessionId?: string | null
   email: string
   firebaseUid?: string | null
   name?: string | null
@@ -938,6 +965,7 @@ export type UserCreateWithoutSchoolsInput = {
 }
 
 export type UserUncheckedCreateWithoutSchoolsInput = {
+  trialSessionId?: string | null
   id?: number
   email: string
   firebaseUid?: string | null
@@ -980,6 +1008,7 @@ export type UserUpdateToOneWithWhereWithoutSchoolsInput = {
 }
 
 export type UserUpdateWithoutSchoolsInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   firebaseUid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   name?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1005,6 +1034,7 @@ export type UserUpdateWithoutSchoolsInput = {
 }
 
 export type UserUncheckedUpdateWithoutSchoolsInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.IntFieldUpdateOperationsInput | number
   email?: Prisma.StringFieldUpdateOperationsInput | string
   firebaseUid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1031,6 +1061,7 @@ export type UserUncheckedUpdateWithoutSchoolsInput = {
 }
 
 export type UserCreateWithoutContestsInput = {
+  trialSessionId?: string | null
   email: string
   firebaseUid?: string | null
   name?: string | null
@@ -1056,6 +1087,7 @@ export type UserCreateWithoutContestsInput = {
 }
 
 export type UserUncheckedCreateWithoutContestsInput = {
+  trialSessionId?: string | null
   id?: number
   email: string
   firebaseUid?: string | null
@@ -1098,6 +1130,7 @@ export type UserUpdateToOneWithWhereWithoutContestsInput = {
 }
 
 export type UserUpdateWithoutContestsInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   firebaseUid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   name?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1123,6 +1156,7 @@ export type UserUpdateWithoutContestsInput = {
 }
 
 export type UserUncheckedUpdateWithoutContestsInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.IntFieldUpdateOperationsInput | number
   email?: Prisma.StringFieldUpdateOperationsInput | string
   firebaseUid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1149,6 +1183,7 @@ export type UserUncheckedUpdateWithoutContestsInput = {
 }
 
 export type UserCreateWithoutGroupsInput = {
+  trialSessionId?: string | null
   email: string
   firebaseUid?: string | null
   name?: string | null
@@ -1174,6 +1209,7 @@ export type UserCreateWithoutGroupsInput = {
 }
 
 export type UserUncheckedCreateWithoutGroupsInput = {
+  trialSessionId?: string | null
   id?: number
   email: string
   firebaseUid?: string | null
@@ -1216,6 +1252,7 @@ export type UserUpdateToOneWithWhereWithoutGroupsInput = {
 }
 
 export type UserUpdateWithoutGroupsInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   firebaseUid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   name?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1241,6 +1278,7 @@ export type UserUpdateWithoutGroupsInput = {
 }
 
 export type UserUncheckedUpdateWithoutGroupsInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.IntFieldUpdateOperationsInput | number
   email?: Prisma.StringFieldUpdateOperationsInput | string
   firebaseUid?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1325,6 +1363,7 @@ export type UserCountOutputTypeCountTrialEventsArgs<ExtArgs extends runtime.Type
 
 
 export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  trialSessionId?: boolean
   id?: boolean
   email?: boolean
   firebaseUid?: boolean
@@ -1353,6 +1392,7 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
 }, ExtArgs["result"]["user"]>
 
 export type UserSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  trialSessionId?: boolean
   id?: boolean
   email?: boolean
   firebaseUid?: boolean
@@ -1376,6 +1416,7 @@ export type UserSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
 }, ExtArgs["result"]["user"]>
 
 export type UserSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  trialSessionId?: boolean
   id?: boolean
   email?: boolean
   firebaseUid?: boolean
@@ -1399,6 +1440,7 @@ export type UserSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
 }, ExtArgs["result"]["user"]>
 
 export type UserSelectScalar = {
+  trialSessionId?: boolean
   id?: boolean
   email?: boolean
   firebaseUid?: boolean
@@ -1421,7 +1463,7 @@ export type UserSelectScalar = {
   updatedAt?: boolean
 }
 
-export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "firebaseUid" | "name" | "firstName" | "lastName" | "passwordHash" | "role" | "status" | "schoolCodUe" | "schoolName" | "institutionType" | "department" | "city" | "phone" | "letterFilename" | "idFrontFilename" | "idBackFilename" | "createdAt" | "updatedAt", ExtArgs["result"]["user"]>
+export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"trialSessionId" | "id" | "email" | "firebaseUid" | "name" | "firstName" | "lastName" | "passwordHash" | "role" | "status" | "schoolCodUe" | "schoolName" | "institutionType" | "department" | "city" | "phone" | "letterFilename" | "idFrontFilename" | "idBackFilename" | "createdAt" | "updatedAt", ExtArgs["result"]["user"]>
 export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   schools?: boolean | Prisma.User$schoolsArgs<ExtArgs>
   contests?: boolean | Prisma.User$contestsArgs<ExtArgs>
@@ -1441,6 +1483,7 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     trialEvents: Prisma.$TrialEventPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
+    trialSessionId: string | null
     id: number
     email: string
     firebaseUid: string | null
@@ -1544,8 +1587,8 @@ export interface UserDelegate<ExtArgs extends runtime.Types.Extensions.InternalA
    * // Get first 10 Users
    * const users = await prisma.user.findMany({ take: 10 })
    * 
-   * // Only select the `id`
-   * const userWithIdOnly = await prisma.user.findMany({ select: { id: true } })
+   * // Only select the `trialSessionId`
+   * const userWithTrialSessionIdOnly = await prisma.user.findMany({ select: { trialSessionId: true } })
    * 
    */
   findMany<T extends UserFindManyArgs>(args?: Prisma.SelectSubset<T, UserFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
@@ -1589,9 +1632,9 @@ export interface UserDelegate<ExtArgs extends runtime.Types.Extensions.InternalA
    *   ]
    * })
    * 
-   * // Create many Users and only return the `id`
-   * const userWithIdOnly = await prisma.user.createManyAndReturn({
-   *   select: { id: true },
+   * // Create many Users and only return the `trialSessionId`
+   * const userWithTrialSessionIdOnly = await prisma.user.createManyAndReturn({
+   *   select: { trialSessionId: true },
    *   data: [
    *     // ... provide data here
    *   ]
@@ -1680,9 +1723,9 @@ export interface UserDelegate<ExtArgs extends runtime.Types.Extensions.InternalA
    *   ]
    * })
    * 
-   * // Update zero or more Users and only return the `id`
-   * const userWithIdOnly = await prisma.user.updateManyAndReturn({
-   *   select: { id: true },
+   * // Update zero or more Users and only return the `trialSessionId`
+   * const userWithTrialSessionIdOnly = await prisma.user.updateManyAndReturn({
+   *   select: { trialSessionId: true },
    *   where: {
    *     // ... provide filter here
    *   },
@@ -1888,6 +1931,7 @@ export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Typ
  * Fields of the User model
  */
 export interface UserFieldRefs {
+  readonly trialSessionId: Prisma.FieldRef<"User", 'String'>
   readonly id: Prisma.FieldRef<"User", 'Int'>
   readonly email: Prisma.FieldRef<"User", 'String'>
   readonly firebaseUid: Prisma.FieldRef<"User", 'String'>

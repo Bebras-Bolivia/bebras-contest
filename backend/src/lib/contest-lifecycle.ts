@@ -1,11 +1,12 @@
 import type { Express } from "express";
 import type { Prisma } from "../generated/prisma/client";
-import { db, prisma } from "./prisma";
+import { db, prisma, trialScope } from "./prisma";
 import {
   SCHOOL_GRADES,
   contestCategories,
   contestStateAt,
   parseCategorySchedules,
+  resultsWindow,
   serializeCategorySchedules,
 } from "./contest-rules";
 
@@ -45,6 +46,7 @@ export async function favoriteContestId() {
 }
 
 export async function purgeExpiredContests(now = new Date()) {
+  if (typeof trialScope() === "string") return;
   const threshold = new Date(now.getTime() - TRASH_RETENTION_MS);
   const expired = `((typeof("trashedAt") = 'text' AND strftime('%Y-%m-%dT%H:%M:%fZ', "trashedAt") <= ?)
     OR (typeof("trashedAt") IN ('integer', 'real') AND "trashedAt" <= ?))`;
@@ -87,6 +89,10 @@ export function registerContestLifecycle(
       where: { id: String(req.params.id) },
       select: { trashedAt: true },
     });
+    if (!contest) {
+      res.status(404).json({ message: "Desafío no encontrado." });
+      return;
+    }
     if (
       contest?.trashedAt &&
       !(req.method === "POST" && req.path === "/restore")
@@ -156,7 +162,7 @@ export function registerContestLifecycle(
     if (contestStateAt(now(), contest).state === "abierta") {
       res.status(409).json({
         message:
-          "El desafío se está rindiendo. Detenlo antes de enviarlo a la papelera.",
+          "El desafío se está rindiendo. Podrás enviarlo a la papelera cuando termine la rendición.",
       });
       return;
     }
@@ -222,69 +228,6 @@ export function registerContestLifecycle(
     res.json(serialize(await load(id)));
   });
 
-  app.post("/api/contests/:id/stop", async (req, res) => {
-    const id = String(req.params.id);
-    const contest = await prisma.contest.findUnique({ where: { id } });
-    if (!contest?.publishedAt || contest.stoppedAt) {
-      res.status(409).json({
-        message:
-          "Solo se puede detener un desafío publicado que no esté ya detenido.",
-      });
-      return;
-    }
-    const stamp = now().toISOString();
-    const result = await db().batch([
-      db()
-        .prepare(
-          `UPDATE "Contest" SET "stoppedAt" = ?, "suspendedAt" = NULL,
-        "consolidatedAt" = NULL, "resultsPublishedAt" = NULL, "resultsReleasedAt" = NULL, "updatedAt" = ?
-        WHERE "id" = ? AND "trashedAt" IS NULL AND (strftime('%Y-%m-%dT%H:%M:%fZ', "updatedAt") = ? OR "updatedAt" = ?)`,
-        )
-        .bind(
-          stamp,
-          stamp,
-          id,
-          contest.updatedAt.toISOString(),
-          contest.updatedAt.getTime(),
-        ),
-      db()
-        .prepare(
-          `DELETE FROM "Attempt" WHERE "teamId" IN
-        (SELECT t."id" FROM "Team" t JOIN "ContestGroup" g ON g."id" = t."groupId"
-         JOIN "Contest" c ON c."id" = g."contestId" WHERE c."id" = ? AND c."stoppedAt" = ?)`,
-        )
-        .bind(id, stamp),
-      db()
-        .prepare(
-          `INSERT INTO "Attempt" ("id", "teamId", "status", "mode", "createdAt", "updatedAt")
-        SELECT lower(hex(randomblob(16))), t."id", 'pending', 'online', ?, ?
-        FROM "Team" t JOIN "ContestGroup" g ON g."id" = t."groupId"
-        JOIN "Contest" c ON c."id" = g."contestId" WHERE c."id" = ? AND c."stoppedAt" = ?`,
-        )
-        .bind(stamp, stamp, id, stamp),
-      db()
-        .prepare(
-          `UPDATE "Team" SET "status" = 'registered', "updatedAt" = ? WHERE "groupId" IN
-        (SELECT g."id" FROM "ContestGroup" g JOIN "Contest" c ON c."id" = g."contestId"
-         WHERE c."id" = ? AND c."stoppedAt" = ?)`,
-        )
-        .bind(stamp, id, stamp),
-      db()
-        .prepare(
-          `UPDATE "ContestGroup" SET "firstUsedAt" = NULL, "expiresAt" = NULL, "updatedAt" = ?
-        WHERE "contestId" = ? AND EXISTS (SELECT 1 FROM "Contest" WHERE "id" = ? AND "stoppedAt" = ?)`,
-        )
-        .bind(stamp, id, id, stamp),
-    ]);
-    if (!result[0].meta.changes) {
-      res.status(409).json({
-        message: "El desafío cambió. Actualiza la página e inténtalo otra vez.",
-      });
-      return;
-    }
-    res.json(serialize(await load(id)));
-  });
-
   app.post("/api/contests/:id/restart", async (req, res) => {
     const id = String(req.params.id);
     const contest = await load(id);
@@ -321,6 +264,123 @@ export function registerContestLifecycle(
     res.json(serialize(await load(id)));
   });
 
+  app.patch("/api/contests/:id/results-window", async (req, res) => {
+    const id = String(req.params.id);
+    const contest = await prisma.contest.findUnique({ where: { id } });
+    if (!contest?.publishedAt) {
+      res.status(404).json({ message: "Desafío no encontrado." });
+      return;
+    }
+    const state = contestStateAt(now(), contest).state;
+    const published =
+      state === "publicada" && Boolean(contest.resultsPublishedAt);
+    if (
+      contest.isTest ||
+      (!published && !["inscripcion", "preparacion", "abierta"].includes(state))
+    ) {
+      res.status(409).json({
+        message:
+          "Puedes cambiar las fechas durante la inscripción o la rendición, o ampliar su plazo cuando los resultados ya están publicados.",
+      });
+      return;
+    }
+    let resultsAt: Date | null;
+    let resultsUntil: Date | null;
+    try {
+      const keys = Object.keys(req.body ?? {});
+      if (
+        !keys.length ||
+        keys.some((key) => !["resultsAt", "resultsUntil"].includes(key))
+      ) {
+        throw new Error(
+          "Solo puedes cambiar las fechas de resultados desde esta opción.",
+        );
+      }
+      const optionalDate = (
+        value: unknown,
+        current: Date | null,
+        label: string,
+      ) =>
+        value === undefined
+          ? current
+          : value === null || value === ""
+            ? null
+            : dateInput(value, label);
+      resultsAt = optionalDate(
+        req.body.resultsAt,
+        contest.resultsAt,
+        "la publicación de resultados",
+      );
+      resultsUntil = optionalDate(
+        req.body.resultsUntil,
+        contest.resultsUntil,
+        "el fin de la publicación de resultados",
+      );
+      if (resultsAt && contest.endsAt && resultsAt < contest.endsAt) {
+        throw new Error(
+          "Los resultados no pueden publicarse antes del cierre de la última categoría.",
+        );
+      }
+      const from = resultsAt ?? contest.endsAt;
+      if (resultsUntil && (!from || resultsUntil <= from)) {
+        throw new Error(
+          "Los resultados tienen que mostrarse hasta después de publicarse.",
+        );
+      }
+      if (published) {
+        const current = resultsWindow(contest);
+        if (from?.getTime() !== current.from?.getTime()) {
+          throw new Error(
+            "Los resultados ya están publicados. La fecha «Desde» se conserva.",
+          );
+        }
+        if (
+          !resultsUntil ||
+          !current.until ||
+          resultsUntil < current.until ||
+          resultsUntil <= now()
+        ) {
+          throw new Error(
+            "Solo puedes ampliar «Hasta» y debe quedar en el futuro.",
+          );
+        }
+        resultsAt = contest.resultsAt;
+      }
+    } catch (failure) {
+      res.status(400).json({
+        message:
+          failure instanceof Error
+            ? failure.message
+            : "Fechas de resultados inválidas.",
+      });
+      return;
+    }
+    const changed = await db()
+      .prepare(
+        `UPDATE "Contest" SET "resultsAt" = ?, "resultsUntil" = ?, "updatedAt" = ?
+      WHERE "id" = ? AND "stoppedAt" IS NULL AND "trashedAt" IS NULL
+      AND ${published ? '"resultsPublishedAt" IS NOT NULL' : '"resultsReleasedAt" IS NULL'}
+      AND (strftime('%Y-%m-%dT%H:%M:%fZ', "updatedAt") = ? OR "updatedAt" = ?)`,
+      )
+      .bind(
+        resultsAt?.toISOString() ?? null,
+        resultsUntil?.toISOString() ?? null,
+        now().toISOString(),
+        id,
+        contest.updatedAt.toISOString(),
+        contest.updatedAt.getTime(),
+      )
+      .run();
+    if (!changed.meta.changes) {
+      res.status(409).json({
+        message:
+          "El desafío cambió. Actualiza la página antes de guardar las fechas.",
+      });
+      return;
+    }
+    res.json(serialize(await load(id)));
+  });
+
   app.patch("/api/contests/:id/closing", async (req, res) => {
     const id = String(req.params.id);
     const contest = await prisma.contest.findUnique({ where: { id } });
@@ -338,7 +398,7 @@ export function registerContestLifecycle(
         )
       ) {
         throw new Error(
-          "Solo puedes ampliar el cierre. Detén el desafío para reprogramar el inicio o las preguntas.",
+          "Solo puedes ampliar el cierre. El inicio y las preguntas están bloqueados.",
         );
       }
       if (req.body?.registrationEndsAt !== undefined) {
@@ -357,7 +417,7 @@ export function registerContestLifecycle(
           );
         if (contest.startsAt && end > contest.startsAt)
           throw new Error(
-            "Para mover también el inicio de la rendición, detén el desafío y reprograma sus fechas.",
+            "La inscripción debe cerrar antes o al inicio de la rendición. Ese inicio no se puede cambiar.",
           );
         const changed = await db()
           .prepare(
@@ -397,14 +457,14 @@ export function registerContestLifecycle(
           );
           if (end < window.endsAt)
             throw new Error(
-              "El cierre solo se puede ampliar. Para reprogramar, detén el desafío.",
+              "El nuevo cierre no puede ser anterior al cierre actual.",
             );
           if (
             window.endsAt <= instant &&
             end.getTime() !== window.endsAt.getTime()
           )
             throw new Error(
-              `La categoría ${category} ya terminó. Detén el desafío para reprogramarla.`,
+              `La categoría ${category} ya terminó y su cierre no se puede cambiar.`,
             );
           if (end > window.endsAt) {
             const grades = SCHOOL_GRADES.filter(

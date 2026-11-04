@@ -2,6 +2,7 @@ import type { User } from "firebase/auth";
 
 import { API_BASE_URL } from "@/lib/api-client";
 import { setSession, type AuthUser } from "@/lib/auth";
+import { trialSessionHeaders } from "@/lib/trial-view";
 
 export type SessionOutcome =
   | { status: "ok"; user: AuthUser }
@@ -34,7 +35,7 @@ export async function openBebrasSession(user: User): Promise<SessionOutcome> {
   try {
     response = await fetch(`${API_BASE_URL}/api/auth/session`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, ...trialSessionHeaders() },
     });
   } catch {
     return { status: "error", message: "No se pudo conectar con el servidor." };
@@ -48,7 +49,10 @@ export async function openBebrasSession(user: User): Promise<SessionOutcome> {
   }
 
   if (data.code === "PROFILE_REQUIRED") {
-    return { status: "profile-required", email: data.email ?? user.email ?? "" };
+    return {
+      status: "profile-required",
+      email: data.email ?? user.email ?? "",
+    };
   }
 
   if (data.code === "EMAIL_NOT_VERIFIED") {

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import {
   ArchiveIcon,
+  BarChart3Icon,
+  EyeIcon,
   FilePenLineIcon,
   FilePlus2Icon,
   ListChecksIcon,
@@ -170,6 +172,41 @@ export function ContestsHome() {
         <ul className="divide-y border-b">
           {ordered.map((contest, index) => {
             const hasGroups = contest.categories.length > 0;
+            const editable = [
+              "borrador",
+              "programada",
+              "inscripcion",
+              "detenida",
+            ].includes(contest.state);
+            const ended = ["cerrada", "consolidada", "publicada"].includes(
+              contest.state,
+            );
+            const extending = [
+              "abierta",
+              "inscripcion",
+              "preparacion",
+            ].includes(contest.state);
+            const showResults = ended && !contest.isTest;
+            const showLiveResults =
+              contest.state === "abierta" && !contest.isTest;
+            const showUsage = ended && contest.isTest && contest.collectUsage;
+            const showDetails = ended && (showResults || showUsage);
+            const actionCount =
+              editable || showLiveResults || showDetails ? 4 : 3;
+            const mainHref = `/desafios/${showResults ? "resultados" : showUsage ? "uso" : "editar"}?id=${contest.id}`;
+            const mainLabel = showResults
+              ? "Resultados"
+              : showUsage
+                ? "Uso y opiniones"
+                : editable || extending
+                  ? "Editar"
+                  : "Ver desafío";
+            const MainIcon =
+              showResults || showUsage
+                ? BarChart3Icon
+                : editable || extending
+                  ? FilePenLineIcon
+                  : EyeIcon;
             return (
               <li
                 key={contest.id}
@@ -180,7 +217,7 @@ export function ContestsHome() {
                   <div className="flex items-start gap-2">
                     <h2 className="text-lg font-semibold break-words">
                       <a
-                        href={`/desafios/editar?id=${contest.id}`}
+                        href={mainHref}
                         className="outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
                       >
                         {contest.title}
@@ -252,29 +289,76 @@ export function ContestsHome() {
                     })}
                   </div>
                 </div>
-                <div className="grid w-full shrink-0 grid-cols-2 gap-1.5 min-[400px]:grid-cols-4 lg:w-72 lg:grid-cols-2 lg:gap-2">
+                <div
+                  className={cn(
+                    "grid w-full shrink-0 grid-cols-2 gap-1.5 lg:w-72 lg:grid-cols-2 lg:gap-2",
+                    actionCount === 4
+                      ? "min-[400px]:grid-cols-4"
+                      : actionCount === 3
+                        ? "min-[400px]:grid-cols-3"
+                        : "min-[400px]:grid-cols-2",
+                  )}
+                >
                   <Button
                     asChild
                     size="sm"
                     variant="outline"
-                    className={actionClass}
+                    className={cn(
+                      actionClass,
+                      actionCount === 3 &&
+                        "col-span-2 min-[400px]:col-span-1 lg:col-span-2",
+                    )}
                   >
-                    <a href={`/desafios/editar?id=${contest.id}`}>
-                      <FilePenLineIcon data-icon="inline-start" />
-                      Editar
+                    <a href={mainHref}>
+                      <MainIcon data-icon="inline-start" />
+                      {mainLabel}
                     </a>
                   </Button>
-                  <Button
-                    asChild
-                    size="sm"
-                    variant="outline"
-                    className={actionClass}
-                  >
-                    <a href={`/desafios/preguntas?id=${contest.id}`}>
-                      <ListChecksIcon data-icon="inline-start" />
-                      Preguntas
-                    </a>
-                  </Button>
+                  {editable && (
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="outline"
+                      className={actionClass}
+                    >
+                      <a href={`/desafios/preguntas?id=${contest.id}`}>
+                        <ListChecksIcon data-icon="inline-start" />
+                        Preguntas
+                      </a>
+                    </Button>
+                  )}
+                  {showLiveResults && (
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="outline"
+                      className={actionClass}
+                    >
+                      <a href={`/desafios/resultados?id=${contest.id}`}>
+                        <BarChart3Icon data-icon="inline-start" />
+                        Resultados
+                      </a>
+                    </Button>
+                  )}
+                  {showDetails ? (
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="outline"
+                      className={actionClass}
+                    >
+                      <a href={`/desafios/editar?id=${contest.id}`}>
+                        {contest.state === "publicada" ? (
+                          <FilePenLineIcon data-icon="inline-start" />
+                        ) : (
+                          <EyeIcon data-icon="inline-start" />
+                        )}
+                        {contest.state === "publicada"
+                          ? "Editar"
+                          : "Ver desafío"}
+                      </a>
+                    </Button>
+                  ) : null}
                   <Button
                     asChild
                     size="sm"

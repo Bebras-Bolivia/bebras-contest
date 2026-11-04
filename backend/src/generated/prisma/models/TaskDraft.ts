@@ -35,6 +35,7 @@ export type TaskDraftSumAggregateOutputType = {
 }
 
 export type TaskDraftMinAggregateOutputType = {
+  trialSessionId: string | null
   id: string | null
   title: string | null
   country: string | null
@@ -61,6 +62,7 @@ export type TaskDraftMinAggregateOutputType = {
 }
 
 export type TaskDraftMaxAggregateOutputType = {
+  trialSessionId: string | null
   id: string | null
   title: string | null
   country: string | null
@@ -87,6 +89,7 @@ export type TaskDraftMaxAggregateOutputType = {
 }
 
 export type TaskDraftCountAggregateOutputType = {
+  trialSessionId: number
   id: number
   title: number
   country: number
@@ -123,6 +126,7 @@ export type TaskDraftSumAggregateInputType = {
 }
 
 export type TaskDraftMinAggregateInputType = {
+  trialSessionId?: true
   id?: true
   title?: true
   country?: true
@@ -149,6 +153,7 @@ export type TaskDraftMinAggregateInputType = {
 }
 
 export type TaskDraftMaxAggregateInputType = {
+  trialSessionId?: true
   id?: true
   title?: true
   country?: true
@@ -175,6 +180,7 @@ export type TaskDraftMaxAggregateInputType = {
 }
 
 export type TaskDraftCountAggregateInputType = {
+  trialSessionId?: true
   id?: true
   title?: true
   country?: true
@@ -288,6 +294,7 @@ export type TaskDraftGroupByArgs<ExtArgs extends runtime.Types.Extensions.Intern
 }
 
 export type TaskDraftGroupByOutputType = {
+  trialSessionId: string | null
   id: string
   title: string
   country: string | null
@@ -337,6 +344,7 @@ export type TaskDraftWhereInput = {
   AND?: Prisma.TaskDraftWhereInput | Prisma.TaskDraftWhereInput[]
   OR?: Prisma.TaskDraftWhereInput[]
   NOT?: Prisma.TaskDraftWhereInput | Prisma.TaskDraftWhereInput[]
+  trialSessionId?: Prisma.StringNullableFilter<"TaskDraft"> | string | null
   id?: Prisma.StringFilter<"TaskDraft"> | string
   title?: Prisma.StringFilter<"TaskDraft"> | string
   country?: Prisma.StringNullableFilter<"TaskDraft"> | string | null
@@ -365,6 +373,7 @@ export type TaskDraftWhereInput = {
 }
 
 export type TaskDraftOrderByWithRelationInput = {
+  trialSessionId?: Prisma.SortOrderInput | Prisma.SortOrder
   id?: Prisma.SortOrder
   title?: Prisma.SortOrder
   country?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -397,6 +406,7 @@ export type TaskDraftWhereUniqueInput = Prisma.AtLeast<{
   AND?: Prisma.TaskDraftWhereInput | Prisma.TaskDraftWhereInput[]
   OR?: Prisma.TaskDraftWhereInput[]
   NOT?: Prisma.TaskDraftWhereInput | Prisma.TaskDraftWhereInput[]
+  trialSessionId?: Prisma.StringNullableFilter<"TaskDraft"> | string | null
   title?: Prisma.StringFilter<"TaskDraft"> | string
   country?: Prisma.StringNullableFilter<"TaskDraft"> | string | null
   year?: Prisma.IntNullableFilter<"TaskDraft"> | number | null
@@ -424,6 +434,7 @@ export type TaskDraftWhereUniqueInput = Prisma.AtLeast<{
 }, "id">
 
 export type TaskDraftOrderByWithAggregationInput = {
+  trialSessionId?: Prisma.SortOrderInput | Prisma.SortOrder
   id?: Prisma.SortOrder
   title?: Prisma.SortOrder
   country?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -458,6 +469,7 @@ export type TaskDraftScalarWhereWithAggregatesInput = {
   AND?: Prisma.TaskDraftScalarWhereWithAggregatesInput | Prisma.TaskDraftScalarWhereWithAggregatesInput[]
   OR?: Prisma.TaskDraftScalarWhereWithAggregatesInput[]
   NOT?: Prisma.TaskDraftScalarWhereWithAggregatesInput | Prisma.TaskDraftScalarWhereWithAggregatesInput[]
+  trialSessionId?: Prisma.StringNullableWithAggregatesFilter<"TaskDraft"> | string | null
   id?: Prisma.StringWithAggregatesFilter<"TaskDraft"> | string
   title?: Prisma.StringWithAggregatesFilter<"TaskDraft"> | string
   country?: Prisma.StringNullableWithAggregatesFilter<"TaskDraft"> | string | null
@@ -484,6 +496,7 @@ export type TaskDraftScalarWhereWithAggregatesInput = {
 }
 
 export type TaskDraftCreateInput = {
+  trialSessionId?: string | null
   id?: string
   title: string
   country?: string | null
@@ -512,6 +525,7 @@ export type TaskDraftCreateInput = {
 }
 
 export type TaskDraftUncheckedCreateInput = {
+  trialSessionId?: string | null
   id?: string
   title: string
   country?: string | null
@@ -540,6 +554,7 @@ export type TaskDraftUncheckedCreateInput = {
 }
 
 export type TaskDraftUpdateInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.StringFieldUpdateOperationsInput | string
   title?: Prisma.StringFieldUpdateOperationsInput | string
   country?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -568,6 +583,7 @@ export type TaskDraftUpdateInput = {
 }
 
 export type TaskDraftUncheckedUpdateInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.StringFieldUpdateOperationsInput | string
   title?: Prisma.StringFieldUpdateOperationsInput | string
   country?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -596,6 +612,7 @@ export type TaskDraftUncheckedUpdateInput = {
 }
 
 export type TaskDraftCreateManyInput = {
+  trialSessionId?: string | null
   id?: string
   title: string
   country?: string | null
@@ -622,6 +639,7 @@ export type TaskDraftCreateManyInput = {
 }
 
 export type TaskDraftUpdateManyMutationInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.StringFieldUpdateOperationsInput | string
   title?: Prisma.StringFieldUpdateOperationsInput | string
   country?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -648,6 +666,7 @@ export type TaskDraftUpdateManyMutationInput = {
 }
 
 export type TaskDraftUncheckedUpdateManyInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.StringFieldUpdateOperationsInput | string
   title?: Prisma.StringFieldUpdateOperationsInput | string
   country?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -674,6 +693,7 @@ export type TaskDraftUncheckedUpdateManyInput = {
 }
 
 export type TaskDraftCountOrderByAggregateInput = {
+  trialSessionId?: Prisma.SortOrder
   id?: Prisma.SortOrder
   title?: Prisma.SortOrder
   country?: Prisma.SortOrder
@@ -704,6 +724,7 @@ export type TaskDraftAvgOrderByAggregateInput = {
 }
 
 export type TaskDraftMaxOrderByAggregateInput = {
+  trialSessionId?: Prisma.SortOrder
   id?: Prisma.SortOrder
   title?: Prisma.SortOrder
   country?: Prisma.SortOrder
@@ -730,6 +751,7 @@ export type TaskDraftMaxOrderByAggregateInput = {
 }
 
 export type TaskDraftMinOrderByAggregateInput = {
+  trialSessionId?: Prisma.SortOrder
   id?: Prisma.SortOrder
   title?: Prisma.SortOrder
   country?: Prisma.SortOrder
@@ -797,6 +819,7 @@ export type TaskDraftUpdateOneRequiredWithoutAttemptAnswersNestedInput = {
 }
 
 export type TaskDraftCreateWithoutContestTasksInput = {
+  trialSessionId?: string | null
   id?: string
   title: string
   country?: string | null
@@ -824,6 +847,7 @@ export type TaskDraftCreateWithoutContestTasksInput = {
 }
 
 export type TaskDraftUncheckedCreateWithoutContestTasksInput = {
+  trialSessionId?: string | null
   id?: string
   title: string
   country?: string | null
@@ -867,6 +891,7 @@ export type TaskDraftUpdateToOneWithWhereWithoutContestTasksInput = {
 }
 
 export type TaskDraftUpdateWithoutContestTasksInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.StringFieldUpdateOperationsInput | string
   title?: Prisma.StringFieldUpdateOperationsInput | string
   country?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -894,6 +919,7 @@ export type TaskDraftUpdateWithoutContestTasksInput = {
 }
 
 export type TaskDraftUncheckedUpdateWithoutContestTasksInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.StringFieldUpdateOperationsInput | string
   title?: Prisma.StringFieldUpdateOperationsInput | string
   country?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -921,6 +947,7 @@ export type TaskDraftUncheckedUpdateWithoutContestTasksInput = {
 }
 
 export type TaskDraftCreateWithoutAttemptAnswersInput = {
+  trialSessionId?: string | null
   id?: string
   title: string
   country?: string | null
@@ -948,6 +975,7 @@ export type TaskDraftCreateWithoutAttemptAnswersInput = {
 }
 
 export type TaskDraftUncheckedCreateWithoutAttemptAnswersInput = {
+  trialSessionId?: string | null
   id?: string
   title: string
   country?: string | null
@@ -991,6 +1019,7 @@ export type TaskDraftUpdateToOneWithWhereWithoutAttemptAnswersInput = {
 }
 
 export type TaskDraftUpdateWithoutAttemptAnswersInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.StringFieldUpdateOperationsInput | string
   title?: Prisma.StringFieldUpdateOperationsInput | string
   country?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1018,6 +1047,7 @@ export type TaskDraftUpdateWithoutAttemptAnswersInput = {
 }
 
 export type TaskDraftUncheckedUpdateWithoutAttemptAnswersInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.StringFieldUpdateOperationsInput | string
   title?: Prisma.StringFieldUpdateOperationsInput | string
   country?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1085,6 +1115,7 @@ export type TaskDraftCountOutputTypeCountAttemptAnswersArgs<ExtArgs extends runt
 
 
 export type TaskDraftSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  trialSessionId?: boolean
   id?: boolean
   title?: boolean
   country?: boolean
@@ -1114,6 +1145,7 @@ export type TaskDraftSelect<ExtArgs extends runtime.Types.Extensions.InternalArg
 }, ExtArgs["result"]["taskDraft"]>
 
 export type TaskDraftSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  trialSessionId?: boolean
   id?: boolean
   title?: boolean
   country?: boolean
@@ -1140,6 +1172,7 @@ export type TaskDraftSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ext
 }, ExtArgs["result"]["taskDraft"]>
 
 export type TaskDraftSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  trialSessionId?: boolean
   id?: boolean
   title?: boolean
   country?: boolean
@@ -1166,6 +1199,7 @@ export type TaskDraftSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ext
 }, ExtArgs["result"]["taskDraft"]>
 
 export type TaskDraftSelectScalar = {
+  trialSessionId?: boolean
   id?: boolean
   title?: boolean
   country?: boolean
@@ -1191,7 +1225,7 @@ export type TaskDraftSelectScalar = {
   updatedAt?: boolean
 }
 
-export type TaskDraftOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "title" | "country" | "year" | "sourceTaskCode" | "category" | "difficulties" | "bodyBlocks" | "challengeBlocks" | "answerType" | "answerConfig" | "answerKey" | "multipleChoiceOrderMode" | "answers" | "correctAnswerId" | "shortAnswer" | "dragDropBackground" | "dragDropItems" | "explanationBlocks" | "isPractice" | "forTeachers" | "createdAt" | "updatedAt", ExtArgs["result"]["taskDraft"]>
+export type TaskDraftOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"trialSessionId" | "id" | "title" | "country" | "year" | "sourceTaskCode" | "category" | "difficulties" | "bodyBlocks" | "challengeBlocks" | "answerType" | "answerConfig" | "answerKey" | "multipleChoiceOrderMode" | "answers" | "correctAnswerId" | "shortAnswer" | "dragDropBackground" | "dragDropItems" | "explanationBlocks" | "isPractice" | "forTeachers" | "createdAt" | "updatedAt", ExtArgs["result"]["taskDraft"]>
 export type TaskDraftInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   contestTasks?: boolean | Prisma.TaskDraft$contestTasksArgs<ExtArgs>
   attemptAnswers?: boolean | Prisma.TaskDraft$attemptAnswersArgs<ExtArgs>
@@ -1207,6 +1241,7 @@ export type $TaskDraftPayload<ExtArgs extends runtime.Types.Extensions.InternalA
     attemptAnswers: Prisma.$AttemptAnswerPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
+    trialSessionId: string | null
     id: string
     title: string
     country: string | null
@@ -1313,8 +1348,8 @@ export interface TaskDraftDelegate<ExtArgs extends runtime.Types.Extensions.Inte
    * // Get first 10 TaskDrafts
    * const taskDrafts = await prisma.taskDraft.findMany({ take: 10 })
    * 
-   * // Only select the `id`
-   * const taskDraftWithIdOnly = await prisma.taskDraft.findMany({ select: { id: true } })
+   * // Only select the `trialSessionId`
+   * const taskDraftWithTrialSessionIdOnly = await prisma.taskDraft.findMany({ select: { trialSessionId: true } })
    * 
    */
   findMany<T extends TaskDraftFindManyArgs>(args?: Prisma.SelectSubset<T, TaskDraftFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TaskDraftPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
@@ -1358,9 +1393,9 @@ export interface TaskDraftDelegate<ExtArgs extends runtime.Types.Extensions.Inte
    *   ]
    * })
    * 
-   * // Create many TaskDrafts and only return the `id`
-   * const taskDraftWithIdOnly = await prisma.taskDraft.createManyAndReturn({
-   *   select: { id: true },
+   * // Create many TaskDrafts and only return the `trialSessionId`
+   * const taskDraftWithTrialSessionIdOnly = await prisma.taskDraft.createManyAndReturn({
+   *   select: { trialSessionId: true },
    *   data: [
    *     // ... provide data here
    *   ]
@@ -1449,9 +1484,9 @@ export interface TaskDraftDelegate<ExtArgs extends runtime.Types.Extensions.Inte
    *   ]
    * })
    * 
-   * // Update zero or more TaskDrafts and only return the `id`
-   * const taskDraftWithIdOnly = await prisma.taskDraft.updateManyAndReturn({
-   *   select: { id: true },
+   * // Update zero or more TaskDrafts and only return the `trialSessionId`
+   * const taskDraftWithTrialSessionIdOnly = await prisma.taskDraft.updateManyAndReturn({
+   *   select: { trialSessionId: true },
    *   where: {
    *     // ... provide filter here
    *   },
@@ -1655,6 +1690,7 @@ export interface Prisma__TaskDraftClient<T, Null = never, ExtArgs extends runtim
  * Fields of the TaskDraft model
  */
 export interface TaskDraftFieldRefs {
+  readonly trialSessionId: Prisma.FieldRef<"TaskDraft", 'String'>
   readonly id: Prisma.FieldRef<"TaskDraft", 'String'>
   readonly title: Prisma.FieldRef<"TaskDraft", 'String'>
   readonly country: Prisma.FieldRef<"TaskDraft", 'String'>

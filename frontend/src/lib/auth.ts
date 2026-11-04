@@ -1,5 +1,5 @@
 import { formatPersonName } from "./person-name";
-import { readTrialView } from "./trial-view";
+import { readTrialView, readTrialSession } from "./trial-view";
 
 const TOKEN_KEY = "bebras_token";
 const USER_KEY = "bebras_user";
@@ -78,6 +78,7 @@ export function setToken(token: string) {
 
 export function setUser(user: AuthUser) {
   if (!getToken() || !validUser(user)) return;
+  if (readTrialSession()) return;
   window.localStorage.setItem(USER_KEY, JSON.stringify(user));
   notifySession();
 }
@@ -95,7 +96,7 @@ function withTrialView(user: AuthUser | null) {
         id: view.id,
         email: view.email,
         name: view.name || null,
-        role: "maestro",
+        role: view.role ?? "maestro",
         status: "approved",
       },
     };

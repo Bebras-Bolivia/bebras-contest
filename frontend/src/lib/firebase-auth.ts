@@ -25,7 +25,7 @@ import {
   isFirebaseConfigured,
 } from "@/lib/firebase";
 import { idTokenFrom } from "@/lib/firebase-token";
-import { readTrialView } from "@/lib/trial-view";
+import { readTrialView, trialSessionHeaders } from "@/lib/trial-view";
 
 /** Estado unico de Firebase Authentication para todo el frontend (§16). */
 export interface FirebaseSession {
@@ -166,11 +166,15 @@ export async function endRejectedSession() {
 
 export async function authorizationHeaders(): Promise<Record<string, string>> {
   const token = await currentIdToken();
-  if (!token) return {};
+  if (!token) return trialSessionHeaders();
   const view = readTrialView();
   return view
-    ? { Authorization: `Bearer ${token}`, "x-trial-as": String(view.id) }
-    : { Authorization: `Bearer ${token}` };
+    ? {
+        Authorization: `Bearer ${token}`,
+        "x-trial-as": String(view.id),
+        ...trialSessionHeaders(),
+      }
+    : { Authorization: `Bearer ${token}`, ...trialSessionHeaders() };
 }
 
 export async function signOutFirebase() {

@@ -85,12 +85,6 @@ export function setContestFavorite(contestId: string, favorite: boolean) {
   );
 }
 
-export function stopContest(contestId: string) {
-  return request<StoredContest>(`/api/contests/${contestId}/stop`, {
-    method: "POST",
-  });
-}
-
 export function restartContest(contestId: string) {
   return request<StoredContest>(`/api/contests/${contestId}/restart`, {
     method: "POST",
@@ -106,6 +100,16 @@ export function extendContestClosing(
   },
 ) {
   return request<StoredContest>(`/api/contests/${contestId}/closing`, {
+    method: "PATCH",
+    body: JSON.stringify(dates),
+  });
+}
+
+export function updateContestResultsWindow(
+  contestId: string,
+  dates: { resultsAt?: string; resultsUntil: string },
+) {
+  return request<StoredContest>(`/api/contests/${contestId}/results-window`, {
     method: "PATCH",
     body: JSON.stringify(dates),
   });

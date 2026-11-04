@@ -7,6 +7,8 @@ import { CategoryLogo, categoryColor } from "@/components/category-logo";
 import { Expand } from "@/components/reveal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { API_BASE_URL } from "@/lib/api-client";
+import { authorizationHeaders } from "@/lib/firebase-auth";
+import { readTrialSession } from "@/lib/trial-view";
 import { rememberCount, rememberedCount } from "@/lib/remembered-count";
 import { enter } from "@/lib/surface";
 import { cn } from "@/lib/utils";
@@ -35,7 +37,10 @@ export function PublicRanking() {
   const [expected] = useState(() => rememberedCount(SHOWN_KEY, 0) > 0);
 
   useEffect(() => {
-    void fetch(`${API_BASE_URL}/api/public-ranking`)
+    void Promise.resolve(readTrialSession() ? authorizationHeaders() : {})
+      .then((headers) =>
+        fetch(`${API_BASE_URL}/api/public-ranking`, { headers }),
+      )
       .then((response) =>
         response.ok
           ? (response.json() as Promise<ContestRanking[]>)

@@ -61,7 +61,7 @@ import {
 import { EMAIL_VERIFICATION_CHANNEL } from "@/lib/email-action";
 import { GoogleButton } from "@/components/google-button";
 import { AUTH_EMULATOR_HOST, isFirebaseConfigured } from "@/lib/firebase";
-import { isTrialSignup } from "@/lib/trial-view";
+import { isTrialSignup, trialSessionHeaders } from "@/lib/trial-view";
 import {
   GoogleRedirectStarted,
   consumeGoogleRedirect,
@@ -551,7 +551,7 @@ export function RegisterForm() {
 
       const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, ...trialSessionHeaders() },
         body: form,
       });
 

@@ -1,6 +1,7 @@
 import type { ContentBlock } from "@/lib/task-schema";
 import type { PlayTask } from "@/lib/play-api";
 import { ApiError, optionalAuthRequest } from "@/lib/api-client";
+import { readTrialSession } from "@/lib/trial-view";
 
 export type PracticeCategory = {
   name: string;
@@ -60,7 +61,7 @@ function practiceFileName(name: string) {
 }
 
 async function published<T>(file: string, fallback: string) {
-  if (CDN_URL) {
+  if (CDN_URL && !readTrialSession()) {
     try {
       const response = await fetch(`${CDN_URL}/practice/${file}`, {
         signal: AbortSignal.timeout(8000),

@@ -10,6 +10,7 @@ datasource db {
 }
 
 model User {
+  trialSessionId  String?
   id              Int             @id @default(autoincrement())
   email           String          @unique
   firebaseUid     String?         @unique
@@ -34,6 +35,8 @@ model User {
   contests        Contest[]
   groups          ContestGroup[]
   trialEvents     TrialEvent[]
+
+  @@index([trialSessionId])
 }
 
 model TrialEvent {
@@ -115,6 +118,7 @@ model School {
 }
 
 model TaskDraft {
+  trialSessionId          String?
   id                      String          @id @default(cuid())
   title                   String
   country                 String?
@@ -141,9 +145,12 @@ model TaskDraft {
   updatedAt               DateTime        @updatedAt
   contestTasks            ContestTask[]
   attemptAnswers          AttemptAnswer[]
+
+  @@index([trialSessionId])
 }
 
 model Contest {
+  trialSessionId       String?
   id                   String         @id @default(cuid())
   title                String
   // Lista JSON de categorías Bebras; cada una tiene sus propias preguntas.
@@ -193,6 +200,7 @@ model Contest {
 
   @@index([createdById])
   @@index([trashedAt])
+  @@index([trialSessionId])
 }
 
 model ContestTask {

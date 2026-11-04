@@ -85,6 +85,7 @@ export async function authenticateFirebase(
 export async function resolveAuthUser(
   req: Request,
 ): Promise<{ user: AuthUser } | { failure: AuthFailure }> {
+  if (req.user) return { user: req.user };
   const authenticated = await authenticateFirebase(req);
   if ("failure" in authenticated) return authenticated;
 

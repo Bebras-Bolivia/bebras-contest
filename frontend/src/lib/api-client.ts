@@ -1,4 +1,5 @@
 import { authorizationHeaders, endRejectedSession } from "@/lib/firebase-auth";
+import { readTrialSession, trialSessionHeaders } from "@/lib/trial-view";
 
 export const API_BASE_URL =
   import.meta.env.PUBLIC_API_BASE_URL?.replace(/\/$/, "") ??
@@ -62,15 +63,17 @@ export async function apiRequest<T>(
   // inestable) no debe dejar la peticion colgada: se sigue sin cabecera.
   const requestHeaders = new Headers(
     auth === false
-      ? undefined
-      : auth === "optional"
-        ? await Promise.race([
-            authorizationHeaders().catch(() => ({})),
-            new Promise<Record<string, string>>((resolve) =>
-              setTimeout(() => resolve({}), 4000),
-            ),
-          ])
-        : await authorizationHeaders(),
+      ? trialSessionHeaders()
+      : readTrialSession()
+        ? await authorizationHeaders()
+        : auth === "optional"
+          ? await Promise.race([
+              authorizationHeaders().catch(() => ({})),
+              new Promise<Record<string, string>>((resolve) =>
+                setTimeout(() => resolve({}), 4000),
+              ),
+            ])
+          : await authorizationHeaders(),
   );
 
   new Headers(headers).forEach((value, key) => {

@@ -14,6 +14,8 @@ import { Expand } from "@/components/reveal";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { API_BASE_URL } from "@/lib/api-client";
+import { authorizationHeaders } from "@/lib/firebase-auth";
+import { readTrialSession } from "@/lib/trial-view";
 import { getToken, getUser, isApproved } from "@/lib/auth";
 import type { ContestState } from "@/lib/contest-schema";
 import { rememberCount, rememberedCount } from "@/lib/remembered-count";
@@ -188,7 +190,10 @@ export function LiveContests() {
   const [expected] = useState(() => Math.min(rememberedCount(COUNT_KEY, 1), 4));
 
   const refreshContests = useCallback(() => {
-    return fetch(`${API_BASE_URL}/api/public-contests`)
+    return Promise.resolve(readTrialSession() ? authorizationHeaders() : {})
+      .then((headers) =>
+        fetch(`${API_BASE_URL}/api/public-contests`, { headers }),
+      )
       .then((response) => {
         if (!response.ok) {
           throw new Error("no disponible");
@@ -267,9 +272,8 @@ export function LiveContests() {
 
     let active = true;
 
-    fetch(`${API_BASE_URL}/api/groups`, {
-      headers: { authorization: `Bearer ${token}` },
-    })
+    authorizationHeaders()
+      .then((headers) => fetch(`${API_BASE_URL}/api/groups`, { headers }))
       .then((response) =>
         response.ok
           ? (response.json() as Promise<Array<{ contestId: string }>>)

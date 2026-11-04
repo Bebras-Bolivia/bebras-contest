@@ -16,7 +16,12 @@ import {
   XIcon,
 } from "lucide-react";
 
-import { getContest, publishContest, updateContest } from "@/lib/contests-api";
+import {
+  getContest,
+  publishContest,
+  updateContest,
+  updateContestResultsWindow,
+} from "@/lib/contests-api";
 import { safeReturnTo } from "@/lib/site-navigation";
 import {
   BEBRAS_SCORING,
@@ -79,7 +84,13 @@ type Form = {
   tasks: Record<string, string[]>;
 };
 
-const EDITABLE_STATES: ContestState[] = ["borrador", "programada", "detenida"];
+const EDITABLE_STATES: ContestState[] = [
+  "borrador",
+  "programada",
+  "inscripcion",
+  "detenida",
+];
+const RESULTS_DISPLAY_MINUTES = 7 * 24 * 60;
 
 function localValue(value: string | null) {
   return value ? toDatetimeLocalValue(value) : "";
@@ -87,6 +98,7 @@ function localValue(value: string | null) {
 
 function formFromContest(contest: StoredContest): Form {
   const tasks: Record<string, string[]> = {};
+  const resultsAt = localValue(contest.resultsAt ?? contest.endsAt);
 
   for (const task of contest.tasks
     .slice()
@@ -116,8 +128,10 @@ function formFromContest(contest: StoredContest): Form {
     endsAt: localValue(contest.endsAt),
     scheduleMode: Object.keys(schedules).length > 0 ? "category" : "single",
     schedules,
-    resultsAt: localValue(contest.resultsAt),
-    resultsUntil: localValue(contest.resultsUntil),
+    resultsAt,
+    resultsUntil:
+      localValue(contest.resultsUntil) ||
+      plusMinutes(resultsAt, RESULTS_DISPLAY_MINUTES),
     scoring: contest.scoring ?? defaultContestScoring(),
     questionDisplayMode: contest.questionDisplayMode,
     allowPairs: contest.allowPairs,
@@ -270,6 +284,18 @@ function withRun(form: Form, patch: Partial<Form>): Form {
     next.resultsAt = after;
   }
 
+  if (
+    next.resultsUntil === form.resultsUntil &&
+    (!form.resultsUntil ||
+      form.resultsUntil ===
+        plusMinutes(form.resultsAt || before, RESULTS_DISPLAY_MINUTES))
+  ) {
+    next.resultsUntil = plusMinutes(
+      next.resultsAt || after,
+      RESULTS_DISPLAY_MINUTES,
+    );
+  }
+
   return next;
 }
 
@@ -322,6 +348,8 @@ function WindowField({
   minDate = null,
   maxDate = null,
   disabled,
+  startDisabled = false,
+  minEndDate = null,
   startLabel = "Inicio",
   endLabel = "Cierre",
   category,
@@ -336,6 +364,8 @@ function WindowField({
   minDate?: Date | null;
   maxDate?: Date | null;
   disabled: boolean;
+  startDisabled?: boolean;
+  minEndDate?: Date | null;
   startLabel?: string;
   endLabel?: string;
   onChange: (startsAt: string, endsAt: string) => void;
@@ -362,7 +392,7 @@ function WindowField({
         </div>
         <div className="flex items-baseline gap-3 text-sm text-muted-foreground">
           {length && <span>Dura {length}</span>}
-          {!disabled && (startsAt || endsAt) && (
+          {!disabled && !startDisabled && (startsAt || endsAt) && (
             <button
               type="button"
               onClick={() => onChange("", "")}
@@ -384,7 +414,7 @@ function WindowField({
             value={startsAt}
             minDate={minDate}
             maxDate={maxDate}
-            disabled={disabled}
+            disabled={disabled || startDisabled}
             onChange={(value) => onChange(value, endsAt)}
           />
         </div>
@@ -400,7 +430,7 @@ function WindowField({
             label={`${title}, ${endLabel.toLowerCase()}`}
             value={endsAt}
             fallbackHour={18}
-            minDate={start ?? minDate}
+            minDate={minEndDate ?? start ?? minDate}
             maxDate={maxDate}
             disabled={disabled}
             onChange={(value) => onChange(startsAt, value)}
@@ -512,6 +542,13 @@ export function ContestEditor() {
   const leavingRef = useRef(false);
 
   const locked = !EDITABLE_STATES.includes(contestState);
+  const resultsEditable =
+    locked &&
+    !form?.isTest &&
+    ["inscripcion", "preparacion", "abierta", "publicada"].includes(
+      contestState,
+    );
+  const resultsPublished = contestState === "publicada";
 
   useEffect(() => {
     if (!contestId) {
@@ -737,6 +774,14 @@ export function ContestEditor() {
 
   const byCategory = form.scheduleMode === "category";
   const span = runSpan(form);
+  const minimumResultsUntil =
+    resultsPublished && contestMeta
+      ? localValue(contestMeta.resultsUntil) ||
+        plusMinutes(
+          localValue(contestMeta.resultsAt ?? contestMeta.endsAt),
+          RESULTS_DISPLAY_MINUTES,
+        )
+      : "";
 
   const setScheduleMode = (mode: Form["scheduleMode"]) => {
     if (mode === form.scheduleMode) return;
@@ -801,14 +846,28 @@ export function ContestEditor() {
 
   const save = async () => {
     setTried(true);
-    if (!contestId || problems.length > 0) return false;
+    if (!contestId || (resultsEditable ? dateProblems : problems).length > 0)
+      return false;
     const payload = toPayload(form);
     const snapshot = JSON.stringify(payload);
     if (snapshot === savedRef.current) return true;
     setBusy("saving");
     try {
-      const saved = await updateContest(contestId, payload);
+      const saved = resultsEditable
+        ? await updateContestResultsWindow(contestId, {
+            ...(contestMeta &&
+            form.resultsAt === formFromContest(contestMeta).resultsAt
+              ? {}
+              : { resultsAt: payload.resultsAt }),
+            resultsUntil: payload.resultsUntil,
+          })
+        : await updateContest(contestId, payload);
       savedRef.current = snapshot;
+      if (resultsEditable) {
+        const next = formFromContest(saved);
+        setForm(next);
+        savedRef.current = JSON.stringify(toPayload(next));
+      }
       setContestState(saved.state);
       setContestMeta(saved);
       setSaveError(null);
@@ -853,24 +912,33 @@ export function ContestEditor() {
   };
 
   const lockedHint =
-    "Con el desafío en curso no se puede cambiar. Para modificarlo, detén el desafío y reprográmalo.";
+    contestState === "abierta"
+      ? "La rendición está en curso. Puedes ampliar su cierre desde «Ampliar rendición» y cambiar las fechas de resultados. El inicio, las preguntas y las demás opciones están bloqueados para conservar las respuestas."
+      : resultsPublished
+        ? "Los resultados ya están publicados. Puedes ampliar «Hasta» para que sigan visibles. La fecha «Desde», la rendición y las preguntas se conservan."
+        : ["inscripcion", "preparacion"].includes(contestState)
+          ? "Puedes ampliar el cierre desde «Ampliar inscripción» y cambiar las fechas de resultados. El inicio, las preguntas y las demás opciones están bloqueados."
+          : "Las fechas, las preguntas y la configuración de este desafío están bloqueadas para conservar las respuestas y los resultados.";
 
   const shownProblems = !tried
     ? []
-    : publishTried && contestState === "borrador"
-      ? publishProblems
-      : problems;
-  const barMessage = locked
-    ? null
-    : shownProblems[0]
-      ? {
-          tone: "error",
-          text: shownProblems[0],
-          more: shownProblems.length - 1,
-        }
-      : saveError
-        ? { tone: "error", text: saveError, more: 0 }
-        : null;
+    : resultsEditable
+      ? dateProblems
+      : publishTried && contestState === "borrador"
+        ? publishProblems
+        : problems;
+  const barMessage =
+    locked && !resultsEditable
+      ? null
+      : shownProblems[0]
+        ? {
+            tone: "error",
+            text: shownProblems[0],
+            more: shownProblems.length - 1,
+          }
+        : saveError
+          ? { tone: "error", text: saveError, more: 0 }
+          : null;
 
   return (
     <div className="flex flex-col gap-10">
@@ -889,7 +957,7 @@ export function ContestEditor() {
           </span>
           <FieldHint>
             {locked
-              ? "Puedes ampliar el cierre. Para cambiar el inicio o las preguntas, detén el desafío y reprograma."
+              ? lockedHint
               : contestState === "borrador"
                 ? "Nadie lo ve hasta que lo publiques."
                 : "Los maestros ya pueden inscribir a sus estudiantes."}
@@ -905,22 +973,21 @@ export function ContestEditor() {
         </div>
       </div>
 
-      {contestMeta &&
-        ["abierta", "inscripcion", "preparacion"].includes(contestState) && (
-          <ContestLifecycleActions
-            placement="closing"
-            contest={contestMeta}
-            beforeRestart={save}
-            onChanged={(contest) => {
-              const next = formFromContest(contest);
-              setForm(next);
-              setContestState(contest.state);
-              setContestMeta(contest);
-              savedRef.current = JSON.stringify(toPayload(next));
-              setSaveError(null);
-            }}
-          />
-        )}
+      {contestMeta && ["abierta", "preparacion"].includes(contestState) && (
+        <ContestLifecycleActions
+          placement="closing"
+          contest={contestMeta}
+          beforeRestart={save}
+          onChanged={(contest) => {
+            const next = formFromContest(contest);
+            setForm(next);
+            setContestState(contest.state);
+            setContestMeta(contest);
+            savedRef.current = JSON.stringify(toPayload(next));
+            setSaveError(null);
+          }}
+        />
+      )}
 
       <>
         <section className="flex flex-col gap-3">
@@ -1107,7 +1174,7 @@ export function ContestEditor() {
                 startsAt={form.registrationStartsAt}
                 endsAt={form.registrationEndsAt}
                 maxDate={parseDateTimeLocal(span.startsAt)}
-                disabled={locked || contestState === "inscripcion"}
+                disabled={locked}
                 onChange={(registrationStartsAt, registrationEndsAt) =>
                   update({ registrationStartsAt, registrationEndsAt })
                 }
@@ -1150,7 +1217,15 @@ export function ContestEditor() {
                 <WindowField
                   id="contest-run"
                   title="Rendición"
-                  help="Sin fechas todavía nadie puede rendir. Puedes ponerlas después de publicar."
+                  help={
+                    locked
+                      ? lockedHint
+                      : form.startsAt && form.endsAt
+                        ? "Este horario define cuándo pueden rendir los estudiantes. Cada equipo tiene el tiempo indicado abajo."
+                        : form.startsAt || form.endsAt
+                          ? "Completa el inicio y el cierre para habilitar la rendición."
+                          : "Sin fechas todavía nadie puede rendir. Puedes ponerlas después de publicar."
+                  }
                   startsAt={form.startsAt}
                   endsAt={form.endsAt}
                   minDate={parseDateTimeLocal(form.registrationEndsAt)}
@@ -1187,15 +1262,23 @@ export function ContestEditor() {
               <WindowField
                 id="contest-results"
                 title="Resultados"
-                help={`Desde: se publican solos y el desafío aparece con sus resultados en la página principal. Se pone sola al cierre de ${byCategory ? "la última categoría" : "la rendición"} y la puedes cambiar. Hasta: deja de salir ahí (sin fecha, 7 días después). Cada estudiante los sigue viendo con su código.`}
+                help={
+                  resultsPublished
+                    ? lockedHint
+                    : locked && !resultsEditable
+                      ? lockedHint
+                      : `Desde: se publican solos y el desafío aparece con sus resultados en la página principal. Se pone sola al cierre de ${byCategory ? "la última categoría" : "la rendición"} y la puedes cambiar. Hasta: deja de salir ahí. Se pone sola 7 días después de «Desde» y la puedes cambiar. Cada estudiante los sigue viendo con su código.`
+                }
                 startsAt={form.resultsAt}
                 endsAt={form.resultsUntil}
                 minDate={parseDateTimeLocal(span.endsAt)}
-                disabled={locked}
+                disabled={(locked && !resultsEditable) || busy !== null}
+                startDisabled={resultsPublished}
+                minEndDate={parseDateTimeLocal(minimumResultsUntil)}
                 startLabel="Desde"
                 endLabel="Hasta"
                 onChange={(resultsAt, resultsUntil) =>
-                  update({ resultsAt, resultsUntil })
+                  updateRun({ resultsAt, resultsUntil })
                 }
               />
             )}
@@ -1558,9 +1641,13 @@ export function ContestEditor() {
                 </a>
               </Button>
             )}
-            <Button type="button" disabled>
+            <Button
+              type="button"
+              disabled={!resultsEditable || busy !== null}
+              onClick={() => void saveAndGo("/desafios")}
+            >
               <SaveIcon data-icon="inline-start" />
-              Guardar
+              {busy === "saving" ? "Guardando…" : "Guardar"}
             </Button>
           </>
         ) : (

@@ -4,6 +4,7 @@ import { ListPageSkeleton } from "@/components/page-skeletons";
 import { useEffect, useState } from "react";
 import {
   CalculatorIcon,
+  ClockIcon,
   DownloadIcon,
   EyeIcon,
   EyeOffIcon,
@@ -154,22 +155,40 @@ export function ContestResults() {
   useEffect(() => {
     if (!contestId) return;
     let alive = true;
-    void getContestResults(contestId)
-      .then((data) => {
-        if (alive) setResults(data);
-      })
-      .catch((error) => {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "No se pudieron cargar los resultados.",
-        );
-      })
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
+    let refreshing = false;
+    let live = true;
+    const load = () => {
+      if (refreshing) return;
+      refreshing = true;
+      void getContestResults(contestId)
+        .then((data) => {
+          if (alive) {
+            setResults(data);
+            live = data.state === "abierta";
+          }
+        })
+        .catch((error) => {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "No se pudieron cargar los resultados.",
+          );
+        })
+        .finally(() => {
+          refreshing = false;
+          if (alive) setLoading(false);
+        });
+    };
+    load();
+    const refresh = () => {
+      if (live && document.visibilityState !== "hidden") load();
+    };
+    const timer = window.setInterval(refresh, 15000);
+    window.addEventListener("focus", refresh);
     return () => {
       alive = false;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
     };
   }, [contestId]);
 
@@ -203,9 +222,7 @@ export function ContestResults() {
   };
 
   if (loading) {
-    return (
-      <ListPageSkeleton label="Cargando resultados..." />
-    );
+    return <ListPageSkeleton label="Cargando resultados..." />;
   }
 
   if (!results) {
@@ -242,6 +259,14 @@ export function ContestResults() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {results.state === "publicada" && (
+            <Button asChild variant="outline">
+              <a href={`/desafios/editar?id=${contestId}#contest-results`}>
+                <ClockIcon data-icon="inline-start" />
+                Ampliar publicación
+              </a>
+            </Button>
+          )}
           {results.state === "cerrada" && (
             <Button
               type="button"
@@ -284,6 +309,14 @@ export function ContestResults() {
           </Button>
         </div>
       </div>
+
+      {results.state === "abierta" && (
+        <p className="text-sm text-muted-foreground">
+          Resultados provisionales: se muestran los puntajes de quienes ya
+          entregaron. Se actualizan automáticamente mientras continúa la
+          rendición.
+        </p>
+      )}
 
       {results.rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">

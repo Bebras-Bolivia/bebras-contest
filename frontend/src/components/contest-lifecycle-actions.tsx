@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LoaderCircleIcon, PlayIcon, SquareIcon, XIcon } from "lucide-react";
+import { LoaderCircleIcon, PlayIcon, XIcon } from "lucide-react";
 import {
   extendContestClosing,
   removeContest,
   restartContest,
-  stopContest,
 } from "@/lib/contests-api";
 import {
   fromDatetimeLocalValue,
@@ -42,7 +41,7 @@ export function ContestLifecycleActions({
   beforeRestart: () => Promise<boolean>;
   placement: "closing" | "actions" | "deletion";
 }) {
-  const [confirm, setConfirm] = useState<"stop" | "trash" | null>(null);
+  const [confirm, setConfirm] = useState<"trash" | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [registrationEnd, setRegistrationEnd] = useState(
@@ -81,16 +80,16 @@ export function ContestLifecycleActions({
   const registration =
     contest.state === "inscripcion" || contest.state === "preparacion";
 
-  const run = async (action: "stop" | "trash" | "restart") => {
+  const run = async (action: "trash" | "restart") => {
     setBusy(action);
     setError(null);
     try {
       if (action === "trash") {
         await removeContest(contest.id);
         window.location.assign("/desafios");
-      } else if (action === "restart") {
+      } else {
         if (await beforeRestart()) onChanged(await restartContest(contest.id));
-      } else onChanged(await stopContest(contest.id));
+      }
     } catch (failure) {
       setError(
         failure instanceof Error
@@ -139,8 +138,8 @@ export function ContestLifecycleActions({
               {registration ? "Ampliar inscripción" : "Ampliar rendición"}
             </h2>
             <FieldHint>
-              El inicio se conserva. Para cambiarlo, modificar las preguntas o
-              reprogramar el desafío, primero debes detenerlo.
+              Solo puedes ampliar el cierre. El inicio, las preguntas y las
+              respuestas se conservan.
             </FieldHint>
           </div>
           <FieldGroup className="gap-4 sm:grid sm:grid-cols-2">
@@ -204,30 +203,16 @@ export function ContestLifecycleActions({
           </Button>
         </div>
       )}
-      {placement === "actions" && (
+      {placement === "actions" && contest.stoppedAt && (
         <div className="flex flex-wrap items-center gap-2">
-          {contest.stoppedAt ? (
-            <Button
-              type="button"
-              disabled={busy !== null}
-              onClick={() => void run("restart")}
-            >
-              <PlayIcon data-icon="inline-start" />
-              {busy === "restart" ? "Reprogramando…" : "Reprogramar"}
-            </Button>
-          ) : (
-            contest.publishedAt && (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy !== null}
-                onClick={() => setConfirm("stop")}
-              >
-                <SquareIcon data-icon="inline-start" />
-                Detener
-              </Button>
-            )
-          )}
+          <Button
+            type="button"
+            disabled={busy !== null}
+            onClick={() => void run("restart")}
+          >
+            <PlayIcon data-icon="inline-start" />
+            {busy === "restart" ? "Reprogramando…" : "Reprogramar"}
+          </Button>
         </div>
       )}
       {placement === "deletion" && !running && (
@@ -256,14 +241,12 @@ export function ContestLifecycleActions({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {confirm === "stop"
-                ? "¿Detener y reiniciar este desafío?"
-                : "¿Enviar este desafío a la papelera?"}
+              ¿Enviar este desafío a la papelera?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {confirm === "stop"
-                ? "Se descartarán todas las respuestas y resultados, y los intentos volverán al inicio. Las inscripciones y los códigos se conservan. Después podrás cambiar las fechas y preguntas para reprogramarlo."
-                : "Se ocultarán el desafío y todos sus grupos, estudiantes y resultados. Podrás recuperarlos durante 30 días; después se eliminarán automáticamente. Nadie puede adelantar ese plazo."}
+              Se ocultarán el desafío y todos sus grupos, estudiantes y
+              resultados. Podrás recuperarlos durante 30 días; después se
+              eliminarán automáticamente. Nadie puede adelantar ese plazo.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -273,9 +256,7 @@ export function ContestLifecycleActions({
                 if (confirm) void run(confirm);
               }}
             >
-              {confirm === "stop"
-                ? "Detener y reiniciar"
-                : "Enviar a la papelera"}
+              Enviar a la papelera
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

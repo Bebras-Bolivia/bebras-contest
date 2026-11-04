@@ -37,6 +37,7 @@ export type ContestSumAggregateOutputType = {
 }
 
 export type ContestMinAggregateOutputType = {
+  trialSessionId: string | null
   id: string | null
   title: string | null
   categories: string | null
@@ -74,6 +75,7 @@ export type ContestMinAggregateOutputType = {
 }
 
 export type ContestMaxAggregateOutputType = {
+  trialSessionId: string | null
   id: string | null
   title: string | null
   categories: string | null
@@ -111,6 +113,7 @@ export type ContestMaxAggregateOutputType = {
 }
 
 export type ContestCountAggregateOutputType = {
+  trialSessionId: number
   id: number
   title: number
   categories: number
@@ -160,6 +163,7 @@ export type ContestSumAggregateInputType = {
 }
 
 export type ContestMinAggregateInputType = {
+  trialSessionId?: true
   id?: true
   title?: true
   categories?: true
@@ -197,6 +201,7 @@ export type ContestMinAggregateInputType = {
 }
 
 export type ContestMaxAggregateInputType = {
+  trialSessionId?: true
   id?: true
   title?: true
   categories?: true
@@ -234,6 +239,7 @@ export type ContestMaxAggregateInputType = {
 }
 
 export type ContestCountAggregateInputType = {
+  trialSessionId?: true
   id?: true
   title?: true
   categories?: true
@@ -358,6 +364,7 @@ export type ContestGroupByArgs<ExtArgs extends runtime.Types.Extensions.Internal
 }
 
 export type ContestGroupByOutputType = {
+  trialSessionId: string | null
   id: string
   title: string
   categories: string
@@ -418,6 +425,7 @@ export type ContestWhereInput = {
   AND?: Prisma.ContestWhereInput | Prisma.ContestWhereInput[]
   OR?: Prisma.ContestWhereInput[]
   NOT?: Prisma.ContestWhereInput | Prisma.ContestWhereInput[]
+  trialSessionId?: Prisma.StringNullableFilter<"Contest"> | string | null
   id?: Prisma.StringFilter<"Contest"> | string
   title?: Prisma.StringFilter<"Contest"> | string
   categories?: Prisma.StringFilter<"Contest"> | string
@@ -459,6 +467,7 @@ export type ContestWhereInput = {
 }
 
 export type ContestOrderByWithRelationInput = {
+  trialSessionId?: Prisma.SortOrderInput | Prisma.SortOrder
   id?: Prisma.SortOrder
   title?: Prisma.SortOrder
   categories?: Prisma.SortOrder
@@ -504,6 +513,7 @@ export type ContestWhereUniqueInput = Prisma.AtLeast<{
   AND?: Prisma.ContestWhereInput | Prisma.ContestWhereInput[]
   OR?: Prisma.ContestWhereInput[]
   NOT?: Prisma.ContestWhereInput | Prisma.ContestWhereInput[]
+  trialSessionId?: Prisma.StringNullableFilter<"Contest"> | string | null
   title?: Prisma.StringFilter<"Contest"> | string
   categories?: Prisma.StringFilter<"Contest"> | string
   durationMinutes?: Prisma.IntFilter<"Contest"> | number
@@ -544,6 +554,7 @@ export type ContestWhereUniqueInput = Prisma.AtLeast<{
 }, "id">
 
 export type ContestOrderByWithAggregationInput = {
+  trialSessionId?: Prisma.SortOrderInput | Prisma.SortOrder
   id?: Prisma.SortOrder
   title?: Prisma.SortOrder
   categories?: Prisma.SortOrder
@@ -589,6 +600,7 @@ export type ContestScalarWhereWithAggregatesInput = {
   AND?: Prisma.ContestScalarWhereWithAggregatesInput | Prisma.ContestScalarWhereWithAggregatesInput[]
   OR?: Prisma.ContestScalarWhereWithAggregatesInput[]
   NOT?: Prisma.ContestScalarWhereWithAggregatesInput | Prisma.ContestScalarWhereWithAggregatesInput[]
+  trialSessionId?: Prisma.StringNullableWithAggregatesFilter<"Contest"> | string | null
   id?: Prisma.StringWithAggregatesFilter<"Contest"> | string
   title?: Prisma.StringWithAggregatesFilter<"Contest"> | string
   categories?: Prisma.StringWithAggregatesFilter<"Contest"> | string
@@ -626,6 +638,7 @@ export type ContestScalarWhereWithAggregatesInput = {
 }
 
 export type ContestCreateInput = {
+  trialSessionId?: string | null
   id?: string
   title: string
   categories?: string
@@ -666,6 +679,7 @@ export type ContestCreateInput = {
 }
 
 export type ContestUncheckedCreateInput = {
+  trialSessionId?: string | null
   id?: string
   title: string
   categories?: string
@@ -706,6 +720,7 @@ export type ContestUncheckedCreateInput = {
 }
 
 export type ContestUpdateInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.StringFieldUpdateOperationsInput | string
   title?: Prisma.StringFieldUpdateOperationsInput | string
   categories?: Prisma.StringFieldUpdateOperationsInput | string
@@ -746,6 +761,7 @@ export type ContestUpdateInput = {
 }
 
 export type ContestUncheckedUpdateInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.StringFieldUpdateOperationsInput | string
   title?: Prisma.StringFieldUpdateOperationsInput | string
   categories?: Prisma.StringFieldUpdateOperationsInput | string
@@ -786,6 +802,7 @@ export type ContestUncheckedUpdateInput = {
 }
 
 export type ContestCreateManyInput = {
+  trialSessionId?: string | null
   id?: string
   title: string
   categories?: string
@@ -823,6 +840,7 @@ export type ContestCreateManyInput = {
 }
 
 export type ContestUpdateManyMutationInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.StringFieldUpdateOperationsInput | string
   title?: Prisma.StringFieldUpdateOperationsInput | string
   categories?: Prisma.StringFieldUpdateOperationsInput | string
@@ -859,6 +877,7 @@ export type ContestUpdateManyMutationInput = {
 }
 
 export type ContestUncheckedUpdateManyInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.StringFieldUpdateOperationsInput | string
   title?: Prisma.StringFieldUpdateOperationsInput | string
   categories?: Prisma.StringFieldUpdateOperationsInput | string
@@ -906,6 +925,7 @@ export type ContestOrderByRelationAggregateInput = {
 }
 
 export type ContestCountOrderByAggregateInput = {
+  trialSessionId?: Prisma.SortOrder
   id?: Prisma.SortOrder
   title?: Prisma.SortOrder
   categories?: Prisma.SortOrder
@@ -948,6 +968,7 @@ export type ContestAvgOrderByAggregateInput = {
 }
 
 export type ContestMaxOrderByAggregateInput = {
+  trialSessionId?: Prisma.SortOrder
   id?: Prisma.SortOrder
   title?: Prisma.SortOrder
   categories?: Prisma.SortOrder
@@ -985,6 +1006,7 @@ export type ContestMaxOrderByAggregateInput = {
 }
 
 export type ContestMinOrderByAggregateInput = {
+  trialSessionId?: Prisma.SortOrder
   id?: Prisma.SortOrder
   title?: Prisma.SortOrder
   categories?: Prisma.SortOrder
@@ -1120,6 +1142,7 @@ export type ContestUpdateOneRequiredWithoutPracticeResultsNestedInput = {
 }
 
 export type ContestCreateWithoutCreatedByInput = {
+  trialSessionId?: string | null
   id?: string
   title: string
   categories?: string
@@ -1159,6 +1182,7 @@ export type ContestCreateWithoutCreatedByInput = {
 }
 
 export type ContestUncheckedCreateWithoutCreatedByInput = {
+  trialSessionId?: string | null
   id?: string
   title: string
   categories?: string
@@ -1226,6 +1250,7 @@ export type ContestScalarWhereInput = {
   AND?: Prisma.ContestScalarWhereInput | Prisma.ContestScalarWhereInput[]
   OR?: Prisma.ContestScalarWhereInput[]
   NOT?: Prisma.ContestScalarWhereInput | Prisma.ContestScalarWhereInput[]
+  trialSessionId?: Prisma.StringNullableFilter<"Contest"> | string | null
   id?: Prisma.StringFilter<"Contest"> | string
   title?: Prisma.StringFilter<"Contest"> | string
   categories?: Prisma.StringFilter<"Contest"> | string
@@ -1263,6 +1288,7 @@ export type ContestScalarWhereInput = {
 }
 
 export type ContestCreateWithoutTasksInput = {
+  trialSessionId?: string | null
   id?: string
   title: string
   categories?: string
@@ -1302,6 +1328,7 @@ export type ContestCreateWithoutTasksInput = {
 }
 
 export type ContestUncheckedCreateWithoutTasksInput = {
+  trialSessionId?: string | null
   id?: string
   title: string
   categories?: string
@@ -1357,6 +1384,7 @@ export type ContestUpdateToOneWithWhereWithoutTasksInput = {
 }
 
 export type ContestUpdateWithoutTasksInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.StringFieldUpdateOperationsInput | string
   title?: Prisma.StringFieldUpdateOperationsInput | string
   categories?: Prisma.StringFieldUpdateOperationsInput | string
@@ -1396,6 +1424,7 @@ export type ContestUpdateWithoutTasksInput = {
 }
 
 export type ContestUncheckedUpdateWithoutTasksInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.StringFieldUpdateOperationsInput | string
   title?: Prisma.StringFieldUpdateOperationsInput | string
   categories?: Prisma.StringFieldUpdateOperationsInput | string
@@ -1435,6 +1464,7 @@ export type ContestUncheckedUpdateWithoutTasksInput = {
 }
 
 export type ContestCreateWithoutGroupsInput = {
+  trialSessionId?: string | null
   id?: string
   title: string
   categories?: string
@@ -1474,6 +1504,7 @@ export type ContestCreateWithoutGroupsInput = {
 }
 
 export type ContestUncheckedCreateWithoutGroupsInput = {
+  trialSessionId?: string | null
   id?: string
   title: string
   categories?: string
@@ -1529,6 +1560,7 @@ export type ContestUpdateToOneWithWhereWithoutGroupsInput = {
 }
 
 export type ContestUpdateWithoutGroupsInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.StringFieldUpdateOperationsInput | string
   title?: Prisma.StringFieldUpdateOperationsInput | string
   categories?: Prisma.StringFieldUpdateOperationsInput | string
@@ -1568,6 +1600,7 @@ export type ContestUpdateWithoutGroupsInput = {
 }
 
 export type ContestUncheckedUpdateWithoutGroupsInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.StringFieldUpdateOperationsInput | string
   title?: Prisma.StringFieldUpdateOperationsInput | string
   categories?: Prisma.StringFieldUpdateOperationsInput | string
@@ -1607,6 +1640,7 @@ export type ContestUncheckedUpdateWithoutGroupsInput = {
 }
 
 export type ContestCreateWithoutPracticeResultsInput = {
+  trialSessionId?: string | null
   id?: string
   title: string
   categories?: string
@@ -1646,6 +1680,7 @@ export type ContestCreateWithoutPracticeResultsInput = {
 }
 
 export type ContestUncheckedCreateWithoutPracticeResultsInput = {
+  trialSessionId?: string | null
   id?: string
   title: string
   categories?: string
@@ -1701,6 +1736,7 @@ export type ContestUpdateToOneWithWhereWithoutPracticeResultsInput = {
 }
 
 export type ContestUpdateWithoutPracticeResultsInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.StringFieldUpdateOperationsInput | string
   title?: Prisma.StringFieldUpdateOperationsInput | string
   categories?: Prisma.StringFieldUpdateOperationsInput | string
@@ -1740,6 +1776,7 @@ export type ContestUpdateWithoutPracticeResultsInput = {
 }
 
 export type ContestUncheckedUpdateWithoutPracticeResultsInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.StringFieldUpdateOperationsInput | string
   title?: Prisma.StringFieldUpdateOperationsInput | string
   categories?: Prisma.StringFieldUpdateOperationsInput | string
@@ -1779,6 +1816,7 @@ export type ContestUncheckedUpdateWithoutPracticeResultsInput = {
 }
 
 export type ContestCreateManyCreatedByInput = {
+  trialSessionId?: string | null
   id?: string
   title: string
   categories?: string
@@ -1815,6 +1853,7 @@ export type ContestCreateManyCreatedByInput = {
 }
 
 export type ContestUpdateWithoutCreatedByInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.StringFieldUpdateOperationsInput | string
   title?: Prisma.StringFieldUpdateOperationsInput | string
   categories?: Prisma.StringFieldUpdateOperationsInput | string
@@ -1854,6 +1893,7 @@ export type ContestUpdateWithoutCreatedByInput = {
 }
 
 export type ContestUncheckedUpdateWithoutCreatedByInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.StringFieldUpdateOperationsInput | string
   title?: Prisma.StringFieldUpdateOperationsInput | string
   categories?: Prisma.StringFieldUpdateOperationsInput | string
@@ -1893,6 +1933,7 @@ export type ContestUncheckedUpdateWithoutCreatedByInput = {
 }
 
 export type ContestUncheckedUpdateManyWithoutCreatedByInput = {
+  trialSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   id?: Prisma.StringFieldUpdateOperationsInput | string
   title?: Prisma.StringFieldUpdateOperationsInput | string
   categories?: Prisma.StringFieldUpdateOperationsInput | string
@@ -1978,6 +2019,7 @@ export type ContestCountOutputTypeCountPracticeResultsArgs<ExtArgs extends runti
 
 
 export type ContestSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  trialSessionId?: boolean
   id?: boolean
   title?: boolean
   categories?: boolean
@@ -2020,6 +2062,7 @@ export type ContestSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
 }, ExtArgs["result"]["contest"]>
 
 export type ContestSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  trialSessionId?: boolean
   id?: boolean
   title?: boolean
   categories?: boolean
@@ -2058,6 +2101,7 @@ export type ContestSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
 }, ExtArgs["result"]["contest"]>
 
 export type ContestSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
+  trialSessionId?: boolean
   id?: boolean
   title?: boolean
   categories?: boolean
@@ -2096,6 +2140,7 @@ export type ContestSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
 }, ExtArgs["result"]["contest"]>
 
 export type ContestSelectScalar = {
+  trialSessionId?: boolean
   id?: boolean
   title?: boolean
   categories?: boolean
@@ -2132,7 +2177,7 @@ export type ContestSelectScalar = {
   updatedAt?: boolean
 }
 
-export type ContestOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "title" | "categories" | "durationMinutes" | "registrationStartsAt" | "registrationEndsAt" | "startsAt" | "endsAt" | "schedules" | "scoring" | "questionDisplayMode" | "allowPairs" | "shuffleOptions" | "showFeedback" | "showSolutions" | "showTotalScore" | "showScoreOnSubmit" | "showFeedbackOnSubmit" | "showSolutionsOnSubmit" | "publishedAt" | "suspendedAt" | "stoppedAt" | "trashedAt" | "consolidatedAt" | "resultsPublishedAt" | "resultsAt" | "resultsReleasedAt" | "resultsUntil" | "isPractice" | "isTest" | "collectUsage" | "createdById" | "createdAt" | "updatedAt", ExtArgs["result"]["contest"]>
+export type ContestOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"trialSessionId" | "id" | "title" | "categories" | "durationMinutes" | "registrationStartsAt" | "registrationEndsAt" | "startsAt" | "endsAt" | "schedules" | "scoring" | "questionDisplayMode" | "allowPairs" | "shuffleOptions" | "showFeedback" | "showSolutions" | "showTotalScore" | "showScoreOnSubmit" | "showFeedbackOnSubmit" | "showSolutionsOnSubmit" | "publishedAt" | "suspendedAt" | "stoppedAt" | "trashedAt" | "consolidatedAt" | "resultsPublishedAt" | "resultsAt" | "resultsReleasedAt" | "resultsUntil" | "isPractice" | "isTest" | "collectUsage" | "createdById" | "createdAt" | "updatedAt", ExtArgs["result"]["contest"]>
 export type ContestInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   createdBy?: boolean | Prisma.Contest$createdByArgs<ExtArgs>
   tasks?: boolean | Prisma.Contest$tasksArgs<ExtArgs>
@@ -2156,6 +2201,7 @@ export type $ContestPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     practiceResults: Prisma.$PracticeResultPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
+    trialSessionId: string | null
     id: string
     title: string
     categories: string
@@ -2273,8 +2319,8 @@ export interface ContestDelegate<ExtArgs extends runtime.Types.Extensions.Intern
    * // Get first 10 Contests
    * const contests = await prisma.contest.findMany({ take: 10 })
    * 
-   * // Only select the `id`
-   * const contestWithIdOnly = await prisma.contest.findMany({ select: { id: true } })
+   * // Only select the `trialSessionId`
+   * const contestWithTrialSessionIdOnly = await prisma.contest.findMany({ select: { trialSessionId: true } })
    * 
    */
   findMany<T extends ContestFindManyArgs>(args?: Prisma.SelectSubset<T, ContestFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ContestPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
@@ -2318,9 +2364,9 @@ export interface ContestDelegate<ExtArgs extends runtime.Types.Extensions.Intern
    *   ]
    * })
    * 
-   * // Create many Contests and only return the `id`
-   * const contestWithIdOnly = await prisma.contest.createManyAndReturn({
-   *   select: { id: true },
+   * // Create many Contests and only return the `trialSessionId`
+   * const contestWithTrialSessionIdOnly = await prisma.contest.createManyAndReturn({
+   *   select: { trialSessionId: true },
    *   data: [
    *     // ... provide data here
    *   ]
@@ -2409,9 +2455,9 @@ export interface ContestDelegate<ExtArgs extends runtime.Types.Extensions.Intern
    *   ]
    * })
    * 
-   * // Update zero or more Contests and only return the `id`
-   * const contestWithIdOnly = await prisma.contest.updateManyAndReturn({
-   *   select: { id: true },
+   * // Update zero or more Contests and only return the `trialSessionId`
+   * const contestWithTrialSessionIdOnly = await prisma.contest.updateManyAndReturn({
+   *   select: { trialSessionId: true },
    *   where: {
    *     // ... provide filter here
    *   },
@@ -2617,6 +2663,7 @@ export interface Prisma__ContestClient<T, Null = never, ExtArgs extends runtime.
  * Fields of the Contest model
  */
 export interface ContestFieldRefs {
+  readonly trialSessionId: Prisma.FieldRef<"Contest", 'String'>
   readonly id: Prisma.FieldRef<"Contest", 'String'>
   readonly title: Prisma.FieldRef<"Contest", 'String'>
   readonly categories: Prisma.FieldRef<"Contest", 'String'>

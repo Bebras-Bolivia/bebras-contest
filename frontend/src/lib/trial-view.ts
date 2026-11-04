@@ -1,6 +1,32 @@
 const VIEW_KEY = "bebras_trial_view";
+const SESSION_KEY = "bebras_trial_session";
 
-export type TrialView = { id: number; email: string; name: string };
+export function readTrialSession(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage.getItem(SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function trialSessionHeaders(): Record<string, string> {
+  const session = readTrialSession();
+  return session ? { "x-trial-session": session } : {};
+}
+
+export function trialSessionUrl(path: string, sessionId: string) {
+  const url = new URL(path, window.location.origin);
+  url.searchParams.set("ensayo", sessionId);
+  return url.href;
+}
+
+export type TrialView = {
+  id: number;
+  email: string;
+  name: string;
+  role?: "maestro" | "admin";
+};
 
 export function readTrialView(): TrialView | null {
   if (typeof window === "undefined") return null;
@@ -11,6 +37,7 @@ export function readTrialView(): TrialView | null {
           id: value.id,
           email: value.email,
           name: typeof value.name === "string" ? value.name : "",
+          role: value.role === "admin" ? "admin" : "maestro",
         }
       : null;
   } catch {
@@ -21,18 +48,47 @@ export function readTrialView(): TrialView | null {
 export function leaveTrialView() {
   try {
     window.sessionStorage.removeItem(VIEW_KEY);
+    window.sessionStorage.removeItem(SESSION_KEY);
   } catch {
     return;
   }
 }
 
-export function trialViewUrl(path: string, view: TrialView) {
-  const params = new URLSearchParams({
+export function trialViewUrl(
+  path: string,
+  view: TrialView,
+  sessionId?: string,
+) {
+  const url = new URL(path, window.location.origin);
+  const params = {
     vm_id: String(view.id),
     vm_email: view.email,
     vm_name: view.name,
-  });
-  return `${path}?${params.toString()}`;
+    vm_role: view.role ?? "maestro",
+  };
+  Object.entries(params).forEach(([key, value]) =>
+    url.searchParams.set(key, value),
+  );
+  return sessionId ? trialSessionUrl(url.href, sessionId) : url.href;
+}
+
+function captureTrialSession() {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (["/prueba-guiada", "/pruebas-guiadas"].includes(url.pathname)) {
+    leaveTrialView();
+    return;
+  }
+  const sessionId = url.searchParams.get("ensayo");
+  if (!sessionId) return;
+  try {
+    if (readTrialSession() !== sessionId) leaveTrialView();
+    window.sessionStorage.setItem(SESSION_KEY, sessionId);
+    url.searchParams.delete("ensayo");
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+  } catch {
+    return;
+  }
 }
 
 const SIGNUP_KEY = "bebras_trial_signup";
@@ -81,12 +137,19 @@ function captureTrialView() {
   try {
     window.sessionStorage.setItem(
       VIEW_KEY,
-      JSON.stringify({ id, email, name: params.get("vm_name") ?? "" }),
+      JSON.stringify({
+        id,
+        email,
+        name: params.get("vm_name") ?? "",
+        role: params.get("vm_role") === "admin" ? "admin" : "maestro",
+      }),
     );
   } catch {
     return;
   }
-  ["vm_id", "vm_email", "vm_name"].forEach((key) => params.delete(key));
+  ["vm_id", "vm_email", "vm_name", "vm_role"].forEach((key) =>
+    params.delete(key),
+  );
   const query = params.toString();
   window.history.replaceState(
     null,
@@ -97,5 +160,14 @@ function captureTrialView() {
   );
 }
 
+captureTrialSession();
 captureTrialSignup();
 captureTrialView();
+
+if (typeof document !== "undefined") {
+  document.addEventListener("astro:page-load", () => {
+    captureTrialSession();
+    captureTrialSignup();
+    captureTrialView();
+  });
+}
