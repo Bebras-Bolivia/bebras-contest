@@ -14,6 +14,7 @@ import { getUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
 import {
+  BEBRAS_CATEGORIES,
   CONTEST_STATE_LABELS,
   SCHOOL_GRADES,
   gradeLabel,
@@ -123,6 +124,51 @@ function sectionsFrom(
       Number(b.isFavorite) - Number(a.isFavorite) ||
       b.createdAt.localeCompare(a.createdAt) ||
       a.title.localeCompare(b.title, "es"),
+  );
+}
+
+function categoryOf(group: StoredGroup) {
+  return (
+    group.category ??
+    SCHOOL_GRADES.find((grade) => grade.value === group.grade)?.category ??
+    null
+  );
+}
+
+function CategoryCounts({ groups }: { groups: ListedGroup[] }) {
+  const enabled = new Set(groups.flatMap((group) => group.contestCategories));
+  const counts = new Map<string, number>();
+  for (const group of groups) {
+    const category = categoryOf(group);
+    if (category)
+      counts.set(category, (counts.get(category) ?? 0) + studentCount(group));
+  }
+  const rows = BEBRAS_CATEGORIES.filter(
+    (category) => enabled.has(category.name) || counts.get(category.name),
+  );
+  if (rows.length < 2) return null;
+  return (
+    <ul
+      aria-label="Estudiantes por categoría"
+      className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6"
+    >
+      {rows.map((category) => {
+        const count = counts.get(category.name) ?? 0;
+        return (
+          <li
+            key={category.slug}
+            style={categoryStyle(category.name)}
+            className="flex flex-col gap-0.5 px-3 py-2.5"
+          >
+            <span className="text-sm font-semibold">{category.name}</span>
+            <span className="text-xs opacity-85">{category.ageRange} años</span>
+            <span className="mt-1 text-2xl font-semibold tabular-nums">
+              {count}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -559,6 +605,7 @@ export function GroupsHome() {
                 </div>
               )}
             </div>
+            {current.students > 0 && <CategoryCounts groups={current.groups} />}
             {isMaestro && schools.length > 1 && (
               <div
                 role="tablist"
