@@ -734,7 +734,17 @@ function AdminGroups({
         students: 0,
       };
       if (group.ownerName) entry.teachers.add(group.ownerName);
-      if (key === "admin" || group.teamCount > 0) entry.groups.push(group);
+      if (key === "admin") {
+        const same = entry.groups.findIndex(
+          (item) => item.grade === group.grade,
+        );
+        if (same === -1) entry.groups.push(group);
+        else if (
+          studentCount(group) > studentCount(entry.groups[same]) ||
+          (entry.groups[same].pending && !group.pending)
+        )
+          entry.groups[same] = group;
+      } else if (group.teamCount > 0) entry.groups.push(group);
       entry.students += studentCount(group);
       byOwner.set(key, entry);
     }
