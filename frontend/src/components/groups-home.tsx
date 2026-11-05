@@ -100,6 +100,45 @@ function plain(value: string) {
     .toLowerCase();
 }
 
+function Highlight({ text, terms }: { text: string; terms: string[] }) {
+  if (terms.length === 0) return <>{text}</>;
+  let flat = "";
+  const origin: number[] = [];
+  Array.from(text).forEach((char, index) => {
+    const base = plain(char);
+    for (let i = 0; i < base.length; i += 1) origin.push(index);
+    flat += base;
+  });
+  const chars = Array.from(text);
+  const marked = new Array<boolean>(chars.length).fill(false);
+  for (const term of terms) {
+    let at = flat.indexOf(term);
+    while (at !== -1) {
+      for (let i = at; i < at + term.length; i += 1) marked[origin[i]] = true;
+      at = flat.indexOf(term, at + term.length);
+    }
+  }
+  const parts: { text: string; on: boolean }[] = [];
+  chars.forEach((char, index) => {
+    const last = parts[parts.length - 1];
+    if (last && last.on === marked[index]) last.text += char;
+    else parts.push({ text: char, on: marked[index] });
+  });
+  return (
+    <>
+      {parts.map((part, index) =>
+        part.on ? (
+          <span key={index} className="font-semibold text-primary">
+            {part.text}
+          </span>
+        ) : (
+          part.text
+        ),
+      )}
+    </>
+  );
+}
+
 function sectionsFrom(
   summaries: GroupContestSummary[],
   published: PublishedContest[],
@@ -770,28 +809,29 @@ function AdminGroups({
   );
 
   const direct = owners.find((owner) => owner.key === "admin");
-  const query = plain(search.trim());
+  const terms = plain(search).split(/\s+/).filter(Boolean);
+  const query = terms.join(" ");
   const filtered = owners
     .filter((owner) => owner.key !== "admin")
-    .filter(
-      (owner) =>
-        (department === "todos" || owner.department === department) &&
-        (!query ||
-          plain(
-            [
-              owner.name,
-              owner.email,
-              owner.school,
-              owner.department,
-              ...owner.teachers,
-            ]
-              .filter(Boolean)
-              .join(" "),
-          ).includes(query) ||
-          owner.groups.some((group) =>
-            plain(group.accessCode).includes(query),
-          )),
-    );
+    .filter((owner) => {
+      if (department !== "todos" && owner.department !== department)
+        return false;
+      if (terms.length === 0) return true;
+      const text = plain(
+        [
+          owner.name,
+          owner.email,
+          owner.school,
+          owner.department,
+          departmentName(owner.department),
+          ...owner.teachers,
+          ...owner.groups.map((group) => group.accessCode),
+        ]
+          .filter(Boolean)
+          .join(" "),
+      );
+      return terms.every((term) => text.includes(term));
+    });
   const visible = filtered.slice(0, limit);
   const openAll = Boolean(query) && filtered.length <= 3;
 
@@ -918,16 +958,19 @@ function AdminGroups({
                 >
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="font-semibold break-words">
-                      {owner.name}
+                      <Highlight text={owner.name} terms={terms} />
                     </span>
                     {owner.key !== "admin" && (
                       <span className="text-sm text-muted-foreground">
-                        {[
-                          departmentName(owner.department),
-                          `${owner.teachers.size} ${owner.teachers.size === 1 ? "maestro" : "maestros"}`,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
+                        <Highlight
+                          text={[
+                            departmentName(owner.department),
+                            [...owner.teachers].join(", ") || "Sin maestro",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                          terms={terms}
+                        />
                       </span>
                     )}
                   </span>
