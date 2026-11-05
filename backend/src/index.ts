@@ -3288,6 +3288,46 @@ app.get("/api/practices/tasks", async (req, res) => {
   res.json({ category, ageRange, tasks: usable });
 });
 
+app.get("/api/practices/tasks/:id", async (req, res) => {
+  const raw = await prisma.taskDraft.findFirst({
+    where: { id: String(req.params.id), ...TEACHER_TASKS },
+  });
+  if (!raw) {
+    res.status(404).json({ message: "Tarea no encontrada." });
+    return;
+  }
+  res.json(
+    await externalizeTaskImages(
+      renderSafeTask({ position: 0 }, deserializeTask(raw)),
+      imageStore(req),
+    ),
+  );
+});
+
+app.post("/api/practices/tasks/:id/check", async (req, res) => {
+  const raw = await prisma.taskDraft.findFirst({
+    where: { id: String(req.params.id), ...TEACHER_TASKS },
+  });
+  if (!raw) {
+    res.status(404).json({ message: "Tarea no encontrada." });
+    return;
+  }
+  const task = deserializeTask(raw);
+  const payload = req.body?.payload;
+  const error = validateTaskAnswer(task, payload);
+  if (error) {
+    res.status(400).json({ message: error });
+    return;
+  }
+  res.json({
+    correct: answerIsCorrect(task, payload),
+    explanationBlocks: await externalizeTaskImages(
+      task.explanationBlocks,
+      imageStore(req),
+    ),
+  });
+});
+
 app.get("/api/practices", async (req, res) => {
   const practices = await prisma.contest.findMany({
     where: practiceOwnerWhere(req),

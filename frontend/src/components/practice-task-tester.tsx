@@ -13,12 +13,12 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { smoothReset } from "@/lib/smooth-reset";
 import { answerHasResponse, type PlayTask } from "@/lib/play-api";
+import type { PracticeCheck } from "@/lib/practice-api";
 import {
-  checkPracticeAnswer,
-  getPracticeTask,
-  type PracticeCheck,
-} from "@/lib/practice-api";
-import type { PracticeTask } from "@/lib/practices-api";
+  checkTeacherPracticeAnswer,
+  getTeacherPracticeTask,
+  type PracticeTask,
+} from "@/lib/practices-api";
 import { AnswerResult } from "@/components/answer-result";
 import { DifficultyTag } from "@/components/contest-task-parts";
 import { QuestionSkeleton } from "@/components/page-skeletons";
@@ -31,7 +31,7 @@ const playTasks = new Map<string, Promise<PlayTask>>();
 function fetchPlayTask(taskId: string) {
   let entry = playTasks.get(taskId);
   if (!entry) {
-    entry = getPracticeTask(taskId);
+    entry = getTeacherPracticeTask(taskId);
     entry.catch(() => playTasks.delete(taskId));
     playTasks.set(taskId, entry);
   }
@@ -130,7 +130,7 @@ export function PracticeTaskTester({
     const checkedRevision = ++revision.current;
     setChecking(true);
     try {
-      const checked = await checkPracticeAnswer(playTask.taskId, answer);
+      const checked = await checkTeacherPracticeAnswer(playTask.taskId, answer);
       if (checkedRevision === revision.current) setResult(checked);
     } catch (error) {
       if (checkedRevision === revision.current) {

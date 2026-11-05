@@ -1,6 +1,8 @@
 import { API_BASE_URL, apiRequest as request } from "@/lib/api-client";
 import { authorizationHeaders } from "@/lib/firebase-auth";
 import type { ContestState } from "@/lib/contest-schema";
+import type { PlayTask } from "@/lib/play-api";
+import type { PracticeCheck } from "@/lib/practice-api";
 
 export type PracticeTask = {
   id: string;
@@ -74,6 +76,19 @@ export function listPractices() {
 export function listPracticeTasks(category: string) {
   return request<{ category: string; ageRange: string; tasks: PracticeTask[] }>(
     `/api/practices/tasks?category=${encodeURIComponent(category)}`,
+  );
+}
+
+export function getTeacherPracticeTask(taskId: string) {
+  return request<PlayTask>(
+    `/api/practices/tasks/${encodeURIComponent(taskId)}`,
+  );
+}
+
+export function checkTeacherPracticeAnswer(taskId: string, payload: unknown) {
+  return request<PracticeCheck>(
+    `/api/practices/tasks/${encodeURIComponent(taskId)}/check`,
+    { method: "POST", body: JSON.stringify({ payload }) },
   );
 }
 

@@ -14,73 +14,6 @@ const title = "Carta de autorización (modelo)";
         sellar por la dirección de tu colegio, y súbela escaneada o fotografiada
         desde tu perfil. Lo que escribas se guarda en este navegador.
       </p>
-      <div class="flex flex-wrap gap-2">
-        <button
-          id="download-letter"
-          type="button"
-          class="inline-flex h-9 items-center gap-2 border border-border bg-primary px-3 text-sm font-semibold text-primary-foreground [box-shadow:var(--shadow-hard)] transition hover:opacity-90"
-        >
-          <svg
-            class="size-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" x2="12" y1="15" y2="3"></line>
-          </svg>
-          <span id="download-label">Descargar en PDF</span>
-        </button>
-        <button
-          id="print-letter"
-          type="button"
-          class="inline-flex h-9 items-center gap-2 border border-border bg-background px-3 text-sm font-semibold [box-shadow:var(--shadow-hard)] transition hover:bg-muted"
-        >
-          <svg
-            class="size-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M6 9V2h12v7"></path>
-            <path
-              d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"
-            ></path>
-            <rect x="6" y="14" width="12" height="8" rx="1"></rect>
-          </svg>
-          Imprimir
-        </button>
-        <button
-          id="clear-letter"
-          type="button"
-          class="inline-flex h-9 items-center gap-2 border border-border bg-background px-3 text-sm font-semibold [box-shadow:var(--shadow-hard)] transition hover:bg-muted"
-        >
-          <svg
-            class="size-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path
-              d="M7 21h13M11.5 21 3.6 13.1a2 2 0 0 1 0-2.8l7.2-7.2a2 2 0 0 1 2.8 0l6.3 6.3a2 2 0 0 1 0 2.8L11.5 21Z"
-            ></path>
-          </svg>
-          Vaciar
-        </button>
-      </div>
     </section>
 
     <article
@@ -153,21 +86,83 @@ const title = "Carta de autorización (modelo)";
       Si enseñas en casa no necesitas esta carta: en su lugar te pediremos el
       anverso y el reverso de tu cédula de identidad.
     </p>
+
+    <div class="flex flex-wrap gap-2 print:hidden">
+      <button
+        id="download-letter"
+        type="button"
+        class="inline-flex h-9 items-center gap-2 border border-border bg-primary px-3 text-sm font-semibold text-primary-foreground [box-shadow:var(--shadow-hard)] transition hover:opacity-90"
+      >
+        <svg
+          class="size-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" x2="12" y1="15" y2="3"></line>
+        </svg>
+        <span id="download-label">Descargar en PDF</span>
+      </button>
+      <button
+        id="print-letter"
+        type="button"
+        class="inline-flex h-9 items-center gap-2 border border-border bg-background px-3 text-sm font-semibold [box-shadow:var(--shadow-hard)] transition hover:bg-muted"
+      >
+        <svg
+          class="size-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M6 9V2h12v7"></path>
+          <path
+            d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"
+          ></path>
+          <rect x="6" y="14" width="12" height="8" rx="1"></rect>
+        </svg>
+        Imprimir
+      </button>
+    </div>
   </main>
 </Layout>
 
 <script>
+  import { apiRequest } from "../lib/api-client";
+  import { getToken, getUser } from "../lib/auth";
   import { formatPersonName } from "../lib/person-name";
+  import { readTrialSession } from "../lib/trial-view";
 
   function setUpLetter() {
-    const STORAGE_KEY = "bebras_carta_modelo";
-    const fields = Array.from(
-      document.querySelectorAll<HTMLElement>("#letter .campo"),
-    );
+    const letter = document.getElementById("letter");
+    if (!letter || letter.dataset.ready) return;
+    letter.dataset.ready = "true";
+    const user = getUser();
+    const trial = readTrialSession();
+    const askedSchool =
+      new URLSearchParams(window.location.search).get("colegio")?.trim() ?? "";
+    const STORAGE_KEY = JSON.stringify([
+      "bebras_carta_modelo",
+      trial,
+      user?.id ?? null,
+      askedSchool,
+    ]);
+    const storage = () =>
+      trial || !user ? window.sessionStorage : window.localStorage;
+    const fields = Array.from(letter.querySelectorAll<HTMLElement>(".campo"));
 
     const read = () => {
       try {
-        return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Record<
+        return JSON.parse(storage().getItem(STORAGE_KEY) ?? "{}") as Record<
           string,
           string
         >;
@@ -183,7 +178,7 @@ const title = "Carta de autorización (modelo)";
       }
 
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        storage().setItem(STORAGE_KEY, JSON.stringify(data));
       } catch {
         return;
       }
@@ -206,16 +201,8 @@ const title = "Carta de autorización (modelo)";
       "diciembre",
     ];
 
-    let teacherName = "";
-    try {
-      const raw = localStorage.getItem("bebras_user");
-      teacherName = raw ? formatPersonName(JSON.parse(raw).name ?? "") : "";
-    } catch {
-      teacherName = "";
-    }
-
-    const askedSchool =
-      new URLSearchParams(window.location.search).get("colegio")?.trim() ?? "";
+    const teacherName =
+      user?.role === "maestro" ? formatPersonName(user.name ?? "") : "";
 
     const defaults: Record<string, string> = {
       dia: String(today.getDate()),
@@ -228,7 +215,7 @@ const title = "Carta de autorización (modelo)";
 
     const fillField = (field: HTMLElement, value: string) => {
       const key = field.dataset.field ?? "";
-      const text = stored[key] || value || "";
+      const text = stored[key] ?? value ?? "";
       field.textContent = key === "maestro" ? formatPersonName(text) : text;
     };
 
@@ -265,19 +252,14 @@ const title = "Carta de autorización (modelo)";
 
     save();
 
-    const token = localStorage.getItem("bebras_token");
-
-    if (token && !askedSchool) {
-      const base =
-        import.meta.env.PUBLIC_API_BASE_URL?.replace(/\/$/, "") ??
-        "http://localhost:3000";
-
-      void fetch(`${base}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then((response) => (response.ok ? response.json() : null))
+    if (user?.role === "maestro" && getToken() && !askedSchool) {
+      void apiRequest<{
+        name: string | null;
+        institutionType: string | null;
+        schoolName: string | null;
+      }>("/api/auth/me")
         .then((profile) => {
-          if (!profile) {
+          if (!letter.isConnected) {
             return;
           }
 
@@ -359,14 +341,6 @@ const title = "Carta de autorización (modelo)";
           label.textContent = previous;
         }
       }
-    });
-
-    document.getElementById("clear-letter")?.addEventListener("click", () => {
-      for (const field of fields) {
-        field.textContent = "";
-      }
-      save();
-      fields[0]?.focus();
     });
   }
 
