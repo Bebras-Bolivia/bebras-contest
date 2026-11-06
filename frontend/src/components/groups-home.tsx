@@ -644,7 +644,9 @@ export function GroupsHome() {
                 </div>
               )}
             </div>
-            {current.students > 0 && <CategoryCounts groups={current.groups} />}
+            {!isMaestro && current.students > 0 && (
+              <CategoryCounts groups={current.groups} />
+            )}
             {isMaestro && schools.length > 1 && (
               <div
                 role="tablist"
