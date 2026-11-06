@@ -272,8 +272,11 @@ async function loadContestRows(
   const stored = (await listGroups({ contestId })).filter(
     (group) => !isMaestro || (group.schoolId ?? null) === schoolId,
   );
+  const contest = contests.find((item) => item.id === contestId);
+  const closedForTeacher = isMaestro && Boolean(contest) && !contest?.canEnroll;
   const rows: ListedGroup[] = stored.filter((group) => {
     if (group.teamCount > 0) return true;
+    if (closedForTeacher) return false;
     const categories = group.contestCategories;
     return group.grade
       ? gradesForCategories(categories).some(
@@ -283,8 +286,7 @@ async function loadContestRows(
         ? categories.includes(group.category)
         : categories.length > 0;
   });
-  const contest = contests.find((item) => item.id === contestId);
-  if (user && contest) {
+  if (user && contest && !closedForTeacher) {
     for (const grade of gradesForCategories(contest.categories)) {
       if (
         stored.some(
@@ -676,7 +678,13 @@ export function GroupsHome() {
                   switchingSchool && "opacity-50",
                 )}
               >
-                {current.groups.map(renderRow)}
+                {current.groups.length === 0 ? (
+                  <li className="py-4 text-sm text-muted-foreground">
+                    No tienes estudiantes inscritos en este desafío.
+                  </li>
+                ) : (
+                  current.groups.map(renderRow)
+                )}
               </ul>
             ) : (
               <AdminGroups groups={current.groups} renderRow={renderRow} />
