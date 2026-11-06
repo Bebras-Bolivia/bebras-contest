@@ -577,15 +577,15 @@ export function ProfilePage() {
               title={item.title}
               detail={
                 isSchool
-                  ? `Colegio principal · ${item.sent ? "carta enviada" : profile.status === "approved" ? "verificado" : "falta la carta del director"}`
-                  : `${item.detail} · ${item.sent ? "enviado" : profile.status === "approved" ? "verificado" : "falta"}`
+                  ? `Colegio principal · ${profile.status === "approved" ? "verificado" : item.sent ? "carta enviada" : "falta la carta del director"}`
+                  : `${item.detail} · ${profile.status === "approved" ? "verificado" : item.sent ? "enviado" : "falta"}`
               }
               sent={item.sent || profile.status === "approved"}
               approved={profile.status === "approved"}
               action={
-                item.sent ? (
+                profile.status === "approved" ? null : item.sent ? (
                   <ViewButton onClick={() => viewDocument(item.view)} />
-                ) : profile.status === "approved" ? null : (
+                ) : (
                   item.action
                 )
               }
@@ -596,7 +596,7 @@ export function ProfilePage() {
               key={school.id}
               title={school.schoolName}
               detail={
-                school.status === "approved" && !school.hasLetter
+                school.status === "approved"
                   ? (SCHOOL_STATUS_LABEL[school.status] ?? school.status)
                   : `${SCHOOL_STATUS_LABEL[school.status] ?? school.status} · ${school.hasLetter ? "carta enviada" : "falta la carta del director"}`
               }
@@ -604,13 +604,13 @@ export function ProfilePage() {
               approved={school.status === "approved"}
               action={
                 <>
-                  {school.hasLetter ? (
+                  {school.status === "approved" ? null : school.hasLetter ? (
                     <ViewButton
                       onClick={() =>
                         viewDocument(() => openMySchoolLetter(school.id))
                       }
                     />
-                  ) : school.status === "approved" ? null : (
+                  ) : (
                     <>
                       <a
                         href={letterLink(school.schoolName)}
