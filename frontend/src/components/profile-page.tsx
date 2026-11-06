@@ -758,16 +758,18 @@ export function ProfilePage() {
           </DialogContent>
         </Dialog>
 
-        <p className="mt-3 flex max-w-prose items-start gap-2 text-xs text-muted-foreground">
-          <ShieldCheckIcon className="mt-px size-4 shrink-0" />
-          <span>
-            Pedimos {isSchool ? "la carta del director" : "tu carnet"} para
-            confirmar que eres maestro y cuidar a los estudiantes que
-            participan. Solo lo ve el equipo de Bebras Bolivia y lo guardamos
-            como respaldo de tu verificación. Al subirlo aceptas que lo usemos
-            solo para esto.
-          </span>
-        </p>
+        {profile.status === "approved" ? null : (
+          <p className="mt-3 flex max-w-prose items-start gap-2 text-xs text-muted-foreground">
+            <ShieldCheckIcon className="mt-px size-4 shrink-0" />
+            <span>
+              Pedimos {isSchool ? "la carta del director" : "tu carnet"} para
+              confirmar que eres maestro y cuidar a los estudiantes que
+              participan. Solo lo ve el equipo de Bebras Bolivia y lo guardamos
+              como respaldo de tu verificación. Al subirlo aceptas que lo
+              usemos solo para esto.
+            </span>
+          </p>
+        )}
       </section>
       <SignOutButton />
     </div>
