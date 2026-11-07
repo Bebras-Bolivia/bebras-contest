@@ -24,6 +24,7 @@ export type GridConfig = {
   states: AssignmentOption[];
   background?: AssignmentImage;
   widthPercent?: number;
+  startState?: string;
 };
 export type ClozeConfig = {
   version: 1;
@@ -156,6 +157,15 @@ export function parseGridConfig(value: unknown): GridConfig {
     "Los IDs de las casillas deben ser únicos.",
   );
   const states = options(value.states);
+  let startState: string | undefined;
+  if (value.startState !== undefined) {
+    if (
+      typeof value.startState !== "string" ||
+      !states.some((state) => state.id === value.startState)
+    )
+      throw new Error("El estado inicial no es válido.");
+    startState = value.startState;
+  }
   if (!onImage)
     return {
       version: 1,
@@ -163,6 +173,7 @@ export function parseGridConfig(value: unknown): GridConfig {
       columns: value.columns,
       cells,
       states,
+      ...(startState ? { startState } : {}),
     };
   if (value.background === undefined || value.background === null)
     throw new Error("Las casillas sobre una imagen necesitan la imagen.");
@@ -174,6 +185,7 @@ export function parseGridConfig(value: unknown): GridConfig {
     background: image(value.background, "La imagen de fondo no es válida."),
     cells,
     states,
+    ...(startState ? { startState } : {}),
   };
   if (value.widthPercent !== undefined) {
     if (!integer(value.widthPercent, 10, 100))

@@ -178,18 +178,33 @@ export function StateGridPlayer({
   const states = config.states.filter((state) => state.limit !== 0);
   const showLabels = !positionalLabels(config.cells);
 
-  function assign(cellId: string, stateId: string) {
+  const start = config.states.some((entry) => entry.id === config.startState)
+    ? config.startState
+    : undefined;
+  const stateOf = (cellId: string) =>
+    config.states.find((entry) => entry.id === (value[cellId] ?? start));
+
+  function assign(cellId: string, chosenId: string) {
     if (disabled) return;
     const cell = config.cells.find((entry) => entry.id === cellId);
     if (!cell) return;
-    onChange(withAssignment(config.states, value, cellId, stateId));
+    const stateId = chosenId || start || "";
+    const base = start
+      ? Object.fromEntries(
+          config.cells.map((entry) => [entry.id, value[entry.id] ?? start]),
+        )
+      : value;
+    onChange(withAssignment(config.states, base, cellId, stateId));
     const state = config.states.find((entry) => entry.id === stateId);
     setAnnouncement(`${cell.label}: ${state?.label ?? "vacío"}`);
   }
 
   const advance = (cellId: string, currentId: string | undefined) => {
     const index = states.findIndex((entry) => entry.id === currentId);
-    assign(cellId, states[index + 1]?.id ?? "");
+    const next = start
+      ? states[(index + 1) % states.length]
+      : states[index + 1];
+    assign(cellId, next?.id ?? "");
   };
 
   if (gridOnImage(config))
@@ -203,9 +218,7 @@ export function StateGridPlayer({
             className="block h-auto w-full select-none"
           />
           {config.cells.map((cell, index) => {
-            const state = config.states.find(
-              (entry) => entry.id === value[cell.id],
-            );
+            const state = stateOf(cell.id);
             return (
               <button
                 key={cell.id}
@@ -221,7 +234,9 @@ export function StateGridPlayer({
                 }
                 style={cellBox(cell)}
                 className={cn(
-                  "absolute grid cursor-pointer touch-manipulation place-items-center overflow-hidden outline-none select-none transition-[background-color,box-shadow,transform] duration-150 focus-visible:z-10 focus-visible:ring-[3px] focus-visible:ring-ring/70 enabled:hover:z-10 enabled:hover:shadow-[inset_0_0_0_2px_var(--primary)] enabled:active:scale-90 disabled:cursor-default",
+                  "absolute grid cursor-pointer touch-manipulation place-items-center overflow-hidden outline-none select-none transition-[background-color,box-shadow,transform] duration-150 focus-visible:z-10 focus-visible:ring-[3px] focus-visible:ring-ring/70 enabled:hover:z-10 enabled:active:scale-90 disabled:cursor-default",
+                  !start &&
+                    "enabled:hover:shadow-[inset_0_0_0_2px_var(--primary)]",
                   !state &&
                     "bg-primary/10 text-primary/60 shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--primary)_40%,transparent)] enabled:hover:bg-primary/20",
                 )}
@@ -260,9 +275,7 @@ export function StateGridPlayer({
         }}
       >
         {config.cells.map((cell, index) => {
-          const state = config.states.find(
-            (entry) => entry.id === value[cell.id],
-          );
+          const state = stateOf(cell.id);
           return (
             <div
               key={cell.id}
@@ -287,7 +300,7 @@ export function StateGridPlayer({
                   )
                 }
                 className={cn(
-                  "grid aspect-square w-full touch-manipulation place-items-center overflow-hidden rounded-lg transition-[background-color,border-color,transform] duration-150 outline-none select-none focus-visible:ring-[3px] focus-visible:ring-ring/50 enabled:active:scale-95 disabled:cursor-default",
+                  "relative grid aspect-square w-full touch-manipulation place-items-center overflow-hidden rounded-lg transition-[background-color,border-color,transform] duration-150 outline-none select-none focus-visible:ring-[3px] focus-visible:ring-ring/50 enabled:active:scale-95 disabled:cursor-default",
                   state
                     ? "enabled:hover:bg-muted/60"
                     : "border-2 border-dashed border-primary/50 text-primary enabled:hover:bg-primary/5",
@@ -301,7 +314,7 @@ export function StateGridPlayer({
                       src={state.image.url}
                       alt=""
                       draggable={false}
-                      className="size-full object-contain mix-blend-multiply motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-75 motion-safe:duration-200"
+                      className="absolute inset-0 size-full object-contain mix-blend-multiply motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-75 motion-safe:duration-200"
                     />
                   ) : (
                     <span
