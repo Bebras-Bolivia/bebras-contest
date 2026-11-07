@@ -73,3 +73,4 @@ backend/.sonaja-backup.json
 
 # Respaldos de la base local
 *.db.backup-*
+tareas-otono-2025/

@@ -337,7 +337,7 @@ export function parseAssignmentKey(
   const signatures = new Set<string>();
   const acceptedAssignments = list(
     value.acceptedAssignments,
-    100,
+    120,
     "soluciones",
   ).map((entry) => {
     if (!assignmentsValid(config, entry, true))
