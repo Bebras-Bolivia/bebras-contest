@@ -747,6 +747,7 @@ type OwnerEntry = {
   school: string | null;
   department: string | null;
   teachers: Set<string>;
+  ownerIds: Set<number>;
   groups: ListedGroup[];
   students: number;
 };
@@ -762,6 +763,22 @@ function AdminGroups({
   const [department, setDepartment] = useState("todos");
   const [opened, setOpened] = useState<Set<string>>(() => new Set());
   const [limit, setLimit] = useState(OWNERS_PAGE);
+  const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
+
+  const downloadOwnerCodes = (owner: OwnerEntry) => {
+    const contestId = owner.groups[0]?.contestId;
+    if (!contestId || owner.ownerIds.size === 0) return;
+    setDownloadingKey(owner.key);
+    downloadStudentCodes(contestId, undefined, [...owner.ownerIds])
+      .catch((error: unknown) =>
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "No se pudo descargar la lista de estudiantes.",
+        ),
+      )
+      .finally(() => setDownloadingKey(null));
+  };
 
   const owners = useMemo(() => {
     const byOwner = new Map<string, OwnerEntry>();
@@ -779,10 +796,12 @@ function AdminGroups({
         school,
         department: group.ownerName ? group.ownerDepartment : null,
         teachers: new Set<string>(),
+        ownerIds: new Set<number>(),
         groups: [],
         students: 0,
       };
       if (group.ownerName) entry.teachers.add(group.ownerName);
+      if (group.ownerName && group.ownerId) entry.ownerIds.add(group.ownerId);
       if (key === "admin") {
         const same = entry.groups.findIndex(
           (item) => item.grade === group.grade,
@@ -1001,9 +1020,27 @@ function AdminGroups({
                       Todavía no hay estudiantes inscritos.
                     </p>
                   ) : (
-                    <ul className="divide-y border-t bg-muted/20">
-                      {expanded && owner.groups.map(renderRow)}
-                    </ul>
+                    <div className="border-t bg-muted/20">
+                      {expanded && owner.key !== "admin" && owner.ownerIds.size > 0 && (
+                        <div className="flex justify-end px-3 pt-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={downloadingKey === owner.key}
+                            onClick={() => downloadOwnerCodes(owner)}
+                          >
+                            <DownloadIcon data-icon="inline-start" />
+                            {downloadingKey === owner.key
+                              ? "Descargando…"
+                              : "Códigos de estos maestros"}
+                          </Button>
+                        </div>
+                      )}
+                      <ul className="divide-y">
+                        {expanded && owner.groups.map(renderRow)}
+                      </ul>
+                    </div>
                   )}
                 </Expand>
               </li>

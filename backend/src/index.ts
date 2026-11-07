@@ -5408,6 +5408,17 @@ app.get("/api/groups", async (req, res) => {
 app.get("/api/groups/students.xlsx", async (req, res) => {
   await trialTouch(req, "codes");
   const { ownerId } = groupListFilters(req);
+  const ownerIds =
+    req.user?.role === "admin" && !ownerId && typeof req.query.ownerIds === "string"
+      ? [
+          ...new Set(
+            req.query.ownerIds
+              .split(",")
+              .map(Number)
+              .filter((value) => Number.isInteger(value) && value > 0),
+          ),
+        ].slice(0, 200)
+      : [];
   const contestId = typeof req.query.contestId === "string" ? req.query.contestId : "";
   const contest = contestId
     ? await prisma.contest.findFirst({
@@ -5427,7 +5438,11 @@ app.get("/api/groups/students.xlsx", async (req, res) => {
   const groups = await prisma.contestGroup.findMany({
     where: {
       contestId: contest.id,
-      ...(ownerId ? { createdById: ownerId } : {}),
+      ...(ownerId
+        ? { createdById: ownerId }
+        : ownerIds.length > 0
+          ? { createdById: { in: ownerIds } }
+          : {}),
       ...schoolFilter,
     },
     select: {
@@ -5491,7 +5506,14 @@ app.get("/api/groups/students.xlsx", async (req, res) => {
 
   const { CELL_BORDER, fill, writeBanner, writeHeader, writeRow } = excelKit();
   const workbook = new ExcelJS.Workbook();
-  const subtitle = [contest.title, !withOwner && groups[0] ? ownerName(groups[0]) : ""]
+  const subtitle = [
+    contest.title,
+    !withOwner && groups[0]
+      ? ownerName(groups[0])
+      : ownerIds.length > 0 && groups[0]
+        ? ((groups[0].school?.schoolName ?? groups[0].createdBy?.schoolName) ?? "")
+        : "",
+  ]
     .filter(Boolean)
     .join("   ·   ");
 
@@ -5582,7 +5604,7 @@ app.get("/api/groups/students.xlsx", async (req, res) => {
       });
   }
 
-  const owner = withOwner ? null : groups[0];
+  const owner = withOwner && ownerIds.length === 0 ? null : groups[0];
   const fileLabel =
     (owner?.school?.schoolName ?? owner?.createdBy?.schoolName)?.trim() ||
     (owner ? ownerName(owner) : "") ||
