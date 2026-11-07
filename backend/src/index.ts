@@ -5421,17 +5421,10 @@ app.get("/api/groups", async (req, res) => {
 app.get("/api/groups/students.xlsx", async (req, res) => {
   await trialTouch(req, "codes");
   const { ownerId } = groupListFilters(req);
-  const ownerIds =
-    req.user?.role === "admin" && !ownerId && typeof req.query.ownerIds === "string"
-      ? [
-          ...new Set(
-            req.query.ownerIds
-              .split(",")
-              .map(Number)
-              .filter((value) => Number.isInteger(value) && value > 0),
-          ),
-        ].slice(0, 200)
-      : [];
+  const groupId =
+    typeof req.query.groupId === "string" && req.query.groupId
+      ? req.query.groupId
+      : null;
   const contestId = typeof req.query.contestId === "string" ? req.query.contestId : "";
   const contest = contestId
     ? await prisma.contest.findFirst({
@@ -5451,11 +5444,8 @@ app.get("/api/groups/students.xlsx", async (req, res) => {
   const groups = await prisma.contestGroup.findMany({
     where: {
       contestId: contest.id,
-      ...(ownerId
-        ? { createdById: ownerId }
-        : ownerIds.length > 0
-          ? { createdById: { in: ownerIds } }
-          : {}),
+      ...(groupId ? { id: groupId } : {}),
+      ...(ownerId ? { createdById: ownerId } : {}),
       ...schoolFilter,
     },
     select: {
@@ -5523,9 +5513,8 @@ app.get("/api/groups/students.xlsx", async (req, res) => {
     contest.title,
     !withOwner && groups[0]
       ? ownerName(groups[0])
-      : ownerIds.length > 0 && groups[0]
-        ? ((groups[0].school?.schoolName ?? groups[0].createdBy?.schoolName) ?? "")
-        : "",
+      : "",
+    groupId && groups[0] ? (groups[0].grade ? gradeName(groups[0].grade) : groups[0].name) : "",
   ]
     .filter(Boolean)
     .join("   ·   ");
@@ -5617,11 +5606,15 @@ app.get("/api/groups/students.xlsx", async (req, res) => {
       });
   }
 
-  const owner = withOwner && ownerIds.length === 0 ? null : groups[0];
-  const fileLabel =
+  const owner = withOwner && !groupId ? null : groups[0];
+  const fileLabel = [
     (owner?.school?.schoolName ?? owner?.createdBy?.schoolName)?.trim() ||
-    (owner ? ownerName(owner) : "") ||
-    contest.title;
+      (owner ? ownerName(owner) : "") ||
+      contest.title,
+    groupId && groups[0] ? (groups[0].grade ? gradeName(groups[0].grade) : groups[0].name) : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   await sendWorkbook(res, workbook, `codigos-${excelFileName(fileLabel)}.xlsx`);
 });
 

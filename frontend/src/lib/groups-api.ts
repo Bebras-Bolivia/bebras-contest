@@ -204,16 +204,15 @@ export async function downloadGroupResults(groupId: string, name: string) {
 export async function downloadStudentCodes(
   contestId: string,
   schoolId?: string | null,
-  ownerIds: number[] = [],
+  groupId?: string,
 ) {
   const school =
     schoolId === undefined
       ? ""
       : `&schoolId=${encodeURIComponent(schoolId ?? "principal")}`;
-  const owners =
-    ownerIds.length > 0 ? `&ownerIds=${ownerIds.join(",")}` : "";
+  const group = groupId ? `&groupId=${encodeURIComponent(groupId)}` : "";
   const response = await fetch(
-    `${API_BASE_URL}/api/groups/students.xlsx?contestId=${encodeURIComponent(contestId)}${school}${owners}`,
+    `${API_BASE_URL}/api/groups/students.xlsx?contestId=${encodeURIComponent(contestId)}${school}${group}`,
     { headers: await authorizationHeaders() },
   );
 

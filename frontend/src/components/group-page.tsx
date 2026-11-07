@@ -36,6 +36,7 @@ import {
 import { formatDateTime } from "@/lib/countdown";
 import {
   downloadGroupResults,
+  downloadStudentCodes,
   downloadRosterTemplate,
   enrollTeam,
   getGroup,
@@ -101,17 +102,28 @@ function readParams() {
   };
 }
 
-async function copy(value: string, message: string) {
-  if (await copyToClipboard(value)) {
-    toast.success(message);
-  } else {
-    toast.error("No se pudo copiar.");
-  }
+async function copy(value: string) {
+  if (await copyToClipboard(value)) return true;
+  toast.error("No se pudo copiar.");
+  return false;
+}
+
+function useCopiedFlash() {
+  const [copied, setCopied] = useState<string | null>(null);
+  const flash = (key: string) => {
+    setCopied(key);
+    window.setTimeout(
+      () => setCopied((current) => (current === key ? null : current)),
+      1600,
+    );
+  };
+  return [copied, flash] as const;
 }
 
 export function GroupPage() {
   const [{ id, view: initialView }] = useState(readParams);
   const [isAdmin] = useState(() => getUser()?.role === "admin");
+  const [copiedKey, flashCopied] = useCopiedFlash();
   const [group, setGroup] = useState<StoredGroup | null>(null);
   const [results, setResults] = useState<GroupResults | null>(null);
   const [loadError, setLoadError] = useState<string | null>(
@@ -293,22 +305,33 @@ export function GroupPage() {
                 size="icon-sm"
                 variant="outline"
                 aria-label="Copiar código"
-                onClick={() => copy(group.accessCode, "Código copiado.")}
+                onClick={() =>
+                  void copy(group.accessCode).then(
+                    (done) => done && flashCopied("grupo"),
+                  )
+                }
               >
-                <CopyIcon />
+                {copiedKey === "grupo" ? (
+                  <CheckIcon className="text-emerald-600" />
+                ) : (
+                  <CopyIcon />
+                )}
               </Button>
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
                 onClick={() =>
-                  copy(
-                    groupJoinLink(group.accessCode),
-                    "Enlace copiado. Compártelo con tus estudiantes.",
+                  void copy(groupJoinLink(group.accessCode)).then(
+                    (done) => done && flashCopied("enlace"),
                   )
                 }
               >
-                <LinkIcon data-icon="inline-start" />
+                {copiedKey === "enlace" ? (
+                  <CheckIcon data-icon="inline-start" className="text-emerald-600" />
+                ) : (
+                  <LinkIcon data-icon="inline-start" />
+                )}
                 Copiar enlace
               </Button>
             </div>
@@ -912,6 +935,8 @@ function StudentsTab({
     (grade) => !group.grade || grade.value === group.grade,
   );
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [downloadingCodes, setDownloadingCodes] = useState(false);
+  const [copiedKey, flashCopied] = useCopiedFlash();
   const [removing, setRemoving] = useState<GroupResultTeam | null>(null);
   const [importing, setImporting] = useState(false);
   const [roster, setRoster] = useState<{
@@ -1124,12 +1149,37 @@ function StudentsTab({
         className={cn(enter, "flex flex-col gap-3")}
         style={{ animationDelay: "80ms" }}
       >
-        <h2 className="font-heading text-lg font-semibold">
-          Inscritos{" "}
-          <span className="font-normal text-muted-foreground tabular-nums">
-            {results.teams.length}
-          </span>
-        </h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-heading text-lg font-semibold">
+            Inscritos{" "}
+            <span className="font-normal text-muted-foreground tabular-nums">
+              {results.teams.length}
+            </span>
+          </h2>
+          {results.teams.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={downloadingCodes}
+              onClick={() => {
+                setDownloadingCodes(true);
+                downloadStudentCodes(group.contestId, undefined, group.id)
+                  .catch((error: unknown) =>
+                    toast.error(
+                      error instanceof Error
+                        ? error.message
+                        : "No se pudo descargar la lista de estudiantes.",
+                    ),
+                  )
+                  .finally(() => setDownloadingCodes(false));
+              }}
+            >
+              <DownloadIcon data-icon="inline-start" />
+              {downloadingCodes ? "Descargando…" : "Códigos"}
+            </Button>
+          )}
+        </div>
         {results.teams.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Todavía no hay nadie. Los que inscribas aparecen aquí con su código
@@ -1182,15 +1232,23 @@ function StudentsTab({
                         title="Copiar código personal"
                         aria-label={`Copiar el código de ${teamName(team)}`}
                         onClick={() =>
-                          copy(
-                            team.personalCode,
-                            `Código de ${team.memberOneFirstName} copiado.`,
+                          void copy(team.personalCode).then(
+                            (done) => done && flashCopied(team.id),
                           )
                         }
-                        className="group/code flex items-center gap-1.5 px-1.5 py-1 font-mono text-lg font-bold tracking-[0.15em] text-foreground transition-colors hover:bg-muted"
+                        className={cn(
+                          "group/code flex items-center gap-1.5 px-1.5 py-1 font-mono text-lg font-bold tracking-[0.15em] transition-colors hover:bg-muted",
+                          copiedKey === team.id
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "text-foreground",
+                        )}
                       >
                         {team.personalCode}
-                        <CopyIcon className="size-3.5 text-muted-foreground group-hover/code:text-foreground" />
+                        {copiedKey === team.id ? (
+                          <CheckIcon className="size-3.5" />
+                        ) : (
+                          <CopyIcon className="size-3.5 text-muted-foreground group-hover/code:text-foreground" />
+                        )}
                       </button>
                       <div className="flex gap-1">
                         {!results.contest.paperBlocked &&
