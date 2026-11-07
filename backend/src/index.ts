@@ -4996,7 +4996,7 @@ const groupContestSelect = {
       department: true,
     },
   },
-  school: { select: { schoolName: true } },
+  school: true,
 } as const;
 
 // ---- Gestión de maestros (solo admin) ----
@@ -5452,7 +5452,7 @@ app.get("/api/groups/students.xlsx", async (req, res) => {
       name: true,
       grade: true,
       accessCode: true,
-      school: { select: { schoolName: true } },
+      school: true,
       createdBy: {
         select: { firstName: true, lastName: true, email: true, schoolName: true },
       },
