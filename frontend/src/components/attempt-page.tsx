@@ -1,6 +1,6 @@
 "use client";
 
-import { IntroSkeleton, QuestionSkeleton } from "@/components/page-skeletons";
+import { LoadingScene } from "@/components/loading-scene";
 import {
   useCallback,
   useEffect,
@@ -778,7 +778,7 @@ export function AttemptPage({
   ) : null;
 
   if (loading) {
-    return <QuestionSkeleton />;
+    return <LoadingScene />;
   }
 
   if (sessionLost) {
@@ -900,7 +900,7 @@ export function AttemptPage({
           {previewTop}
           {switching ? (
             <div className="motion-safe:animate-in motion-safe:duration-200 motion-safe:fade-in-0">
-              <IntroSkeleton />
+              <LoadingScene compact label="Cargando la categoría" />
             </div>
           ) : (
             <div

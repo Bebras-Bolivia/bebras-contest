@@ -1225,3 +1225,82 @@
     animation: hotspot-hint 2.4s ease-in-out calc(var(--i) * 0.2s) 1;
   }
 }
+
+/* Pantalla de carga del desafío: castor que rebota y barra que va y viene. */
+@keyframes loading-scene-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-14px) rotate(2deg);
+  }
+}
+
+@keyframes loading-scene-shadow {
+  0%,
+  100% {
+    opacity: 0.22;
+    transform: translateX(-50%) scaleX(1);
+  }
+  50% {
+    opacity: 0.1;
+    transform: translateX(-50%) scaleX(0.72);
+  }
+}
+
+@keyframes loading-scene-bar {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
+@keyframes loading-scene-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.2;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+
+.loading-scene-shadow {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  width: 70%;
+  height: 10px;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translateX(-50%);
+}
+
+.loading-scene-dots span {
+  opacity: 0.2;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .loading-scene-beaver > img {
+    animation: loading-scene-bob 1.4s ease-in-out infinite;
+  }
+  .loading-scene-shadow {
+    animation: loading-scene-shadow 1.4s ease-in-out infinite;
+  }
+  .loading-scene-bar-fill {
+    animation: loading-scene-bar 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+  .loading-scene-dots span {
+    animation: loading-scene-dot 1.4s infinite;
+  }
+  .loading-scene-dots span:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+  .loading-scene-dots span:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+}
