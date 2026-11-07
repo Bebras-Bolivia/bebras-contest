@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type SVGProps } from "react";
+import { useEffect, useRef, useState, type SVGProps } from "react";
 import { Button } from "@/components/ui/button";
 import {
   physicalShape,
@@ -44,10 +44,29 @@ export function ImageHotspotPlayer({
   disabled?: boolean;
 }) {
   const [focused, setFocused] = useState<string | null>(null);
+  const [hint, setHint] = useState(false);
+  const svgRef = useRef<SVGSVGElement>(null);
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg || disabled || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setHint(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.5 },
+    );
+    observer.observe(svg);
+    return () => observer.disconnect();
+  }, [disabled]);
   const selected = config.regions.find((r) => r.id === regionId);
   return (
     <div className="flex flex-col gap-2">
       <svg
+        ref={svgRef}
+        data-hint={hint ? "on" : undefined}
         viewBox={`0 0 ${config.imageWidth} ${config.imageHeight}`}
         width={config.imageWidth}
         height={config.imageHeight}
@@ -71,8 +90,11 @@ export function ImageHotspotPlayer({
             aria-pressed={region.id === regionId}
             aria-disabled={disabled}
             className={
-              disabled ? "outline-none" : "cursor-pointer outline-none"
+              disabled
+                ? "outline-none"
+                : "hotspot-zone cursor-pointer outline-none"
             }
+            style={{ "--i": index } as React.CSSProperties}
             onFocus={() => setFocused(region.id)}
             onBlur={() => setFocused(null)}
             onClick={() => {
@@ -85,9 +107,10 @@ export function ImageHotspotPlayer({
               }
             }}
           >
-            {region.shapes.map((shape, index) => (
+            {region.shapes.map((shape, shapeIndex) => (
               <HotspotShapeView
-                key={index}
+                key={shapeIndex}
+                className="hotspot-shape"
                 config={config}
                 shape={shape}
                 fill="currentColor"
