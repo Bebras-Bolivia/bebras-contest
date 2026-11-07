@@ -60,6 +60,7 @@ type Form = {
   title: string;
   isTest: boolean;
   collectUsage: boolean;
+  unlisted: boolean;
   linkedContestId: string;
   categories: string[];
   durationMinutes: number;
@@ -122,6 +123,7 @@ function formFromContest(contest: StoredContest): Form {
     title: contest.title,
     isTest: contest.isTest,
     collectUsage: contest.collectUsage,
+    unlisted: Boolean(contest.unlisted),
     linkedContestId: contest.linkedContestId ?? "",
     categories: contest.categories,
     durationMinutes: contest.durationMinutes,
@@ -157,6 +159,7 @@ function toPayload(form: Form): ContestDraftInput {
     title: form.title.trim(),
     isTest: form.isTest,
     collectUsage: form.isTest && form.collectUsage,
+    unlisted: form.isTest && !form.linkedContestId && form.unlisted,
     linkedContestId: form.isTest ? form.linkedContestId : "",
     categories: form.categories,
     durationMinutes: form.durationMinutes,
@@ -1450,6 +1453,36 @@ export function ContestEditor() {
               disabled={locked}
               onChange={(linkedContestId) => update({ linkedContestId })}
             />
+          )}
+          {form.isTest && !form.linkedContestId && (
+            <div className="flex flex-col gap-2 text-sm">
+              <label className="flex items-start gap-3">
+                <Checkbox
+                  className="mt-0.5"
+                  checked={form.unlisted}
+                  disabled={locked}
+                  onCheckedChange={(checked) =>
+                    update({ unlisted: checked === true })
+                  }
+                />
+                <span className="flex flex-col gap-0.5">
+                  Solo con el enlace
+                  <span className="text-muted-foreground">
+                    No sale en la portada: entra quien tenga el enlace, con su
+                    nombre y su curso.
+                  </span>
+                </span>
+              </label>
+              {form.unlisted && contestId && (
+                <input
+                  readOnly
+                  aria-label="Enlace de la prueba"
+                  className="w-full border-2 border-border/20 bg-background px-3 py-2 text-sm"
+                  value={`${window.location.origin}/prueba?id=${contestId}`}
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+              )}
+            </div>
           )}
           {form.isTest && (
             <label className="flex items-start gap-3 text-sm">

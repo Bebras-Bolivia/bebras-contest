@@ -1035,6 +1035,7 @@ function deserializeContest(contest: {
   isTest?: boolean;
   collectUsage?: boolean;
   linkedContestId?: string | null;
+  unlisted?: boolean;
   createdAt: Date;
   updatedAt: Date;
   tasks?: Array<{
@@ -1112,6 +1113,7 @@ function deserializeContest(contest: {
     isTest: Boolean(contest.isTest),
     collectUsage: Boolean(contest.collectUsage),
     linkedContestId: contest.linkedContestId ?? null,
+    unlisted: Boolean(contest.unlisted),
     state,
     isOpen,
     createdAt: contest.createdAt.toISOString(),
@@ -1173,6 +1175,7 @@ function parseContestPayload(body: Record<string, unknown>) {
     categories,
     isTest,
     collectUsage: isTest && body.collectUsage === true,
+    unlisted: isTest && body.unlisted === true,
     linkedContestId:
       isTest &&
       typeof body.linkedContestId === "string" &&
@@ -2196,10 +2199,13 @@ app.get("/api/schools", async (req, res) => {
   res.json(schools);
 });
 
-app.get("/api/public-contests", async (_req, res) => {
+app.get("/api/public-contests", async (req, res) => {
   await releaseDueResults();
+  const wantedId =
+    typeof req.query.id === "string" && req.query.id ? req.query.id : null;
   const contests = await prisma.contest.findMany({
     where: {
+      OR: [{ unlisted: false }, ...(wantedId ? [{ id: wantedId }] : [])],
       publishedAt: { not: null },
       isPractice: false,
       trashedAt: null,
@@ -4151,6 +4157,7 @@ app.post("/api/contests", async (req, res) => {
       title: payload.title,
       isTest: payload.isTest,
       collectUsage: payload.collectUsage,
+      unlisted: payload.unlisted,
       linkedContestId: payload.linkedContestId,
       categories: JSON.stringify(payload.categories),
       durationMinutes: payload.durationMinutes,
@@ -4306,13 +4313,13 @@ app.put("/api/contests/:id", async (req, res) => {
   await db().batch([
     db().prepare('DELETE FROM "ContestTask" WHERE "contestId" = ?').bind(contestId),
     db().prepare(`UPDATE "Contest" SET
-      "title" = ?, "isTest" = ?, "collectUsage" = ?, "linkedContestId" = ?, "categories" = ?, "durationMinutes" = ?,
+      "title" = ?, "isTest" = ?, "collectUsage" = ?, "unlisted" = ?, "linkedContestId" = ?, "categories" = ?, "durationMinutes" = ?,
       "registrationStartsAt" = ?, "registrationEndsAt" = ?, "startsAt" = ?, "endsAt" = ?, "schedules" = ?, "resultsAt" = ?, "resultsUntil" = ?,
       "scoring" = ?, "questionDisplayMode" = ?,
       "allowPairs" = ?, "shuffleOptions" = ?, "showFeedback" = ?, "showSolutions" = ?, "showTotalScore" = ?,
       "showScoreOnSubmit" = ?, "showFeedbackOnSubmit" = ?, "showSolutionsOnSubmit" = ?,
       "updatedAt" = ? WHERE "id" = ?`).bind(
-      payload.title, Number(payload.isTest), Number(payload.collectUsage), payload.linkedContestId, JSON.stringify(payload.categories), payload.durationMinutes,
+      payload.title, Number(payload.isTest), Number(payload.collectUsage), Number(payload.unlisted), payload.linkedContestId, JSON.stringify(payload.categories), payload.durationMinutes,
       payload.registrationStartsAt?.toISOString() ?? null,
       payload.registrationEndsAt?.toISOString() ?? null,
       payload.startsAt?.toISOString() ?? null, payload.endsAt?.toISOString() ?? null,
@@ -7989,6 +7996,7 @@ async function openLinkedTests(
   const contests = await prisma.contest.findMany({
     where: {
       isTest: true,
+      unlisted: false,
       linkedContestId: source.team.group.contestId,
       trashedAt: null,
       stoppedAt: null,

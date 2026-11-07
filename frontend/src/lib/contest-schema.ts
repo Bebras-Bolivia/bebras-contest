@@ -208,6 +208,7 @@ export type StoredContest = {
   isTest: boolean;
   collectUsage: boolean;
   linkedContestId?: string | null;
+  unlisted?: boolean;
   initialScores: Record<string, number>;
   scoring: ContestScoring;
   questionDisplayMode: QuestionDisplayMode;
@@ -238,6 +239,7 @@ export type ContestDraftInput = {
   title: string;
   isTest?: boolean;
   collectUsage?: boolean;
+  unlisted?: boolean;
   linkedContestId?: string;
   categories: string[];
   durationMinutes: number;

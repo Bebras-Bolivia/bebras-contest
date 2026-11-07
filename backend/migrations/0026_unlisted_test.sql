@@ -1,0 +1,1 @@
+ALTER TABLE "Contest" ADD COLUMN "unlisted" BOOLEAN NOT NULL DEFAULT false;

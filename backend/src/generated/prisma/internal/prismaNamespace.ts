@@ -1960,6 +1960,7 @@ export const ContestScalarFieldEnum = {
   isTest: 'isTest',
   collectUsage: 'collectUsage',
   linkedContestId: 'linkedContestId',
+  unlisted: 'unlisted',
   createdById: 'createdById',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'

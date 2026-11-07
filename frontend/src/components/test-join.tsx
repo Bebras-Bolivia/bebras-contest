@@ -34,7 +34,9 @@ export function TestJoin() {
 
   useEffect(() => {
     let alive = true;
-    void apiRequest<TestContest[]>("/api/public-contests")
+    void apiRequest<TestContest[]>(
+      `/api/public-contests?id=${encodeURIComponent(contestId)}`,
+    )
       .then((list) => {
         if (alive) {
           setContest(
