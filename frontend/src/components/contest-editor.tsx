@@ -18,6 +18,7 @@ import {
 
 import {
   getContest,
+  listContests,
   publishContest,
   updateContest,
   updateContestResultsWindow,
@@ -59,6 +60,7 @@ type Form = {
   title: string;
   isTest: boolean;
   collectUsage: boolean;
+  linkedContestId: string;
   categories: string[];
   durationMinutes: number;
   registrationStartsAt: string;
@@ -120,6 +122,7 @@ function formFromContest(contest: StoredContest): Form {
     title: contest.title,
     isTest: contest.isTest,
     collectUsage: contest.collectUsage,
+    linkedContestId: contest.linkedContestId ?? "",
     categories: contest.categories,
     durationMinutes: contest.durationMinutes,
     registrationStartsAt: localValue(contest.registrationStartsAt),
@@ -154,6 +157,7 @@ function toPayload(form: Form): ContestDraftInput {
     title: form.title.trim(),
     isTest: form.isTest,
     collectUsage: form.isTest && form.collectUsage,
+    linkedContestId: form.isTest ? form.linkedContestId : "",
     categories: form.categories,
     durationMinutes: form.durationMinutes,
     registrationStartsAt: iso(form.registrationStartsAt),
@@ -471,6 +475,65 @@ function Reveal({
         </div>
       </div>
     </div>
+  );
+}
+
+function LinkedContestField({
+  contestId,
+  value,
+  disabled,
+  onChange,
+}: {
+  contestId: string | null;
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  const [options, setOptions] = useState<StoredContest[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    void listContests()
+      .then((list) => {
+        if (active)
+          setOptions(
+            list.filter(
+              (item) =>
+                !item.isTest &&
+                !item.trashedAt &&
+                item.publishedAt &&
+                item.id !== contestId,
+            ),
+          );
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [contestId]);
+
+  return (
+    <label className="flex flex-col gap-1.5 text-sm">
+      Cómo se entra
+      <select
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        className="border-2 border-border/20 bg-background px-3 py-2 text-sm outline-none focus-visible:border-primary disabled:opacity-60"
+      >
+        <option value="">Con el nombre y el curso</option>
+        {options.map((item) => (
+          <option key={item.id} value={item.id}>
+            Con el código personal de «{item.title}»
+          </option>
+        ))}
+      </select>
+      <span className="text-muted-foreground">
+        {value
+          ? "Cada estudiante entra con el mismo código que usará en ese desafío, en su curso y con su maestro."
+          : "El estudiante escribe su nombre y elige su curso."}
+      </span>
+    </label>
   );
 }
 
@@ -1375,11 +1438,19 @@ export function ContestEditor() {
             <span className="flex flex-col gap-0.5">
               Es un desafío de prueba
               <span className="text-muted-foreground">
-                Sin inscripción ni resultados: se entra con el nombre y el
-                curso, y cada uno ve su puntaje al entregar.
+                Sin inscripción ni resultados: cada uno ve su puntaje al
+                entregar.
               </span>
             </span>
           </label>
+          {form.isTest && (
+            <LinkedContestField
+              contestId={contestId}
+              value={form.linkedContestId}
+              disabled={locked}
+              onChange={(linkedContestId) => update({ linkedContestId })}
+            />
+          )}
           {form.isTest && (
             <label className="flex items-start gap-3 text-sm">
               <Checkbox

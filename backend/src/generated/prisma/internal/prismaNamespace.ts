@@ -1959,6 +1959,7 @@ export const ContestScalarFieldEnum = {
   isPractice: 'isPractice',
   isTest: 'isTest',
   collectUsage: 'collectUsage',
+  linkedContestId: 'linkedContestId',
   createdById: 'createdById',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -2014,6 +2015,7 @@ export const TeamScalarFieldEnum = {
   memberTwoFirstName: 'memberTwoFirstName',
   memberTwoLastName: 'memberTwoLastName',
   personalCode: 'personalCode',
+  sourceTeamId: 'sourceTeamId',
   sessionToken: 'sessionToken',
   sessionSeenAt: 'sessionSeenAt',
   status: 'status',

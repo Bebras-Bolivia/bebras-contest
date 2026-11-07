@@ -33,6 +33,7 @@ type PublicContest = {
   durationMinutes: number;
   participants: number;
   isTest?: boolean;
+  linked?: boolean;
   registrationStartsAt: string | null;
   registrationEndsAt: string | null;
   startsAt: string | null;
@@ -608,7 +609,13 @@ function ContestCard({
         {contest.isTest ? (
           phase === "abierta" && (
             <Button asChild>
-              <a href={`/prueba?id=${contest.id}`}>Hacer la prueba</a>
+              <a
+                href={
+                  contest.linked ? "/entrar" : `/prueba?id=${contest.id}`
+                }
+              >
+                Hacer la prueba
+              </a>
             </Button>
           )
         ) : staff ? (

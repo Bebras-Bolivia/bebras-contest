@@ -34,6 +34,7 @@ export type TeamMinAggregateOutputType = {
   memberTwoFirstName: string | null
   memberTwoLastName: string | null
   personalCode: string | null
+  sourceTeamId: string | null
   sessionToken: string | null
   sessionSeenAt: Date | null
   status: string | null
@@ -51,6 +52,7 @@ export type TeamMaxAggregateOutputType = {
   memberTwoFirstName: string | null
   memberTwoLastName: string | null
   personalCode: string | null
+  sourceTeamId: string | null
   sessionToken: string | null
   sessionSeenAt: Date | null
   status: string | null
@@ -68,6 +70,7 @@ export type TeamCountAggregateOutputType = {
   memberTwoFirstName: number
   memberTwoLastName: number
   personalCode: number
+  sourceTeamId: number
   sessionToken: number
   sessionSeenAt: number
   status: number
@@ -87,6 +90,7 @@ export type TeamMinAggregateInputType = {
   memberTwoFirstName?: true
   memberTwoLastName?: true
   personalCode?: true
+  sourceTeamId?: true
   sessionToken?: true
   sessionSeenAt?: true
   status?: true
@@ -104,6 +108,7 @@ export type TeamMaxAggregateInputType = {
   memberTwoFirstName?: true
   memberTwoLastName?: true
   personalCode?: true
+  sourceTeamId?: true
   sessionToken?: true
   sessionSeenAt?: true
   status?: true
@@ -121,6 +126,7 @@ export type TeamCountAggregateInputType = {
   memberTwoFirstName?: true
   memberTwoLastName?: true
   personalCode?: true
+  sourceTeamId?: true
   sessionToken?: true
   sessionSeenAt?: true
   status?: true
@@ -211,6 +217,7 @@ export type TeamGroupByOutputType = {
   memberTwoFirstName: string | null
   memberTwoLastName: string | null
   personalCode: string
+  sourceTeamId: string | null
   sessionToken: string | null
   sessionSeenAt: Date | null
   status: string
@@ -249,6 +256,7 @@ export type TeamWhereInput = {
   memberTwoFirstName?: Prisma.StringNullableFilter<"Team"> | string | null
   memberTwoLastName?: Prisma.StringNullableFilter<"Team"> | string | null
   personalCode?: Prisma.StringFilter<"Team"> | string
+  sourceTeamId?: Prisma.StringNullableFilter<"Team"> | string | null
   sessionToken?: Prisma.StringNullableFilter<"Team"> | string | null
   sessionSeenAt?: Prisma.DateTimeNullableFilter<"Team"> | Date | string | null
   status?: Prisma.StringFilter<"Team"> | string
@@ -269,6 +277,7 @@ export type TeamOrderByWithRelationInput = {
   memberTwoFirstName?: Prisma.SortOrderInput | Prisma.SortOrder
   memberTwoLastName?: Prisma.SortOrderInput | Prisma.SortOrder
   personalCode?: Prisma.SortOrder
+  sourceTeamId?: Prisma.SortOrderInput | Prisma.SortOrder
   sessionToken?: Prisma.SortOrderInput | Prisma.SortOrder
   sessionSeenAt?: Prisma.SortOrderInput | Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -283,6 +292,7 @@ export type TeamWhereUniqueInput = Prisma.AtLeast<{
   id?: string
   personalCode?: string
   sessionToken?: string
+  groupId_sourceTeamId?: Prisma.TeamGroupIdSourceTeamIdCompoundUniqueInput
   AND?: Prisma.TeamWhereInput | Prisma.TeamWhereInput[]
   OR?: Prisma.TeamWhereInput[]
   NOT?: Prisma.TeamWhereInput | Prisma.TeamWhereInput[]
@@ -293,6 +303,7 @@ export type TeamWhereUniqueInput = Prisma.AtLeast<{
   memberOneLastName?: Prisma.StringFilter<"Team"> | string
   memberTwoFirstName?: Prisma.StringNullableFilter<"Team"> | string | null
   memberTwoLastName?: Prisma.StringNullableFilter<"Team"> | string | null
+  sourceTeamId?: Prisma.StringNullableFilter<"Team"> | string | null
   sessionSeenAt?: Prisma.DateTimeNullableFilter<"Team"> | Date | string | null
   status?: Prisma.StringFilter<"Team"> | string
   createdAt?: Prisma.DateTimeFilter<"Team"> | Date | string
@@ -300,7 +311,7 @@ export type TeamWhereUniqueInput = Prisma.AtLeast<{
   group?: Prisma.XOR<Prisma.ContestGroupScalarRelationFilter, Prisma.ContestGroupWhereInput>
   attempt?: Prisma.XOR<Prisma.AttemptNullableScalarRelationFilter, Prisma.AttemptWhereInput> | null
   practiceResults?: Prisma.PracticeResultListRelationFilter
-}, "id" | "personalCode" | "sessionToken">
+}, "id" | "personalCode" | "sessionToken" | "groupId_sourceTeamId">
 
 export type TeamOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
@@ -312,6 +323,7 @@ export type TeamOrderByWithAggregationInput = {
   memberTwoFirstName?: Prisma.SortOrderInput | Prisma.SortOrder
   memberTwoLastName?: Prisma.SortOrderInput | Prisma.SortOrder
   personalCode?: Prisma.SortOrder
+  sourceTeamId?: Prisma.SortOrderInput | Prisma.SortOrder
   sessionToken?: Prisma.SortOrderInput | Prisma.SortOrder
   sessionSeenAt?: Prisma.SortOrderInput | Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -335,6 +347,7 @@ export type TeamScalarWhereWithAggregatesInput = {
   memberTwoFirstName?: Prisma.StringNullableWithAggregatesFilter<"Team"> | string | null
   memberTwoLastName?: Prisma.StringNullableWithAggregatesFilter<"Team"> | string | null
   personalCode?: Prisma.StringWithAggregatesFilter<"Team"> | string
+  sourceTeamId?: Prisma.StringNullableWithAggregatesFilter<"Team"> | string | null
   sessionToken?: Prisma.StringNullableWithAggregatesFilter<"Team"> | string | null
   sessionSeenAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Team"> | Date | string | null
   status?: Prisma.StringWithAggregatesFilter<"Team"> | string
@@ -351,6 +364,7 @@ export type TeamCreateInput = {
   memberTwoFirstName?: string | null
   memberTwoLastName?: string | null
   personalCode: string
+  sourceTeamId?: string | null
   sessionToken?: string | null
   sessionSeenAt?: Date | string | null
   status?: string
@@ -371,6 +385,7 @@ export type TeamUncheckedCreateInput = {
   memberTwoFirstName?: string | null
   memberTwoLastName?: string | null
   personalCode: string
+  sourceTeamId?: string | null
   sessionToken?: string | null
   sessionSeenAt?: Date | string | null
   status?: string
@@ -389,6 +404,7 @@ export type TeamUpdateInput = {
   memberTwoFirstName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   memberTwoLastName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   personalCode?: Prisma.StringFieldUpdateOperationsInput | string
+  sourceTeamId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -409,6 +425,7 @@ export type TeamUncheckedUpdateInput = {
   memberTwoFirstName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   memberTwoLastName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   personalCode?: Prisma.StringFieldUpdateOperationsInput | string
+  sourceTeamId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -428,6 +445,7 @@ export type TeamCreateManyInput = {
   memberTwoFirstName?: string | null
   memberTwoLastName?: string | null
   personalCode: string
+  sourceTeamId?: string | null
   sessionToken?: string | null
   sessionSeenAt?: Date | string | null
   status?: string
@@ -444,6 +462,7 @@ export type TeamUpdateManyMutationInput = {
   memberTwoFirstName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   memberTwoLastName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   personalCode?: Prisma.StringFieldUpdateOperationsInput | string
+  sourceTeamId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -461,6 +480,7 @@ export type TeamUncheckedUpdateManyInput = {
   memberTwoFirstName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   memberTwoLastName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   personalCode?: Prisma.StringFieldUpdateOperationsInput | string
+  sourceTeamId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -478,6 +498,11 @@ export type TeamOrderByRelationAggregateInput = {
   _count?: Prisma.SortOrder
 }
 
+export type TeamGroupIdSourceTeamIdCompoundUniqueInput = {
+  groupId: string
+  sourceTeamId: string
+}
+
 export type TeamCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   groupId?: Prisma.SortOrder
@@ -488,6 +513,7 @@ export type TeamCountOrderByAggregateInput = {
   memberTwoFirstName?: Prisma.SortOrder
   memberTwoLastName?: Prisma.SortOrder
   personalCode?: Prisma.SortOrder
+  sourceTeamId?: Prisma.SortOrder
   sessionToken?: Prisma.SortOrder
   sessionSeenAt?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -505,6 +531,7 @@ export type TeamMaxOrderByAggregateInput = {
   memberTwoFirstName?: Prisma.SortOrder
   memberTwoLastName?: Prisma.SortOrder
   personalCode?: Prisma.SortOrder
+  sourceTeamId?: Prisma.SortOrder
   sessionToken?: Prisma.SortOrder
   sessionSeenAt?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -522,6 +549,7 @@ export type TeamMinOrderByAggregateInput = {
   memberTwoFirstName?: Prisma.SortOrder
   memberTwoLastName?: Prisma.SortOrder
   personalCode?: Prisma.SortOrder
+  sourceTeamId?: Prisma.SortOrder
   sessionToken?: Prisma.SortOrder
   sessionSeenAt?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -613,6 +641,7 @@ export type TeamCreateWithoutGroupInput = {
   memberTwoFirstName?: string | null
   memberTwoLastName?: string | null
   personalCode: string
+  sourceTeamId?: string | null
   sessionToken?: string | null
   sessionSeenAt?: Date | string | null
   status?: string
@@ -631,6 +660,7 @@ export type TeamUncheckedCreateWithoutGroupInput = {
   memberTwoFirstName?: string | null
   memberTwoLastName?: string | null
   personalCode: string
+  sourceTeamId?: string | null
   sessionToken?: string | null
   sessionSeenAt?: Date | string | null
   status?: string
@@ -678,6 +708,7 @@ export type TeamScalarWhereInput = {
   memberTwoFirstName?: Prisma.StringNullableFilter<"Team"> | string | null
   memberTwoLastName?: Prisma.StringNullableFilter<"Team"> | string | null
   personalCode?: Prisma.StringFilter<"Team"> | string
+  sourceTeamId?: Prisma.StringNullableFilter<"Team"> | string | null
   sessionToken?: Prisma.StringNullableFilter<"Team"> | string | null
   sessionSeenAt?: Prisma.DateTimeNullableFilter<"Team"> | Date | string | null
   status?: Prisma.StringFilter<"Team"> | string
@@ -694,6 +725,7 @@ export type TeamCreateWithoutAttemptInput = {
   memberTwoFirstName?: string | null
   memberTwoLastName?: string | null
   personalCode: string
+  sourceTeamId?: string | null
   sessionToken?: string | null
   sessionSeenAt?: Date | string | null
   status?: string
@@ -713,6 +745,7 @@ export type TeamUncheckedCreateWithoutAttemptInput = {
   memberTwoFirstName?: string | null
   memberTwoLastName?: string | null
   personalCode: string
+  sourceTeamId?: string | null
   sessionToken?: string | null
   sessionSeenAt?: Date | string | null
   status?: string
@@ -746,6 +779,7 @@ export type TeamUpdateWithoutAttemptInput = {
   memberTwoFirstName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   memberTwoLastName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   personalCode?: Prisma.StringFieldUpdateOperationsInput | string
+  sourceTeamId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -765,6 +799,7 @@ export type TeamUncheckedUpdateWithoutAttemptInput = {
   memberTwoFirstName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   memberTwoLastName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   personalCode?: Prisma.StringFieldUpdateOperationsInput | string
+  sourceTeamId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -782,6 +817,7 @@ export type TeamCreateWithoutPracticeResultsInput = {
   memberTwoFirstName?: string | null
   memberTwoLastName?: string | null
   personalCode: string
+  sourceTeamId?: string | null
   sessionToken?: string | null
   sessionSeenAt?: Date | string | null
   status?: string
@@ -801,6 +837,7 @@ export type TeamUncheckedCreateWithoutPracticeResultsInput = {
   memberTwoFirstName?: string | null
   memberTwoLastName?: string | null
   personalCode: string
+  sourceTeamId?: string | null
   sessionToken?: string | null
   sessionSeenAt?: Date | string | null
   status?: string
@@ -834,6 +871,7 @@ export type TeamUpdateWithoutPracticeResultsInput = {
   memberTwoFirstName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   memberTwoLastName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   personalCode?: Prisma.StringFieldUpdateOperationsInput | string
+  sourceTeamId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -853,6 +891,7 @@ export type TeamUncheckedUpdateWithoutPracticeResultsInput = {
   memberTwoFirstName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   memberTwoLastName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   personalCode?: Prisma.StringFieldUpdateOperationsInput | string
+  sourceTeamId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -870,6 +909,7 @@ export type TeamCreateManyGroupInput = {
   memberTwoFirstName?: string | null
   memberTwoLastName?: string | null
   personalCode: string
+  sourceTeamId?: string | null
   sessionToken?: string | null
   sessionSeenAt?: Date | string | null
   status?: string
@@ -886,6 +926,7 @@ export type TeamUpdateWithoutGroupInput = {
   memberTwoFirstName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   memberTwoLastName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   personalCode?: Prisma.StringFieldUpdateOperationsInput | string
+  sourceTeamId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -904,6 +945,7 @@ export type TeamUncheckedUpdateWithoutGroupInput = {
   memberTwoFirstName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   memberTwoLastName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   personalCode?: Prisma.StringFieldUpdateOperationsInput | string
+  sourceTeamId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -922,6 +964,7 @@ export type TeamUncheckedUpdateManyWithoutGroupInput = {
   memberTwoFirstName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   memberTwoLastName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   personalCode?: Prisma.StringFieldUpdateOperationsInput | string
+  sourceTeamId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessionSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -970,6 +1013,7 @@ export type TeamSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   memberTwoFirstName?: boolean
   memberTwoLastName?: boolean
   personalCode?: boolean
+  sourceTeamId?: boolean
   sessionToken?: boolean
   sessionSeenAt?: boolean
   status?: boolean
@@ -991,6 +1035,7 @@ export type TeamSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   memberTwoFirstName?: boolean
   memberTwoLastName?: boolean
   personalCode?: boolean
+  sourceTeamId?: boolean
   sessionToken?: boolean
   sessionSeenAt?: boolean
   status?: boolean
@@ -1009,6 +1054,7 @@ export type TeamSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   memberTwoFirstName?: boolean
   memberTwoLastName?: boolean
   personalCode?: boolean
+  sourceTeamId?: boolean
   sessionToken?: boolean
   sessionSeenAt?: boolean
   status?: boolean
@@ -1027,6 +1073,7 @@ export type TeamSelectScalar = {
   memberTwoFirstName?: boolean
   memberTwoLastName?: boolean
   personalCode?: boolean
+  sourceTeamId?: boolean
   sessionToken?: boolean
   sessionSeenAt?: boolean
   status?: boolean
@@ -1034,7 +1081,7 @@ export type TeamSelectScalar = {
   updatedAt?: boolean
 }
 
-export type TeamOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "groupId" | "participationMode" | "grade" | "memberOneFirstName" | "memberOneLastName" | "memberTwoFirstName" | "memberTwoLastName" | "personalCode" | "sessionToken" | "sessionSeenAt" | "status" | "createdAt" | "updatedAt", ExtArgs["result"]["team"]>
+export type TeamOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "groupId" | "participationMode" | "grade" | "memberOneFirstName" | "memberOneLastName" | "memberTwoFirstName" | "memberTwoLastName" | "personalCode" | "sourceTeamId" | "sessionToken" | "sessionSeenAt" | "status" | "createdAt" | "updatedAt", ExtArgs["result"]["team"]>
 export type TeamInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   group?: boolean | Prisma.ContestGroupDefaultArgs<ExtArgs>
   attempt?: boolean | Prisma.Team$attemptArgs<ExtArgs>
@@ -1065,6 +1112,7 @@ export type $TeamPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     memberTwoFirstName: string | null
     memberTwoLastName: string | null
     personalCode: string
+    sourceTeamId: string | null
     sessionToken: string | null
     sessionSeenAt: Date | null
     status: string
@@ -1505,6 +1553,7 @@ export interface TeamFieldRefs {
   readonly memberTwoFirstName: Prisma.FieldRef<"Team", 'String'>
   readonly memberTwoLastName: Prisma.FieldRef<"Team", 'String'>
   readonly personalCode: Prisma.FieldRef<"Team", 'String'>
+  readonly sourceTeamId: Prisma.FieldRef<"Team", 'String'>
   readonly sessionToken: Prisma.FieldRef<"Team", 'String'>
   readonly sessionSeenAt: Prisma.FieldRef<"Team", 'DateTime'>
   readonly status: Prisma.FieldRef<"Team", 'String'>

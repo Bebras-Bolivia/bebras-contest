@@ -165,6 +165,13 @@ export function openPlaySession(personalCode: string) {
   });
 }
 
+export function openLinkedTestSession(personalCode: string, contestId: string) {
+  return request<PlaySession>("/api/play/linked-session", {
+    method: "POST",
+    body: JSON.stringify({ personalCode, contestId }),
+  });
+}
+
 export function closePlaySession() {
   return playRequest<null>("/api/play/session/close", { method: "POST" });
 }

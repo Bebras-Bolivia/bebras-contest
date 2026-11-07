@@ -11,6 +11,14 @@ export type StudentPracticeItem = {
   endsAt: string | null;
 };
 
+export type StudentTestItem = {
+  id: string;
+  title: string;
+  taskCount: number;
+  durationMinutes: number;
+  endsAt: string | null;
+};
+
 export type StudentPractice = {
   title: string;
   category: string;
@@ -48,7 +56,11 @@ function post<T>(path: string, body: Record<string, unknown>) {
 }
 
 export function listStudentPractices(personalCode: string) {
-  return post<{ name?: string; practices: StudentPracticeItem[] }>(
+  return post<{
+    name?: string;
+    practices: StudentPracticeItem[];
+    tests?: StudentTestItem[];
+  }>(
     "/api/play/practices",
     { personalCode },
   );

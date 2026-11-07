@@ -1028,6 +1028,7 @@ function deserializeContest(contest: {
   resultsUntil: Date | null;
   isTest?: boolean;
   collectUsage?: boolean;
+  linkedContestId?: string | null;
   createdAt: Date;
   updatedAt: Date;
   tasks?: Array<{
@@ -1104,6 +1105,7 @@ function deserializeContest(contest: {
     resultsUntil: contest.resultsUntil?.toISOString() ?? null,
     isTest: Boolean(contest.isTest),
     collectUsage: Boolean(contest.collectUsage),
+    linkedContestId: contest.linkedContestId ?? null,
     state,
     isOpen,
     createdAt: contest.createdAt.toISOString(),
@@ -1165,6 +1167,12 @@ function parseContestPayload(body: Record<string, unknown>) {
     categories,
     isTest,
     collectUsage: isTest && body.collectUsage === true,
+    linkedContestId:
+      isTest &&
+      typeof body.linkedContestId === "string" &&
+      body.linkedContestId.trim()
+        ? body.linkedContestId.trim()
+        : null,
     durationMinutes,
     scoring: parseContestScoring(body.scoring),
     questionDisplayMode,
@@ -2210,6 +2218,7 @@ app.get("/api/public-contests", async (_req, res) => {
       resultsAt: true,
       resultsUntil: true,
       isTest: true,
+      linkedContestId: true,
     },
   });
 
@@ -2238,6 +2247,7 @@ app.get("/api/public-contests", async (_req, res) => {
       const window = resultsWindow(contest);
       return {
         isTest: contest.isTest,
+        linked: Boolean(contest.linkedContestId),
         participants: participantsOf.get(contest.id) ?? 0,
         resultsAt: window.from?.toISOString() ?? null,
         resultsUntil: window.until?.toISOString() ?? null,
@@ -4135,6 +4145,7 @@ app.post("/api/contests", async (req, res) => {
       title: payload.title,
       isTest: payload.isTest,
       collectUsage: payload.collectUsage,
+      linkedContestId: payload.linkedContestId,
       categories: JSON.stringify(payload.categories),
       durationMinutes: payload.durationMinutes,
       registrationStartsAt: payload.registrationStartsAt,
@@ -4289,13 +4300,13 @@ app.put("/api/contests/:id", async (req, res) => {
   await db().batch([
     db().prepare('DELETE FROM "ContestTask" WHERE "contestId" = ?').bind(contestId),
     db().prepare(`UPDATE "Contest" SET
-      "title" = ?, "isTest" = ?, "collectUsage" = ?, "categories" = ?, "durationMinutes" = ?,
+      "title" = ?, "isTest" = ?, "collectUsage" = ?, "linkedContestId" = ?, "categories" = ?, "durationMinutes" = ?,
       "registrationStartsAt" = ?, "registrationEndsAt" = ?, "startsAt" = ?, "endsAt" = ?, "schedules" = ?, "resultsAt" = ?, "resultsUntil" = ?,
       "scoring" = ?, "questionDisplayMode" = ?,
       "allowPairs" = ?, "shuffleOptions" = ?, "showFeedback" = ?, "showSolutions" = ?, "showTotalScore" = ?,
       "showScoreOnSubmit" = ?, "showFeedbackOnSubmit" = ?, "showSolutionsOnSubmit" = ?,
       "updatedAt" = ? WHERE "id" = ?`).bind(
-      payload.title, Number(payload.isTest), Number(payload.collectUsage), JSON.stringify(payload.categories), payload.durationMinutes,
+      payload.title, Number(payload.isTest), Number(payload.collectUsage), payload.linkedContestId, JSON.stringify(payload.categories), payload.durationMinutes,
       payload.registrationStartsAt?.toISOString() ?? null,
       payload.registrationEndsAt?.toISOString() ?? null,
       payload.startsAt?.toISOString() ?? null, payload.endsAt?.toISOString() ?? null,
@@ -7920,10 +7931,74 @@ app.post("/api/play/practice/:code/enter", (_req, res) => {
   });
 });
 
+async function linkedTestSource(rawCode: unknown) {
+  const personalCode =
+    typeof rawCode === "string" ? rawCode.trim().toUpperCase() : "";
+  if (!personalCode) return null;
+  const team = await prisma.team.findUnique({
+    where: { personalCode },
+    include: { group: { include: { contest: true } } },
+  });
+  const contest = team?.group.contest;
+  if (
+    !team ||
+    !contest ||
+    team.sourceTeamId ||
+    contest.trashedAt ||
+    contest.isTest ||
+    contest.isPractice
+  ) {
+    return null;
+  }
+  const category = teamCategory(team.grade, contestCategories(contest));
+  if (!category) return null;
+  return { team, category };
+}
+
+async function openLinkedTests(
+  source: NonNullable<Awaited<ReturnType<typeof linkedTestSource>>>,
+) {
+  const contests = await prisma.contest.findMany({
+    where: {
+      isTest: true,
+      linkedContestId: source.team.group.contestId,
+      trashedAt: null,
+      stoppedAt: null,
+      publishedAt: { not: null },
+    },
+    include: { tasks: { select: { category: true } } },
+    orderBy: { startsAt: "asc" },
+  });
+  return contests.filter(
+    (contest) =>
+      contestCategories(contest).includes(source.category) &&
+      computeContestState(contest).state === "abierta",
+  );
+}
+
+async function linkedTestsOffer(rawCode: unknown) {
+  const source = await linkedTestSource(rawCode);
+  if (!source) return { name: undefined, tests: [] };
+  const contests = await openLinkedTests(source);
+  return {
+    name: source.team.memberOneFirstName,
+    tests: contests.map((contest) => ({
+      id: contest.id,
+      title: contest.title,
+      durationMinutes: contest.durationMinutes,
+      taskCount: contest.tasks.filter(
+        (task) => task.category === source.category,
+      ).length,
+      endsAt: contest.endsAt?.toISOString() ?? null,
+    })),
+  };
+}
+
 app.post("/api/play/practices", async (req, res) => {
+  const offer = await linkedTestsOffer(req.body?.personalCode);
   const student = await practiceStudent(req.body?.personalCode);
   if (!student) {
-    res.json({ practices: [] });
+    res.json({ name: offer.name, practices: [], tests: offer.tests });
     return;
   }
 
@@ -7935,6 +8010,7 @@ app.post("/api/play/practices", async (req, res) => {
 
   res.json({
     name: student.team.memberOneFirstName,
+    tests: offer.tests,
     practices: contests
       .filter(
         (contest) =>
@@ -7947,6 +8023,96 @@ app.post("/api/play/practices", async (req, res) => {
         taskCount: contest._count.tasks,
         endsAt: contest.endsAt?.toISOString() ?? null,
       })),
+  });
+});
+
+app.post("/api/play/linked-session", async (req, res) => {
+  const source = await linkedTestSource(req.body?.personalCode);
+  const contestId =
+    typeof req.body?.contestId === "string" ? req.body.contestId : "";
+  const test = source
+    ? (await openLinkedTests(source)).find((contest) => contest.id === contestId)
+    : undefined;
+
+  if (!source || !test) {
+    res
+      .status(404)
+      .json({ message: "Esta prueba no está abierta para tu código." });
+    return;
+  }
+
+  const sourceGroup = source.team.group;
+  const autoKey = `linked:${test.id}:${sourceGroup.id}`;
+  let group = await prisma.contestGroup.findUnique({ where: { autoKey } });
+
+  if (!group) {
+    try {
+      group = await prisma.contestGroup.create({
+        data: {
+          contestId: test.id,
+          createdById: sourceGroup.createdById,
+          schoolId: sourceGroup.schoolId,
+          name: sourceGroup.name,
+          category: sourceGroup.category,
+          grade: sourceGroup.grade,
+          autoKey,
+          accessCode: await generateUniqueAccessCode(),
+          recoveryCode: generateCode(10),
+        },
+      });
+    } catch {
+      group = await prisma.contestGroup.findUnique({ where: { autoKey } });
+    }
+  }
+
+  if (!group) {
+    res.status(500).json({ message: "No pudimos preparar tu prueba." });
+    return;
+  }
+
+  const mirror = { groupId: group.id, sourceTeamId: source.team.id };
+  let team = await prisma.team.findFirst({ where: mirror });
+
+  if (!team) {
+    try {
+      team = await prisma.team.create({
+        data: {
+          ...mirror,
+          participationMode: source.team.participationMode,
+          grade: source.team.grade,
+          memberOneFirstName: source.team.memberOneFirstName,
+          memberOneLastName: source.team.memberOneLastName,
+          memberTwoFirstName: source.team.memberTwoFirstName,
+          memberTwoLastName: source.team.memberTwoLastName,
+          personalCode: await generateUniquePersonalCode(),
+          attempt: { create: { status: "pending" } },
+        },
+      });
+    } catch {
+      team = await prisma.team.findFirst({ where: mirror });
+    }
+  }
+
+  if (!team) {
+    res.status(500).json({ message: "No pudimos preparar tu prueba." });
+    return;
+  }
+
+  const sessionToken = randomUUID();
+  await prisma.team.update({
+    where: { id: team.id },
+    data: { sessionToken, sessionSeenAt: currentDate() },
+  });
+
+  res.status(201).json({
+    sessionToken,
+    groupName: group.name,
+    contestTitle: test.title,
+    participationMode: team.participationMode,
+    memberOneFirstName: team.memberOneFirstName,
+    memberOneLastName: team.memberOneLastName,
+    memberTwoFirstName: team.memberTwoFirstName,
+    memberTwoLastName: team.memberTwoLastName,
   });
 });
 
@@ -8229,6 +8395,7 @@ app.post("/api/play/test-join", async (req, res) => {
     where: {
       id: readField(req.body?.contestId),
       isTest: true,
+      linkedContestId: null,
       trashedAt: null,
       stoppedAt: null,
       publishedAt: { not: null },

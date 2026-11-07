@@ -34,6 +34,7 @@ import {
   forgetPlaySession,
   getAttempt,
   enterPractice,
+  openLinkedTestSession,
   openPlaySession,
   readPlaySession,
   storePlaySession,
@@ -42,6 +43,7 @@ import {
   listStudentPractices,
   rememberPracticeCode,
   type StudentPracticeItem,
+  type StudentTestItem,
 } from "@/lib/student-practice-api";
 import { cn } from "@/lib/utils";
 
@@ -134,6 +136,7 @@ export function JoinForm() {
     code: string;
     name: string;
     practices: StudentPracticeItem[];
+    tests: StudentTestItem[];
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<JoinErrors>({});
@@ -200,13 +203,16 @@ export function JoinForm() {
       if (code.length !== GROUP_CODE_LENGTH) {
         const offered = await listStudentPractices(code).catch(() => null);
 
-        if (offered && offered.practices.length > 0) {
+        const tests = offered?.tests ?? [];
+
+        if (offered && (offered.practices.length > 0 || tests.length > 0)) {
           rememberPracticeCode(code);
           setErrors({});
           setChoice({
             code,
             name: offered.name ?? "",
             practices: offered.practices,
+            tests,
           });
           setStep("choose");
           return;
@@ -499,6 +505,42 @@ export function JoinForm() {
         title="¿Qué quieres hacer?"
       >
         <div className="flex flex-col gap-3">
+          {choice.tests.map((test) => (
+            <Button
+              key={test.id}
+              type="button"
+              size="lg"
+              variant="outline"
+              className="h-auto w-full justify-between py-3"
+              disabled={loading}
+              onClick={() => {
+                setLoading(true);
+                void openLinkedTestSession(choice.code, test.id)
+                  .then((session) => {
+                    storePlaySession(session.sessionToken);
+                    window.location.href = "/rendir";
+                  })
+                  .catch((error: unknown) => {
+                    setLoading(false);
+                    toast.error(
+                      error instanceof Error
+                        ? error.message
+                        : "No se pudo entrar.",
+                    );
+                  });
+              }}
+            >
+              <span className="flex min-w-0 flex-col items-start text-left">
+                <span className="truncate">{test.title}</span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  Desafío de prueba · {test.taskCount}{" "}
+                  {test.taskCount === 1 ? "pregunta" : "preguntas"} ·{" "}
+                  {test.durationMinutes} min
+                </span>
+              </span>
+              <ArrowRightIcon data-icon="inline-end" />
+            </Button>
+          ))}
           {choice.practices.map((practice) => (
             <Button
               key={practice.id}
