@@ -69,6 +69,8 @@ const steps = [
           }
           <a
             href="/login"
+            data-teacher-entry
+            data-logged-label="Mi perfil"
             class="inline-flex h-12 items-center justify-center gap-2 border-2 border-foreground bg-background px-6 text-base font-semibold shadow-[var(--shadow-hard)] press-hard hover:bg-muted"
           >
             Soy maestro
@@ -169,6 +171,8 @@ const steps = [
         </p>
         <a
           href="/login"
+          data-teacher-entry
+          data-logged-label="Ir a mi perfil"
           class="text-sm font-semibold text-primary underline underline-offset-4"
         >
           Iniciar sesión o registrarse
@@ -179,6 +183,25 @@ const steps = [
 </Layout>
 
 <script>
+  import { getUser, subscribeSession } from "../lib/auth";
+
+  function syncTeacherEntry() {
+    const logged = getUser() !== null;
+    document
+      .querySelectorAll<HTMLAnchorElement>("[data-teacher-entry]")
+      .forEach((link) => {
+        link.dataset.guestLabel ??= link.textContent?.trim() ?? "";
+        link.setAttribute("href", logged ? "/perfil" : "/login");
+        link.textContent = logged
+          ? (link.dataset.loggedLabel ?? link.dataset.guestLabel)
+          : link.dataset.guestLabel;
+      });
+  }
+
+  syncTeacherEntry();
+  subscribeSession(syncTeacherEntry);
+  document.addEventListener("astro:page-load", syncTeacherEntry);
+
   function revealOnScroll() {
     const pending = document.querySelectorAll("[data-reveal]:not(.is-visible)");
     if (pending.length === 0) return;
