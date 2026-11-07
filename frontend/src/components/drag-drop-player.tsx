@@ -33,7 +33,7 @@ export type DragDropPlacements = Record<string, string>;
 
 type PublicDragDropItem = Pick<
   StoredTaskDragDropItem,
-  "id" | "label" | "image" | "widthPercent"
+  "id" | "label" | "image" | "widthPercent" | "reusable" | "anchor"
 >;
 
 type PointerDrag = {
@@ -185,14 +185,47 @@ export function DragDropPlayer({
     [items, placements, targetById],
   );
   /** Las piezas en el orden que tenga la bandeja, con su posición. */
-  const trayItems = useMemo(
-    () =>
-      trayOrder.flatMap((itemId, slotIndex) => {
-        const item = items.find((candidate) => candidate.id === itemId);
-        return item ? [{ item, slotIndex }] : [];
-      }),
-    [items, trayOrder],
-  );
+  const trayItems = useMemo(() => {
+    const isFree = (item: PublicDragDropItem) =>
+      !targetById.has(placements[item.id] ?? "");
+    const groupKey = (item: PublicDragDropItem) =>
+      `${item.label ?? ""}`.trim().toLowerCase();
+    const shown = new Set<string>();
+
+    return trayOrder.flatMap((itemId, slotIndex) => {
+      const item = items.find((candidate) => candidate.id === itemId);
+
+      if (!item) {
+        return [];
+      }
+
+      if (!item.reusable) {
+        return [{ item, slotIndex }];
+      }
+
+      const key = groupKey(item);
+
+      if (shown.has(key)) {
+        return [];
+      }
+
+      shown.add(key);
+      const group = trayOrder.flatMap((id) => {
+        const candidate = items.find((entry) => entry.id === id);
+        return candidate?.reusable && groupKey(candidate) === key
+          ? [candidate]
+          : [];
+      });
+      const representative = group.find(isFree) ?? group[0];
+
+      return [
+        {
+          item: representative,
+          slotIndex: trayOrder.indexOf(representative.id),
+        },
+      ];
+    });
+  }, [items, placements, targetById, trayOrder]);
   const previewItem = dragPreview
     ? items.find((item) => item.id === dragPreview.itemId)
     : null;
@@ -215,12 +248,27 @@ export function DragDropPlayer({
     return Math.max(24, piece * 0.6);
   };
 
-  const dropTargetAt = (itemId: string, clientX: number, clientY: number) => {
+  const feetOffset = (itemId: string) => {
+    const item = items.find((candidate) => candidate.id === itemId);
+    if (item?.anchor !== "bottom") return 0;
+    const button = itemButtonRefs.current.get(itemId);
+    const height = (
+      button?.querySelector("img") ?? button
+    )?.getBoundingClientRect().height;
+    return (height ?? 0) / 2;
+  };
+
+  const dropTargetAt = (
+    itemId: string,
+    clientX: number,
+    clientY: number,
+    isPieceCenter = false,
+  ) => {
     const stageElement = stageRef.current;
     if (!stageElement) return undefined;
     return findDropTarget(
       clientX,
-      clientY,
+      isPieceCenter ? clientY + feetOffset(itemId) : clientY,
       getStageBounds(stageElement),
       targets,
       dropRadius(itemId),
@@ -425,6 +473,7 @@ export function DragDropPlayer({
     itemId: string,
     clientX: number,
     clientY: number,
+    isPieceCenter = false,
   ) => {
     const stageElement = stageRef.current;
 
@@ -432,7 +481,7 @@ export function DragDropPlayer({
       return false;
     }
 
-    const target = dropTargetAt(itemId, clientX, clientY);
+    const target = dropTargetAt(itemId, clientX, clientY, isPieceCenter);
 
     if (authoring && !isOutsideStage(clientX, clientY)) {
       const point = stagePercent(clientX, clientY);
@@ -547,7 +596,7 @@ export function DragDropPlayer({
     setDragPreview({ itemId: drag.itemId, x, y, width });
     const outside = isOutsideStage(event.clientX, event.clientY);
     setHoverTargetId(
-      outside ? null : (dropTargetAt(drag.itemId, x, y)?.id ?? null),
+      outside ? null : (dropTargetAt(drag.itemId, x, y, true)?.id ?? null),
     );
     // Fuera de la imagen la pieza vuelve a la bandeja: al lugar que está bajo
     // el dedo o, si no hay ninguno, al suyo.
@@ -614,7 +663,7 @@ export function DragDropPlayer({
         clearSelection();
       } else {
         settleRef.current = moves;
-        placeItemAtPoint(drag.itemId, x, y);
+        placeItemAtPoint(drag.itemId, x, y, true);
       }
       setSettleTick((tick) => tick + 1);
     }
@@ -847,7 +896,12 @@ export function DragDropPlayer({
                   key={target.id}
                   aria-hidden="true"
                   data-drop-hint
-                  className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 border-2 border-dashed border-primary bg-primary/15 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-75 motion-safe:duration-150"
+                  className={cn(
+                    "pointer-events-none absolute -translate-x-1/2 border-2 border-dashed border-primary bg-primary/15 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-75 motion-safe:duration-150",
+                    previewItem?.anchor === "bottom"
+                      ? "-translate-y-full"
+                      : "-translate-y-1/2",
+                  )}
                   style={{
                     left: `${target.x}%`,
                     top: `${target.y}%`,
@@ -877,7 +931,10 @@ export function DragDropPlayer({
                 key={item.id}
                 {...itemButtonProps(item)}
                 className={cn(
-                  "group/piece absolute touch-none -translate-x-1/2 -translate-y-1/2 cursor-pointer overflow-hidden rounded-sm border-2 border-transparent bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default",
+                  "group/piece absolute touch-none -translate-x-1/2 cursor-pointer overflow-hidden rounded-sm border-2 border-transparent bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default",
+                  item.anchor === "bottom"
+                    ? "-translate-y-full"
+                    : "-translate-y-1/2",
                   selectedItemId === item.id && "ring-2 ring-primary",
                   dragPreview?.itemId === item.id && "opacity-50",
                 )}
@@ -957,12 +1014,11 @@ export function DragDropPlayer({
       >
         <div
           className={cn(
-            "flex items-center justify-between gap-2",
+            "flex items-center justify-end gap-2",
             // En el editor la bandeja es solo de dónde se toman las piezas.
             authoring && "hidden",
           )}
         >
-          <p className="text-sm font-medium text-muted-foreground">Objetos</p>
           <Popover>
             <PopoverTrigger asChild>
               <button

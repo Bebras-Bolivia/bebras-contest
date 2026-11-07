@@ -244,6 +244,8 @@ export function renderSafeTask(
       label: item.label,
       image: publicImage(item.image),
       widthPercent: item.widthPercent,
+      ...(item.reusable ? { reusable: true } : {}),
+      ...(item.anchor ? { anchor: item.anchor } : {}),
     })),
     dragDropTargets: [...task.dragDropTargets]
       .sort(

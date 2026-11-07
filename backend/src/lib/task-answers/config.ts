@@ -194,6 +194,8 @@ export function normalizeDragDropConfig(value: unknown): DragDropConfig {
           typeof item.equivalenceKey === "string"
             ? item.equivalenceKey.trim() || undefined
             : undefined,
+        reusable: item.reusable === true ? true : undefined,
+        anchor: item.anchor === "bottom" ? "bottom" : undefined,
         widthPercent: normalizeDragDropWidth(item.widthPercent),
         correctTargetId: targetId,
       });
@@ -235,6 +237,8 @@ export function normalizeDragDropConfig(value: unknown): DragDropConfig {
           typeof item.equivalenceKey === "string"
             ? item.equivalenceKey.trim() || undefined
             : undefined,
+        reusable: item.reusable === true ? true : undefined,
+        anchor: item.anchor === "bottom" ? "bottom" : undefined,
         widthPercent: normalizeDragDropWidth(item.widthPercent),
         correctTargetId:
           typeof item.correctTargetId === "string" ? item.correctTargetId : "",
@@ -453,7 +457,11 @@ export function parseTaskAnswerConfig(body: Record<string, unknown>) {
       );
     }
 
-    if (dragDropItems.length > dragDropTargets.length) {
+    const hasReusableItems = dragDropItems.some(
+      (entry) => (entry as Record<string, unknown> | null)?.reusable === true,
+    );
+
+    if (!hasReusableItems && dragDropItems.length > dragDropTargets.length) {
       throw new Error(
         "Debe haber al menos tantos destinos como objetos arrastrables.",
       );
@@ -480,6 +488,8 @@ export function parseTaskAnswerConfig(body: Record<string, unknown>) {
         );
       }
       const equivalenceKey = readText(item.equivalenceKey) || undefined;
+      const reusable = item.reusable === true ? true : undefined;
+      const anchor = item.anchor === "bottom" ? "bottom" : undefined;
 
       if (!id) {
         throw new Error("Cada objeto arrastrable debe tener un ID.");
@@ -516,6 +526,8 @@ export function parseTaskAnswerConfig(body: Record<string, unknown>) {
         label,
         image: item.image,
         equivalenceKey,
+        reusable,
+        anchor,
         widthPercent,
         correctTargetId,
       });

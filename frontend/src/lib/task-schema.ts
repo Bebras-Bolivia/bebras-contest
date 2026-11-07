@@ -92,6 +92,10 @@ export type StoredTaskDragDropItem = {
   label: string;
   /** Grupo semántico privado; vacío conserva la equivalencia histórica. */
   equivalenceKey?: string;
+  /** La bandeja muestra una sola pieza por nombre y se puede usar varias veces. */
+  reusable?: boolean;
+  /** La pieza se apoya en su destino por abajo (pies) en vez de centrarse. */
+  anchor?: "bottom";
   image: ContentImage | null;
   correctTargetId: string;
   widthPercent: number;

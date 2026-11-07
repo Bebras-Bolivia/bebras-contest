@@ -5,6 +5,8 @@ export type DragDropItem = {
   label: unknown;
   image: unknown;
   equivalenceKey?: string;
+  reusable?: boolean;
+  anchor?: "bottom";
   widthPercent: number;
   correctTargetId: string;
 };
