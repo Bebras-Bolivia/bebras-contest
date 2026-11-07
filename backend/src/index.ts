@@ -4996,8 +4996,37 @@ const groupContestSelect = {
       department: true,
     },
   },
-  school: true,
 } as const;
+
+/**
+ * El colegio de un grupo (el segundo colegio de un maestro) se lee aparte: la
+ * relación `school` dentro de la misma consulta de Prisma falla en D1 de
+ * producción con «Missing data field».
+ */
+async function attachSchools<T extends { schoolId: string | null }>(
+  groups: T[],
+): Promise<Array<T & { school: { schoolName: string } | null }>> {
+  const ids = [
+    ...new Set(groups.flatMap((group) => (group.schoolId ? [group.schoolId] : []))),
+  ];
+  const names = new Map<string, string>();
+  for (let start = 0; start < ids.length; start += 50) {
+    const part = ids.slice(start, start + 50);
+    const { results } = await db()
+      .prepare(
+        `SELECT "id", "schoolName" FROM "TeacherSchool" WHERE "id" IN (${part.map(() => "?").join(", ")})`,
+      )
+      .bind(...part)
+      .all<{ id: string; schoolName: string }>();
+    for (const row of results) names.set(row.id, row.schoolName);
+  }
+  return groups.map((group) => ({
+    ...group,
+    school: group.schoolId
+      ? { schoolName: names.get(group.schoolId) ?? "" }
+      : null,
+  }));
+}
 
 // ---- Gestión de maestros (solo admin) ----
 
@@ -5391,7 +5420,7 @@ async function groupCounts(filters: {
 app.get("/api/groups", async (req, res) => {
   const filters = groupListFilters(req);
 
-  const [groups, counts, favoriteId] = await Promise.all([
+  const [groupRows, counts, favoriteId] = await Promise.all([
     prisma.contestGroup.findMany({
       where: {
         contest: { trashedAt: null },
@@ -5404,6 +5433,7 @@ app.get("/api/groups", async (req, res) => {
     groupCounts(filters),
     favoriteContestId(),
   ]);
+  const groups = await attachSchools(groupRows);
 
   res.json(
     groups.map((group) => {
@@ -5441,7 +5471,7 @@ app.get("/api/groups/students.xlsx", async (req, res) => {
     ownerId && typeof req.query.schoolId === "string"
       ? { schoolId: req.query.schoolId === "principal" ? null : req.query.schoolId }
       : {};
-  const groups = await prisma.contestGroup.findMany({
+  const groups = await attachSchools(await prisma.contestGroup.findMany({
     where: {
       contestId: contest.id,
       ...(groupId ? { id: groupId } : {}),
@@ -5452,7 +5482,7 @@ app.get("/api/groups/students.xlsx", async (req, res) => {
       name: true,
       grade: true,
       accessCode: true,
-      school: true,
+      schoolId: true,
       createdBy: {
         select: { firstName: true, lastName: true, email: true, schoolName: true },
       },
@@ -5468,7 +5498,7 @@ app.get("/api/groups/students.xlsx", async (req, res) => {
         },
       },
     },
-  });
+  }));
 
   const withOwner = !ownerId;
   const gradeOrder = (grade: string | null) => {
@@ -5671,13 +5701,14 @@ app.get("/api/groups/contests", async (req, res) => {
 
 app.get("/api/groups/:id", async (req, res) => {
   await trialTouch(req, `group:${req.params.id}`);
-  const group = await prisma.contestGroup.findUnique({
+  const groupRow = await prisma.contestGroup.findUnique({
     where: { id: req.params.id },
     include: {
       ...groupContestSelect,
       teams: { orderBy: { createdAt: "asc" } },
     },
   });
+  const group = groupRow ? (await attachSchools([groupRow]))[0] : null;
 
   if (!group) {
     res.status(404).json({ message: "Grupo no encontrado." });
@@ -6291,10 +6322,12 @@ app.post("/api/groups/courses", async (req, res) => {
     inserts.push(courseGroupInsert(contestId, grade, ownerId, code, stamp, schoolId));
   }
   if (inserts.length) await db().batch(inserts);
-  const groups = await prisma.contestGroup.findMany({
-    where: { contestId, createdById: ownerId, schoolId, autoKey: { not: null }, grade: { in: grades.map((grade) => grade.value) } },
-    include: { ...groupContestSelect, teams: true },
-  });
+  const groups = await attachSchools(
+    await prisma.contestGroup.findMany({
+      where: { contestId, createdById: ownerId, schoolId, autoKey: { not: null }, grade: { in: grades.map((grade) => grade.value) } },
+      include: { ...groupContestSelect, teams: true },
+    }),
+  );
   res.json(groups.map(serializeGroup));
 });
 
@@ -6327,10 +6360,12 @@ app.post("/api/groups/course", async (req, res) => {
   }
   const course = SCHOOL_GRADES.find((item) => item.value === grade)!;
   const courseGroup = await ensureCourseGroup(contest.id, course, req.user!.id, chosen.schoolId);
-  const group = await prisma.contestGroup.findUniqueOrThrow({
-    where: { id: courseGroup.id },
-    include: { ...groupContestSelect, teams: true },
-  });
+  const [group] = await attachSchools([
+    await prisma.contestGroup.findUniqueOrThrow({
+      where: { id: courseGroup.id },
+      include: { ...groupContestSelect, teams: true },
+    }),
+  ]);
   res.json(serializeGroup(group));
 });
 
@@ -6419,18 +6454,20 @@ app.post("/api/groups", async (req, res) => {
   const accessCode = await generateUniqueAccessCode();
   const recoveryCode = generateCode(10);
 
-  const group = await prisma.contestGroup.create({
-    data: {
-      contestId,
-      name,
-      category,
-      grade: course?.value ?? null,
-      accessCode,
-      recoveryCode,
-      createdById: req.user?.id ?? null,
-    },
-    include: { ...groupContestSelect, teams: true },
-  });
+  const [group] = await attachSchools([
+    await prisma.contestGroup.create({
+      data: {
+        contestId,
+        name,
+        category,
+        grade: course?.value ?? null,
+        accessCode,
+        recoveryCode,
+        createdById: req.user?.id ?? null,
+      },
+      include: { ...groupContestSelect, teams: true },
+    }),
+  ]);
 
   res.status(201).json(serializeGroup(group));
 });
@@ -6469,11 +6506,13 @@ app.patch("/api/groups/:id", async (req, res) => {
     return;
   }
 
-  const updated = await prisma.contestGroup.update({
-    where: { id: req.params.id },
-    data: { name },
-    include: { ...groupContestSelect, teams: true },
-  });
+  const [updated] = await attachSchools([
+    await prisma.contestGroup.update({
+      where: { id: req.params.id },
+      data: { name },
+      include: { ...groupContestSelect, teams: true },
+    }),
+  ]);
 
   res.json(serializeGroup(updated));
 });
